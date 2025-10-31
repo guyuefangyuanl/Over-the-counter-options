@@ -1,0 +1,538 @@
+<!--询价页面模板 - 优化版-->
+<view class="inquiry-container">
+  <!-- 顶部操作栏 -->
+  <view class="top-actions">
+    <!-- 筛选器和统计 -->
+    <view class="filter-section">
+      <picker 
+        bindchange="onFilterChange" 
+        value="{{filterStatus}}" 
+        range="{{['all', 'pending', 'confirmed', 'expired', 'cancelled']}}"
+        range-key="label"
+      >
+        <view class="filter-display">
+          <text class="filter-text">
+            {{filterStatus === 'all' ? '全部' : 
+              filterStatus === 'pending' ? '待报价' : 
+              filterStatus === 'confirmed' ? '已确认' : 
+              filterStatus === 'expired' ? '已过期' : '已取消'}}
+          </text>
+          <text class="filter-count">
+            ({{filterStatus === 'all' ? statusCounts.all : 
+               filterStatus === 'pending' ? statusCounts.pending : 
+               filterStatus === 'confirmed' ? statusCounts.confirmed : 
+               filterStatus === 'expired' ? statusCounts.expired : statusCounts.cancelled}})
+          </text>
+        </view>
+      </picker>
+    </view>
+
+    <!-- 新建询价按钮 -->
+    <button class="create-btn" bindtap="showCreateInquiry">
+      <text class="create-icon">+</text>
+      <text>新建询价</text>
+    </button>
+  </view>
+
+  <!-- 智能推荐区域 -->
+  <view class="smart-recommendations" wx:if="{{!loading && inquiryList.length === 0}}">
+    <view class="recommendation-title">🤖 智能推荐</view>
+    
+    <!-- 推荐策略 -->
+    <view class="strategy-recommendations">
+      <view class="strategy-item" 
+            wx:for="{{recommendedParams.strategies}}" 
+            wx:key="type"
+            bindtap="useRecommendedStrategy"
+            data-strategy="{{item}}">
+        <view class="strategy-name">{{item.name}}</view>
+        <view class="strategy-desc">{{item.desc}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 询价列表 -->
+  <view class="inquiry-list" wx:if="{{!loading}}">
+    <view 
+      class="inquiry-item" 
+      wx:for="{{getFilteredList()}}" 
+      wx:key="id"
+      data-inquiry="{{item}}"
+      bindtap="onInquiryTap"
+      bindlongpress="showQuickActions"
+    >
+      <!-- 询价头部 -->
+      <view class="inquiry-header">
+        <view class="inquiry-id-section">
+          <text class="inquiry-id">{{item.inquiryId}}</text>
+          <view class="urgency-badge {{item.urgency}}" wx:if="{{item.urgency === 'urgent'}}">
+            <text>紧急</text>
+          </view>
+        </view>
+        <view class="status-section">
+          <view class="inquiry-status {{item.status}}">{{item.statusText}}</view>
+          <text class="quote-count" wx:if="{{item.quoteCount > 0}}">
+            {{item.quoteCount}}个报价
+          </text>
+        </view>
+      </view>
+
+      <!-- 询价详情 -->
+      <view class="inquiry-details">
+        <view class="detail-row">
+          <text class="label">期权类型:</text>
+          <text class="value">
+            {{item.optionType}}
+            <text class="strategy-tag" wx:if="{{item.strategyType !== 'vanilla'}}">
+              (
+              {{item.strategyType === 'snowball' ? '雪球' : 
+                item.strategyType === 'barrier' ? '障碍' : item.strategyType}}
+              )
+            </text>
+          </text>
+        </view>
+        <view class="detail-row">
+          <text class="label">标的资产:</text>
+          <text class="value">{{item.underlying}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">执行价:</text>
+          <text class="value strike-price">{{item.strikePrice}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">到期日:</text>
+          <text class="value">{{item.expiryDate}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">数量:</text>
+          <text class="value">{{item.quantity}}</text>
+        </view>
+        
+        <!-- 价格信息 -->
+        <view class="price-info" wx:if="{{item.targetPrice || item.estimatedPremium}}">
+          <view class="detail-row" wx:if="{{item.targetPrice}}">
+            <text class="label">目标价格:</text>
+            <text class="value target-price">{{item.targetPrice}}</text>
+          </view>
+          <view class="detail-row" wx:if="{{item.estimatedPremium}}">
+            <text class="label">预计范围:</text>
+            <text class="value estimated-range">{{item.estimatedPremium}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 市场情绪指示器 -->
+      <view class="market-sentiment" wx:if="{{item.marketSentiment}}">
+        <text class="sentiment-label">市场情绪:</text>
+        <view class="sentiment-indicator {{item.marketSentiment}}">
+          <text class="sentiment-text">
+            {{item.marketSentiment === 'bullish' ? '看涨' : 
+              item.marketSentiment === 'bearish' ? '看跌' : '中性'}}
+          </text>
+        </view>
+      </view>
+
+      <!-- 增强的报价信息 -->
+      <view class="quotes-info" wx:if="{{item.quotes.length > 0}}">
+        <view class="quotes-header">
+          <text class="quotes-title">收到报价 ({{item.quotes.length}})</text>
+          <text class="best-price" wx:if="{{item.quotes.length > 1}}">
+            最优: {{item.quotes[0].price}}
+          </text>
+        </view>
+        
+        <view class="quotes-list">
+          <view class="quote-item" wx:for="{{item.quotes}}" wx:for-item="quote" wx:key="id">
+            <view class="quote-trader-info">
+              <text class="quote-trader">{{quote.trader}}</text>
+              <view class="confidence-badge {{quote.confidence}}" wx:if="{{quote.confidence}}">
+                <text>{{quote.confidence === 'high' ? '高' : quote.confidence === 'medium' ? '中' : '低'}}</text>
+              </view>
+            </view>
+            
+            <view class="quote-price-info">
+              <text class="quote-price">{{quote.price}}</text>
+              <text class="quote-validity" wx:if="{{quote.validity}}">有效期: {{quote.validity}}</text>
+            </view>
+            
+            <text class="quote-time">{{quote.time}}</text>
+            
+            <!-- 希腊字母信息 -->
+            <view class="greeks-mini" wx:if="{{quote.delta}}">
+              <text class="greek-mini">Delta: {{quote.delta}}</text>
+              <text class="greek-mini" wx:if="{{quote.gamma}}">Gamma: {{quote.gamma}}</text>
+            </view>
+          </view>
+        </view>
+        
+        <!-- 已选择的报价 -->
+        <view class="selected-quote" wx:if="{{item.selectedQuote}}">
+          <text class="selected-label">✓ 已选择:</text>
+          <text class="selected-trader">{{item.selectedQuote.trader}}</text>
+          <text class="selected-price">{{item.selectedQuote.price}}</text>
+        </view>
+      </view>
+
+      <!-- 时间信息 -->
+      <view class="time-info">
+        <text class="create-time">创建: {{item.createTime}}</text>
+        <text class="confirm-time" wx:if="{{item.confirmedTime}}">确认: {{item.confirmedTime}}</text>
+        <text class="expire-time" wx:if="{{item.expiredTime}}">过期: {{item.expiredTime}}</text>
+        <text class="cancel-time" wx:if="{{item.cancelledTime}}">取消: {{item.cancelledTime}}</text>
+        <text class="valid-until" wx:if="{{item.validUntil && item.status === 'pending'}}">
+          有效至: {{item.validUntil}}
+        </text>
+      </view>
+
+      <!-- 备注 -->
+      <view class="notes" wx:if="{{item.notes}}">
+        <text class="notes-label">备注:</text>
+        <text class="notes-content">{{item.notes}}</text>
+      </view>
+
+      <!-- 增强的操作按钮 -->
+      <view class="inquiry-actions">
+        <!-- 待报价状态操作 -->
+        <view class="action-group" wx:if="{{item.status === 'pending'}}">
+          <button class="action-btn edit-btn" 
+                  bindtap="editInquiry" 
+                  data-inquiry="{{item}}"
+                  catchtap="editInquiry">
+            <text>修改</text>
+          </button>
+          <button class="action-btn boost-btn" 
+                  bindtap="boostPriority" 
+                  data-inquiry="{{item}}"
+                  catchtap="boostPriority"
+                  wx:if="{{item.urgency !== 'urgent'}}">
+            <text>加急</text>
+          </button>
+          <button class="action-btn cancel-btn" 
+                  bindtap="cancelInquiry" 
+                  data-inquiry="{{item}}"
+                  catchtap="cancelInquiry">
+            <text>取消</text>
+          </button>
+        </view>
+        
+        <!-- 已确认状态操作 -->
+        <view class="action-group" wx:if="{{item.status === 'confirmed'}}">
+          <button class="action-btn contract-btn" 
+                  bindtap="viewContract" 
+                  data-inquiry="{{item}}"
+                  catchtap="viewContract">
+            <text>查看合约</text>
+          </button>
+          <button class="action-btn duplicate-btn" 
+                  bindtap="duplicateInquiry" 
+                  data-inquiry="{{item}}"
+                  catchtap="duplicateInquiry">
+            <text>复制</text>
+          </button>
+        </view>
+        
+        <!-- 其他状态操作 -->
+        <view class="action-group" wx:if="{{item.status === 'expired' || item.status === 'cancelled'}}">
+          <button class="action-btn duplicate-btn" 
+                  bindtap="duplicateInquiry" 
+                  data-inquiry="{{item}}"
+                  catchtap="duplicateInquiry">
+            <text>复制询价</text>
+          </button>
+          <button class="action-btn delete-btn" 
+                  bindtap="deleteInquiry" 
+                  data-inquiry="{{item}}"
+                  catchtap="deleteInquiry">
+            <text>删除</text>
+          </button>
+        </view>
+        
+        <!-- 通用操作 -->
+        <button class="action-btn share-btn" 
+                bindtap="shareInquiry" 
+                data-inquiry="{{item}}"
+                catchtap="shareInquiry">
+          <text>分享</text>
+        </button>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty-state" wx:if="{{getFilteredList().length === 0}}">
+      <icon type="info" size="60"></icon>
+      <text class="empty-text">暂无询价记录</text>
+      <text class="empty-hint">点击右上角按钮创建新询价</text>
+    </view>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading-container" wx:if="{{loading}}">
+    <view class="loading">
+      <icon type="waiting" size="20"></icon>
+      <text>加载中...</text>
+    </view>
+  </view>
+
+  <!-- 创建询价弹窗 - 增强版 -->
+  <view class="create-modal {{showCreateForm ? 'show' : ''}}" wx:if="{{showCreateForm}}">
+    <view class="modal-overlay" bindtap="hideCreateInquiry"></view>
+    <view class="modal-content">
+      <view class="modal-header">
+        <text class="modal-title">
+          {{editingInquiry ? '编辑询价' : '新建询价'}}
+        </text>
+        <text class="close-icon" bindtap="hideCreateInquiry">×</text>
+      </view>
+
+      <view class="modal-body">
+        <!-- 期权类型 -->
+        <view class="form-group">
+          <text class="form-label">期权类型 *</text>
+          <view class="option-type-selector">
+            <view class="option-type-btn {{newInquiry.optionType === 'call' ? 'active' : ''}}"
+                  bindtap="onOptionTypeChange"
+                  data-value="call">
+              <text>看涨期权</text>
+            </view>
+            <view class="option-type-btn {{newInquiry.optionType === 'put' ? 'active' : ''}}"
+                  bindtap="onOptionTypeChange"
+                  data-value="put">
+              <text>看跌期权</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 策略类型 -->
+        <view class="form-group">
+          <text class="form-label">策略类型 *</text>
+          <picker 
+            bindchange="onStrategyTypeChange" 
+            value="{{newInquiry.strategyType}}" 
+            range="{{['vanilla', 'snowball', 'barrier']}}"
+            range-key="label"
+          >
+            <view class="form-picker">
+              {{newInquiry.strategyType === 'vanilla' ? '香草期权' : 
+                newInquiry.strategyType === 'snowball' ? '雪球期权' : 
+                newInquiry.strategyType === 'barrier' ? '障碍期权' : '选择策略类型'}}
+            </view>
+          </picker>
+        </view>
+
+        <!-- 标的资产 -->
+        <view class="form-group">
+          <text class="form-label">标的资产 *</text>
+          <view class="stock-input-wrapper">
+            <input 
+              class="form-input stock-input" 
+              placeholder="请选择或输入股票"
+              value="{{newInquiry.underlying}}"
+              data-field="underlying"
+              bindinput="onFormInput"
+              bindtap="showStockSearch"
+            />
+            <text class="search-btn-mini" bindtap="showStockSearch">🔍</text>
+          </view>
+          
+          <!-- 智能推荐执行价 -->
+          <view class="smart-suggestions" wx:if="{{newInquiry.underlying && recommendedParams.strikes.length > 0}}">
+            <text class="suggestion-label">推荐执行价:</text>
+            <view class="strike-suggestions">
+              <text class="strike-suggestion" 
+                    wx:for="{{recommendedParams.strikes}}" 
+                    wx:key="*this"
+                    bindtap="selectRecommendedStrike"
+                    data-strike="{{item}}">
+                {{item}}
+              </text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 执行价 -->
+        <view class="form-group">
+          <text class="form-label">执行价 *</text>
+          <input 
+            class="form-input" 
+            type="digit"
+            placeholder="请输入执行价"
+            value="{{newInquiry.strikePrice}}"
+            data-field="strikePrice"
+            bindinput="onFormInput"
+          />
+        </view>
+
+        <!-- 到期日 -->
+        <view class="form-group">
+          <text class="form-label">到期日 *</text>
+          <picker 
+            mode="date" 
+            value="{{newInquiry.expiryDate}}" 
+            bindchange="onDateChange"
+            start="{{todayDate}}"
+          >
+            <view class="form-picker">
+              {{newInquiry.expiryDate || '请选择到期日'}}
+            </view>
+          </picker>
+          
+          <!-- 智能推荐到期日 -->
+          <view class="smart-suggestions" wx:if="{{recommendedParams.expiries.length > 0}}">
+            <text class="suggestion-label">快速选择:</text>
+            <view class="expiry-suggestions">
+              <text class="expiry-suggestion" 
+                    wx:for="{{recommendedParams.expiries}}" 
+                    wx:key="*this"
+                    bindtap="selectRecommendedExpiry"
+                    data-expiry="{{item}}">
+                {{item}}
+              </text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 数量 -->
+        <view class="form-group">
+          <text class="form-label">数量 *</text>
+          <input 
+            class="form-input" 
+            type="number"
+            placeholder="请输入数量"
+            value="{{newInquiry.quantity}}"
+            data-field="quantity"
+            bindinput="onFormInput"
+          />
+        </view>
+
+        <!-- 紧急程度 -->
+        <view class="form-group">
+          <text class="form-label">紧急程度</text>
+          <view class="urgency-selector">
+            <view class="urgency-btn {{newInquiry.urgency === 'urgent' ? 'active' : ''}}"
+                  bindtap="onUrgencyChange"
+                  data-value="urgent">
+              <text>紧急</text>
+              <text class="urgency-desc">2小时内</text>
+            </view>
+            <view class="urgency-btn {{newInquiry.urgency === 'normal' ? 'active' : ''}}"
+                  bindtap="onUrgencyChange"
+                  data-value="normal">
+              <text>正常</text>
+              <text class="urgency-desc">1天内</text>
+            </view>
+            <view class="urgency-btn {{newInquiry.urgency === 'relax' ? 'active' : ''}}"
+                  bindtap="onUrgencyChange"
+                  data-value="relax">
+              <text>宽松</text>
+              <text class="urgency-desc">3天内</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 价格区间 -->
+        <view class="form-group">
+          <text class="form-label">价格区间</text>
+          <view class="price-range">
+            <input 
+              class="form-input price-input" 
+              type="digit"
+              placeholder="目标价格"
+              value="{{newInquiry.targetPrice}}"
+              data-field="targetPrice"
+              bindinput="onFormInput"
+            />
+            <text class="price-separator">-</text>
+            <input 
+              class="form-input price-input" 
+              type="digit"
+              placeholder="最高价格"
+              value="{{newInquiry.maxPrice}}"
+              data-field="maxPrice"
+              bindinput="onFormInput"
+            />
+          </view>
+        </view>
+
+        <!-- 有效期 -->
+        <view class="form-group">
+          <text class="form-label">询价有效期</text>
+          <picker 
+            mode="datetime" 
+            value="{{newInquiry.validUntil}}" 
+            bindchange="onValidUntilChange"
+          >
+            <view class="form-picker">
+              {{newInquiry.validUntil || '请选择有效期'}}
+            </view>
+          </picker>
+        </view>
+
+        <!-- 备注 -->
+        <view class="form-group">
+          <text class="form-label">备注</text>
+          <textarea 
+            class="form-textarea" 
+            placeholder="请输入备注信息（可选）"
+            value="{{newInquiry.notes}}"
+            data-field="notes"
+            bindinput="onFormInput"
+            maxlength="200"
+          ></textarea>
+        </view>
+      </view>
+
+      <view class="modal-footer">
+        <button class="cancel-modal-btn" bindtap="hideCreateInquiry">取消</button>
+        <button class="submit-btn" bindtap="submitInquiry">
+          {{editingInquiry ? '修改询价' : '提交询价'}}
+        </button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 股票搜索弹窗 -->
+  <view class="search-modal {{showSearchModal ? 'show' : ''}}" wx:if="{{showSearchModal}}">
+    <view class="modal-overlay" bindtap="hideCreateInquiry"></view>
+    <view class="search-content">
+      <view class="search-header">
+        <text class="search-title">选择股票</text>
+        <text class="close-icon" bindtap="hideCreateInquiry">×</text>
+      </view>
+      
+      <view class="search-input-wrapper">
+        <input 
+          class="search-input" 
+          placeholder="请输入股票代码或名称"
+          value="{{searchKeyword}}"
+          bindinput="onStockSearchInput"
+          focus="{{showSearchModal}}"
+        />
+      </view>
+      
+      <view class="search-results">
+        <text class="results-title">
+          {{searchKeyword ? '搜索结果' : '热门股票'}}
+        </text>
+        
+        <view class="stock-list">
+          <view class="stock-item" 
+                wx:for="{{searchResults}}" 
+                wx:key="code"
+                bindtap="selectStock"
+                data-stock="{{item}}">
+            <view class="stock-info">
+              <text class="stock-name">{{item.name}}</text>
+              <text class="stock-code">{{item.code}}.{{item.market}}</text>
+            </view>
+            <view class="stock-price" wx:if="{{item.price}}">
+              <text class="price">{{item.price}}</text>
+              <text class="change {{item.change && item.change.includes('+') ? 'positive' : 'negative'}}">
+                {{item.change}}
+              </text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

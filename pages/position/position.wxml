@@ -1,0 +1,327 @@
+<!--pages/position/position.wxml-->
+<view class="container">
+  <!-- 页面头部 -->
+  <view class="header">
+    <view class="title">持仓管理</view>
+    <view class="header-actions">
+      <view class="risk-check-btn" bindtap="checkRiskWarnings">
+        <image src="/images/warning.png" class="action-icon"></image>
+      </view>
+      <view class="export-btn" bindtap="exportReport">
+        <image src="/images/export.png" class="action-icon"></image>
+      </view>
+    </view>
+  </view>
+
+  <!-- 搜索和筛选栏 -->
+  <view class="filter-bar">
+    <view class="search-box">
+      <image src="/images/search.png" class="search-icon"></image>
+      <input class="search-input" 
+             placeholder="搜索标的或期权类型..." 
+             bindinput="searchPositions" 
+             value="{{searchKeyword}}" />
+    </view>
+    
+    <view class="filter-buttons">
+      <view class="filter-btn {{filterRisk === 'ALL' ? 'active' : ''}}"
+            data-risk="ALL"
+            bindtap="filterByRisk">全部</view>
+      <view class="filter-btn risk-low {{filterRisk === 'LOW' ? 'active' : ''}}"
+            data-risk="LOW"
+            bindtap="filterByRisk">低风险</view>
+      <view class="filter-btn risk-medium {{filterRisk === 'MEDIUM' ? 'active' : ''}}"
+            data-risk="MEDIUM"
+            bindtap="filterByRisk">中风险</view>
+      <view class="filter-btn risk-high {{filterRisk === 'HIGH' ? 'active' : ''}}"
+            data-risk="HIGH"
+            bindtap="filterByRisk">高风险</view>
+    </view>
+  </view>
+
+  <!-- 标签切换 -->
+  <view class="tab-bar">
+    <scroll-view class="tab-scroll" scroll-x="true">
+      <view class="tab-item {{currentTab == index ? 'active' : ''}}"
+            wx:for="{{tabList}}" 
+            wx:key="key"
+            wx:for-index="index"
+            data-index="{{index}}"
+            bindtap="switchTab">
+        <text class="tab-text">{{item.name}}</text>
+        <text class="tab-count">({{item.count}})</text>
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- 排序栏 -->
+  <view class="sort-bar">
+    <text class="sort-label">排序：</text>
+    <view class="sort-item {{sortBy === 'createTime' ? 'active' : ''}}"
+          data-sort-by="createTime"
+          bindtap="sortPositions">
+      创建时间
+      <image src="/images/sort-{{sortBy === 'createTime' ? sortOrder : 'none'}}.png" class="sort-icon"></image>
+    </view>
+    <view class="sort-item {{sortBy === 'profitLoss' ? 'active' : ''}}"
+          data-sort-by="profitLoss"
+          bindtap="sortPositions">
+      盈亏
+      <image src="/images/sort-{{sortBy === 'profitLoss' ? sortOrder : 'none'}}.png" class="sort-icon"></image>
+    </view>
+    <view class="sort-item {{sortBy === 'scale' ? 'active' : ''}}"
+          data-sort-by="scale"
+          bindtap="sortPositions">
+      规模
+      <image src="/images/sort-{{sortBy === 'scale' ? sortOrder : 'none'}}.png" class="sort-icon"></image>
+    </view>
+    <view class="sort-item {{sortBy === 'expireTime' ? 'active' : ''}}"
+          data-sort-by="expireTime"
+          bindtap="sortPositions">
+      到期时间
+      <image src="/images/sort-{{sortBy === 'expireTime' ? sortOrder : 'none'}}.png" class="sort-icon"></image>
+    </view>
+  </view>
+
+  <!-- 持仓列表 -->
+  <view class="position-list">
+    <view class="position-item" 
+          wx:for="{{currentPositions}}" 
+          wx:key="id"
+          data-position="{{item}}"
+          bindtap="viewPositionDetail">
+      
+      <!-- 持仓头部信息 -->
+      <view class="position-header">
+        <view class="position-basic">
+          <view class="position-type">{{item.type}}</view>
+          <view class="position-underlying">{{item.underlying}}</view>
+          <view class="risk-badge risk-{{item.riskLevel.toLowerCase()}}">
+            {{item.riskLevel === 'LOW' ? '低风险' : item.riskLevel === 'MEDIUM' ? '中风险' : '高风险'}}
+          </view>
+        </view>
+        
+        <view class="position-status">
+          <view class="status-text status-{{item.statusClass}}">{{item.status}}</view>
+          <view class="remaining-days" wx:if="{{item.remainingDays <= 7}}">
+            <text class="days-number">{{item.remainingDays}}</text>天到期
+          </view>
+        </view>
+      </view>
+
+      <!-- 价格信息 -->
+      <view class="price-info">
+        <view class="price-row">
+          <view class="price-item">
+            <text class="price-label">现价</text>
+            <text class="price-value">{{item.currentPrice}}</text>
+          </view>
+          <view class="price-item">
+            <text class="price-label">执行价</text>
+            <text class="price-value">{{item.strikePrice}}</text>
+          </view>
+          <view class="price-item">
+            <text class="price-label">开仓价</text>
+            <text class="price-value">{{item.openPrice}}</text>
+          </view>
+        </view>
+        
+        <view class="distance-info">
+          <view class="distance-item">
+            <text class="distance-label">距执行价</text>
+            <text class="distance-value {{item.distanceToStrike >= 0 ? 'positive' : 'negative'}}">
+              {{item.distanceToStrike}}%
+            </text>
+          </view>
+          <view class="distance-item">
+            <text class="distance-label">距盈亏平衡</text>
+            <text class="distance-value {{item.distanceToBreakEven >= 0 ? 'positive' : 'negative'}}">
+              {{item.distanceToBreakEven}}%
+            </text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 规模和盈亏信息 -->
+      <view class="scale-profit-info">
+        <view class="scale-info">
+          <view class="scale-item">
+            <text class="scale-label">存续规模</text>
+            <text class="scale-value">{{item.scale}}万</text>
+          </view>
+          <view class="scale-item" wx:if="{{item.openScale !== item.scale}}">
+            <text class="scale-label">开仓规模</text>
+            <text class="scale-value">{{item.openScale}}万</text>
+          </view>
+        </view>
+        
+        <view class="profit-info">
+          <view class="profit-amount {{item.profitLoss >= 0 ? 'profit' : 'loss'}}">
+            {{item.profitLoss >= 0 ? '+' : ''}}{{formatNumber(item.profitLoss)}}
+          </view>
+          <view class="profit-rate {{item.profitRate >= 0 ? 'profit' : 'loss'}}">
+            ({{item.profitRate >= 0 ? '+' : ''}}{{item.profitRate}}%)
+          </view>
+        </view>
+      </view>
+
+      <!-- 时间信息 -->
+      <view class="time-info">
+        <view class="time-item">
+          <text class="time-label">创建时间</text>
+          <text class="time-value">{{item.createTime}}</text>
+        </view>
+        <view class="time-item">
+          <text class="time-label">到期时间</text>
+          <text class="time-value">{{item.expireTime}}</text>
+        </view>
+      </view>
+
+      <!-- 操作按钮 -->
+      <view class="position-actions" catchtap="">
+        <button class="action-btn secondary" size="mini">详情</button>
+        <button class="action-btn primary" size="mini" wx:if="{{item.status !== '完结'}}">平仓</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{currentPositions.length === 0}}">
+    <image src="/images/empty-position.png" class="empty-icon"></image>
+    <text class="empty-text">暂无{{tabList[currentTab].name}}数据</text>
+    <button class="empty-action" wx:if="{{currentTab === 0}}" bindtap="goToInquiry">
+      去询价开仓
+    </button>
+  </view>
+
+  <!-- 持仓详情弹窗 -->
+  <view class="position-detail-mask {{showPositionDetail ? 'show' : ''}}" bindtap="closePositionDetail">
+    <view class="position-detail-popup" catchtap="" wx:if="{{selectedPosition}}">
+      
+      <!-- 弹窗头部 -->
+      <view class="popup-header">
+        <view class="popup-title">
+          {{selectedPosition.type}} · {{selectedPosition.underlying}}
+        </view>
+        <view class="close-btn" bindtap="closePositionDetail">×</view>
+      </view>
+
+      <!-- 详情内容 -->
+      <scroll-view class="popup-content" scroll-y="true">
+        
+        <!-- 基本信息 -->
+        <view class="detail-section">
+          <view class="section-title">基本信息</view>
+          <view class="detail-grid">
+            <view class="detail-item">
+              <text class="detail-label">持仓ID</text>
+              <text class="detail-value">{{selectedPosition.id}}</text>
+            </view>
+            <view class="detail-item">
+              <text class="detail-label">期权类型</text>
+              <text class="detail-value">{{selectedPosition.type}}</text>
+            </view>
+            <view class="detail-item">
+              <text class="detail-label">标的资产</text>
+              <text class="detail-value">{{selectedPosition.underlying}}</text>
+            </view>
+            <view class="detail-item">
+              <text class="detail-label">执行价比例</text>
+              <text class="detail-value">{{selectedPosition.strikeType}}</text>
+            </view>
+            <view class="detail-item">
+              <text class="detail-label">期权费率</text>
+              <text class="detail-value">{{selectedPosition.optionFee}}%</text>
+            </view>
+            <view class="detail-item">
+              <text class="detail-label">风险等级</text>
+              <text class="detail-value risk-{{selectedPosition.riskLevel.toLowerCase()}}">
+                {{selectedPosition.riskLevel === 'LOW' ? '低风险' : selectedPosition.riskLevel === 'MEDIUM' ? '中风险' : '高风险'}}
+              </text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 价格信息 -->
+        <view class="detail-section">
+          <view class="section-title">价格信息</view>
+          <view class="detail-grid">
+            <view class="detail-item">
+              <text class="detail-label">当前价格</text>
+              <text class="detail-value highlight">{{selectedPosition.currentPrice}}</text>
+            </view>
+            <view class="detail-item">
+              <text class="detail-label">执行价格</text>
+              <text class="detail-value">{{selectedPosition.strikePrice}}</text>
+            </view>
+            <view class="detail-item">
+              <text class="detail-label">开仓价格</text>
+              <text class="detail-value">{{selectedPosition.openPrice}}</text>
+            </view>
+            <view class="detail-item">
+              <text class="detail-label">盈亏平衡点</text>
+              <text class="detail-value">{{selectedPosition.breakEvenPoint}}</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 希腊字母 -->
+        <view class="detail-section" wx:if="{{selectedPosition.greeks}}">
+          <view class="section-title">风险指标（希腊字母）</view>
+          <view class="greeks-grid">
+            <view class="greek-item">
+              <view class="greek-name">Delta</view>
+              <view class="greek-value">{{selectedPosition.greeks.delta}}</view>
+            </view>
+            <view class="greek-item">
+              <view class="greek-name">Gamma</view>
+              <view class="greek-value">{{selectedPosition.greeks.gamma}}</view>
+            </view>
+            <view class="greek-item">
+              <view class="greek-name">Theta</view>
+              <view class="greek-value">{{selectedPosition.greeks.theta}}</view>
+            </view>
+            <view class="greek-item">
+              <view class="greek-name">Vega</view>
+              <view class="greek-value">{{selectedPosition.greeks.vega}}</view>
+            </view>
+            <view class="greek-item">
+              <view class="greek-name">Rho</view>
+              <view class="greek-value">{{selectedPosition.greeks.rho}}</view>
+            </view>
+          </view>
+        </view>
+
+        <!-- 盈亏分析 -->
+        <view class="detail-section">
+          <view class="section-title">盈亏分析</view>
+          <view class="pnl-summary">
+            <view class="pnl-item main">
+              <text class="pnl-label">浮动盈亏</text>
+              <text class="pnl-value profit-loss-{{selectedPosition.profitLoss >= 0 ? 'profit' : 'loss'}}">
+                {{selectedPosition.profitLoss >= 0 ? '+' : ''}}{{formatNumber(selectedPosition.profitLoss)}}
+              </text>
+            </view>
+            <view class="pnl-item">
+              <text class="pnl-label">盈亏比例</text>
+              <text class="pnl-value profit-loss-{{selectedPosition.profitRate >= 0 ? 'profit' : 'loss'}}">
+                {{selectedPosition.profitRate >= 0 ? '+' : ''}}{{selectedPosition.profitRate}}%
+              </text>
+            </view>
+          </view>
+        </view>
+
+      </scroll-view>
+
+      <!-- 操作按钮 -->
+      <view class="popup-actions">
+        <button class="action-btn secondary" bindtap="closePositionDetail">关闭</button>
+        <button class="action-btn danger" 
+                bindtap="closePosition"
+                wx:if="{{selectedPosition.status !== '完结'}}">
+          平仓
+        </button>
+      </view>
+    </view>
+  </view>
+</view>
