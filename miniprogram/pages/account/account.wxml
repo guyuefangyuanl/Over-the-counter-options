@@ -1,0 +1,86 @@
+<view class="page">
+  <view class="custom-nav">
+    <view class="account-selector" bindtap="toggleAccountSelector">
+      <text class="account-selector__name">{{selectedAccount.name}}</text>
+      <text class="account-selector__id">({{selectedAccount.id}})</text>
+      <view class="account-selector__arrow {{showAccountSelector ? 'is-open' : ''}}">▼</view>
+    </view>
+    <view class="account-selector__dropdown {{showAccountSelector ? 'is-open' : ''}}" wx:if="{{showAccountSelector}}">
+      <view class="account-selector__item" wx:for="{{accounts}}" wx:key="id" data-id="{{item.id}}" bindtap="switchAccount">{{item.name}} ({{item.id}})</view>
+    </view>
+  </view>
+
+  <view class="action-bar">
+    <view class="btn btn--primary" bindtap="handleAddPosition">＋ 录入持仓</view>
+  </view>
+
+  <view class="card overview-card">
+    <view class="card__header">
+      <view class="overview-card__metrics">
+        <view class="metric">
+          <text class="metric__label">存续规模(元)</text>
+          <text class="metric__value">{{overview.totalScale}}</text>
+        </view>
+        <view class="metric">
+          <text class="metric__label">存续净收益(元)</text>
+          <text class="metric__value {{overview.totalProfit>=0?'text--profit':'text--loss'}}">{{overview.totalProfit}}</text>
+        </view>
+        <view class="metric">
+          <text class="metric__label">完结净收益(元)</text>
+          <text class="metric__value {{overview.completedProfit>=0?'text--profit':'text--loss'}}">{{overview.completedProfit}}</text>
+        </view>
+      </view>
+    </view>
+    <view class="card__body">
+      <view class="cost-section" bindtap="toggleCostDetails">
+        <view class="cost-section__header">
+          <text class="cost-section__title">投入成本(元)</text>
+          <text class="cost-section__total">{{costDetails.total}}</text>
+          <view class="cost-section__arrow {{isCostExpanded ? 'is-open' : ''}}">▼</view>
+        </view>
+        <view class="cost-section__content {{isCostExpanded ? 'is-open' : ''}}" wx:if="{{isCostExpanded}}">
+          <view class="cost-item"><text class="cost-item__label">期权费</text><text class="cost-item__value">{{costDetails.optionFee}}</text></view>
+          <view class="cost-item"><text class="cost-item__label">交易手续费</text><text class="cost-item__value">{{costDetails.commission}}</text></view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="content-section">
+    <view class="tabs">
+      <view class="tab-item {{activeTab==='continuing'?'is-active':''}}" data-tab="continuing" bindtap="switchTab">存续持仓</view>
+      <view class="tab-item {{activeTab==='expiring'?'is-active':''}}" data-tab="expiring" bindtap="switchTab">近期到期</view>
+      <view class="tab-item {{activeTab==='closed'?'is-active':''}}" data-tab="closed" bindtap="switchTab">已完结</view>
+    </view>
+
+    <view class="position-list" wx:if="{{filteredPositions.length>0}}">
+      <view class="card position-card" wx:for="{{filteredPositions}}" wx:key="id">
+        <view class="position-card__header">
+          <text class="position-card__title">{{item.productName}}</text>
+          <text class="position-card__scale">名义本金 {{item.notional}} 元</text>
+        </view>
+        <view class="position-card__grid">
+          <view class="grid-item"><text class="grid-item__label">成交价</text><text class="grid-item__value">{{item.fillPrice}}</text></view>
+          <view class="grid-item"><text class="grid-item__label">当前价</text><text class="grid-item__value">{{item.currentPrice}}</text></view>
+          <view class="grid-item"><text class="grid-item__label">收益率</text><text class="grid-item__value {{item.pnlRate>=0?'text--profit':'text--loss'}}">{{item.pnlRate}}%</text></view>
+          <view class="grid-item"><text class="grid-item__label">账面收益</text><text class="grid-item__value {{item.pnl>=0?'text--profit':'text--loss'}}">{{item.pnl}}</text></view>
+          <view class="grid-item"><text class="grid-item__label">交易商</text><text class="grid-item__value">{{item.dealer}}</text></view>
+          <view class="grid-item"><text class="grid-item__label">剩余天数</text><text class="grid-item__value">{{item.daysLeft}}</text></view>
+        </view>
+        <view class="position-card__footer">
+          <text class="position-card__status">{{item.statusText}}</text>
+          <view class="position-card__actions">
+            <view class="action-text" data-id="{{item.id}}" data-action="modify" bindtap="handlePositionAction">修改</view>
+            <view class="action-text" data-id="{{item.id}}" data-action="close" bindtap="handlePositionAction">平仓记账</view>
+            <view class="action-text action-text--primary" data-id="{{item.id}}" data-action="close-live" bindtap="handlePositionAction">平仓下单</view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="empty-state" wx:else>
+      <view class="empty-state__icon">📄</view>
+      <view class="empty-state__text">暂无相关持仓记录</view>
+    </view>
+  </view>
+</view>

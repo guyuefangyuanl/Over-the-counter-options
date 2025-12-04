@@ -1,0 +1,48 @@
+/* 支付宝设计语言：配色、间距、圆角、阴影、断点 */
+:root {
+  /* 色彩 */
+  --color-primary: #1677FF;
+  --color-bg: #FFFFFF;
+  --color-text: #1F2329;
+  --color-text-secondary: #6B7280;
+  --color-border: #E5E7EB;
+  --color-success: #36B37E;
+  --color-warning: #F5A623;
+  --color-error: #FF4D4F;
+
+  /* 间距 */
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+
+  /* 圆角与阴影 */
+  --radius-4: 4px;
+  --radius-8: 8px;
+  --shadow-card: 0 6px 16px rgba(22, 119, 255, 0.12);
+  --shadow-hover: 0 10px 24px rgba(22, 119, 255, 0.18);
+
+  /* 断点 */
+  --bp-320: 320px;
+  --bp-375: 375px;
+  --bp-414: 414px;
+  --bp-768: 768px;
+  --bp-1024: 1024px;
+}
+
+/* 字体系统 */
+@font-face {
+  font-family: 'SystemUI';
+  src: local('system-ui');
+  font-display: swap;
+}
+
+html, body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: SystemUI, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', Arial,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+}

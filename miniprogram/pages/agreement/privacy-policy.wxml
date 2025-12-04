@@ -1,0 +1,150 @@
+<!--隐私政策页面-->
+<view class="privacy-container">
+  <view class="privacy-header">
+    <text class="privacy-title">隐私政策</text>
+    <text class="update-time">更新时间：2025年01月01日</text>
+  </view>
+
+  <scroll-view class="privacy-content" scroll-y="true">
+    <view class="section">
+      <text class="section-title">引言</text>
+      <text class="section-content">
+        场外期权交易平台（以下简称"我们"）非常重视用户的隐私保护。本隐私政策说明了我们如何收集、使用、存储和保护您的个人信息。请您仔细阅读并理解本隐私政策的全部内容。
+      </text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">我们收集的信息</text>
+      <text class="section-content">
+        1.1 账户信息：当您注册账户时，我们会收集您的手机号码、微信或QQ授权信息等。
+        
+        1.2 身份信息：为了符合监管要求，我们可能需要收集您的真实姓名、身份证号码等信息。
+        
+        1.3 交易信息：您的交易记录、持仓信息、资金变动等。
+        
+        1.4 设备信息：您的设备型号、操作系统、网络信息等。
+        
+        1.5 使用信息：您如何使用我们的服务，包括访问时间、页面浏览记录等。
+      </text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">信息使用目的</text>
+      <text class="section-content">
+        2.1 提供服务：为您提供期权交易相关的各项服务。
+        
+        2.2 身份验证：验证您的身份，确保账户安全。
+        
+        2.3 风险管理：评估和管理交易风险。
+        
+        2.4 合规要求：满足法律法规和监管要求。
+        
+        2.5 服务改进：分析服务使用情况，改进产品功能。
+        
+        2.6 客户服务：为您提供技术支持和客户服务。
+      </text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">信息共享</text>
+      <text class="section-content">
+        3.1 我们不会向第三方出售、出租或以其他方式披露您的个人信息，除非：
+        
+        3.2 获得您的明确同意。
+        
+        3.3 法律法规要求或政府主管部门要求。
+        
+        3.4 为了保护我们或其他用户的合法权益。
+        
+        3.5 与我们的合作伙伴共享必要信息以提供服务，但我们会要求合作伙伴采取相应的保密措施。
+      </text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">信息安全</text>
+      <text class="section-content">
+        4.1 我们采用行业标准的安全措施保护您的个人信息。
+        
+        4.2 使用加密技术传输和存储敏感信息。
+        
+        4.3 定期进行安全评估和漏洞修复。
+        
+        4.4 严格限制访问权限，只有授权人员才能访问您的个人信息。
+        
+        4.5 建立完善的数据备份和灾难恢复机制。
+      </text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">您的权利</text>
+      <text class="section-content">
+        5.1 访问权：您有权了解我们收集的关于您的个人信息。
+        
+        5.2 更正权：您有权要求我们更正不准确的个人信息。
+        
+        5.3 删除权：在特定情况下，您有权要求我们删除您的个人信息。
+        
+        5.4 限制处理权：您有权要求我们限制对您个人信息的处理。
+        
+        5.5 数据可携权：您有权要求我们以结构化、通用和机器可读的格式提供您的个人信息。
+      </text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">Cookie和类似技术</text>
+      <text class="section-content">
+        6.1 我们使用Cookie和类似技术来改善用户体验。
+        
+        6.2 Cookie可以帮助我们记住您的偏好设置。
+        
+        6.3 您可以通过设备设置管理Cookie的使用。
+        
+        6.4 禁用Cookie可能会影响某些功能的正常使用。
+      </text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">未成年人保护</text>
+      <text class="section-content">
+        7.1 我们的服务主要面向成年人。
+        
+        7.2 如果您未满18周岁，请在监护人指导下使用我们的服务。
+        
+        7.3 我们不会故意收集未满13周岁儿童的个人信息。
+        
+        7.4 如果我们发现收集了儿童的个人信息，将立即删除相关信息。
+      </text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">政策更新</text>
+      <text class="section-content">
+        8.1 我们可能会不时更新本隐私政策。
+        
+        8.2 重大变更将通过应用内通知或其他适当方式告知您。
+        
+        8.3 继续使用我们的服务即表示您接受更新后的隐私政策。
+        
+        8.4 建议您定期查看本隐私政策以了解最新信息。
+      </text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">联系我们</text>
+      <text class="section-content">
+        如果您对本隐私政策有任何疑问或需要行使您的权利，请通过以下方式联系我们：
+        
+        客服电话：400-123-4567
+        客服邮箱：privacy@example.com
+        工作时间：周一至周五 9:00-18:00
+        
+        我们将在合理时间内回复您的请求。
+      </text>
+    </view>
+  </scroll-view>
+
+  <view class="privacy-footer">
+    <button class="back-btn" bindtap="goBack">返回</button>
+    <button class="agree-btn" bindtap="agreeAndBack">同意并返回</button>
+  </view>
+</view>

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>询价页 - 分组管理预览</title>
+  <style>
+    body { margin:0; background:#f7f8fa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+    .phone-frame { width: 375px; height: 667px; margin: 24px auto; background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,0.12); border-radius: 24px; overflow: hidden; position: relative; }
+    .top-bar { height: 56px; background: #fff; border-bottom: 1px solid #eee; display:flex; align-items:center; justify-content:center; font-weight:600; }
+    .content { height: calc(100% - 56px); position:relative; }
+    /* 复制部分 WXSS 样式以进行视觉还原 */
+    .group-manage-sheet { height: 60%; position:absolute; left:0; right:0; bottom:0; background:#fff; border-top-left-radius: 16px; border-top-right-radius: 16px; box-shadow: 0 -10px 24px rgba(0,0,0,0.12); display:flex; flex-direction:column; padding: 12px 16px 16px; }
+    .sheet-title { font-size: 16px; font-weight: 600; color: #303133; }
+    .sheet-subtitle { margin-top: 8px; font-size: 14px; color: #909399; }
+    .group-list { flex:1; overflow-y: auto; margin-top: 8px; }
+    .group-item { display:flex; align-items:center; justify-content:space-between; padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 14px; color: #303133; }
+    .group-item.active { background: #f5f9ff; }
+    .sheet-actions { display:flex; align-items:center; gap:8px; margin-top:8px; }
+    .sheet-actions .spacer { flex:1; }
+    .btn { height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #ddd; background:#fff; font-size: 12px; cursor: pointer; }
+    .btn.primary { background: #409EFF; color:#fff; border-color:#409EFF; }
+    .btn.danger { background: #F56C6C; color:#fff; border-color:#F56C6C; }
+    /* 新建分组弹窗 */
+    .overlay { position:absolute; inset:0; background: rgba(0,0,0,0.45); display:none; align-items:center; justify-content:center; }
+    .overlay.show { display:flex; }
+    .new-group-dialog { width: 320px; background:#fff; border-radius:12px; padding:16px; }
+    .dialog-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+    .input { width:100%; height:32px; border:1px solid #ddd; border-radius:8px; padding:0 8px; }
+    .input-error { color:#F56C6C; font-size:12px; margin-top:6px; min-height:14px; }
+    .dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+    /* 编辑模式样式 */
+    .edit-mode { position: relative; padding-right: 80px; }
+    .edit-mode-disabled { opacity: 0.6; cursor: not-allowed; }
+    .edit-actions { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; gap: 12px; align-items: center; }
+    .edit-icon, .delete-icon { cursor: pointer; font-size: 16px; }
+    .edit-icon:hover { color: #409EFF; }
+    .delete-icon:hover { color: #F56C6C; }
+    /* 删除弹窗特殊样式 */
+    .delete-content { margin: 16px 0; font-size: 14px; color: #606266; line-height: 1.5; }
+    .picker-view { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #f5f7fa; border-radius: 6px; margin: 8px 0; font-size: 14px; color: #303133; }
+    /* 设计稿对比：嵌入 Axure 设计稿进行像素校验 */
+    .compare-bar { position:absolute; left:12px; top:12px; display:flex; align-items:center; gap:8px; z-index: 10; }
+    .compare-toggle { display:flex; align-items:center; gap:6px; font-size:12px; }
+    .design-iframe { position:absolute; inset:0; border:0; opacity:0; pointer-events:none; }
+    .design-iframe.show { opacity:0.6; }
+  </style>
+  <script>
+    function toggleCompare() {
+      const iframe = document.querySelector('.design-iframe');
+      iframe.classList.toggle('show');
+    }
+    
+    let isEditMode = false;
+    let currentEditGroup = null;
+    
+    function toggleEditMode() {
+      isEditMode = !isEditMode;
+      const editBtn = document.getElementById('editBtn');
+      const groupItems = document.querySelectorAll('.group-item');
+      
+      editBtn.textContent = isEditMode ? '完成' : '编辑分组';
+      
+      groupItems.forEach(item => {
+        if (item.querySelector('.name').textContent === '全部' || 
+            item.querySelector('.name').textContent === '持仓') {
+          item.classList.toggle('edit-mode-disabled', isEditMode);
+          item.onclick = isEditMode ? null : () => selectGroup(item);
+        } else {
+          if (isEditMode) {
+            item.classList.add('edit-mode');
+            item.onclick = null;
+            // 添加编辑按钮
+            if (!item.querySelector('.edit-actions')) {
+              const actions = document.createElement('div');
+              actions.className = 'edit-actions';
+              actions.innerHTML = `
+                <span class="edit-icon" onclick="openRenameDialog('${item.querySelector('.name').textContent}', this)">✏️</span>
+                <span class="delete-icon" onclick="openDeleteDialog('${item.querySelector('.name').textContent}', this)">🗑️</span>
+              `;
+              item.appendChild(actions);
+            }
+          } else {
+            item.classList.remove('edit-mode');
+            item.onclick = () => selectGroup(item);
+            // 移除编辑按钮
+            const actions = item.querySelector('.edit-actions');
+            if (actions) actions.remove();
+          }
+        }
+      });
+    }
+    
+    function openRenameDialog(groupName, element) {
+      currentEditGroup = groupName;
+      document.getElementById('renameInput').value = groupName;
+      document.getElementById('renameError').textContent = '';
+      document.getElementById('renameOverlay').classList.add('show');
+    }
+    
+    function closeRenameDialog() {
+      document.getElementById('renameOverlay').classList.remove('show');
+      currentEditGroup = null;
+    }
+    
+    function confirmRename() {
+      const newName = document.getElementById('renameInput').value.trim();
+      if (!newName) {
+        document.getElementById('renameError').textContent = '请输入分组名';
+        return;
+      }
+      if (newName.length > 20) {
+        document.getElementById('renameError').textContent = '分组名最多20个字';
+        return;
+      }
+      // 模拟重命名成功
+      const groupItem = Array.from(document.querySelectorAll('.group-item')).find(
+        item => item.querySelector('.name').textContent === currentEditGroup
+      );
+      if (groupItem) {
+        groupItem.querySelector('.name').textContent = newName;
+      }
+      closeRenameDialog();
+    }
+    
+    function openDeleteDialog(groupName, element) {
+      currentEditGroup = groupName;
+      const hasItems = Math.random() > 0.5; // 随机模拟是否有项目
+      const content = document.getElementById('deleteContent');
+      const picker = document.getElementById('targetGroupPicker');
+      
+      if (hasItems) {
+        content.textContent = `该分组下有${Math.floor(Math.random() * 10) + 1}个自选，请选择迁移目标：`;
+        picker.style.display = 'block';
+      } else {
+        content.textContent = '确认删除该分组？';
+        picker.style.display = 'none';
+      }
+      
+      document.getElementById('deleteOverlay').classList.add('show');
+    }
+    
+    function closeDeleteDialog() {
+      document.getElementById('deleteOverlay').classList.remove('show');
+      currentEditGroup = null;
+    }
+    
+    function confirmDelete() {
+      // 模拟删除成功
+      const groupItem = Array.from(document.querySelectorAll('.group-item')).find(
+        item => item.querySelector('.name').textContent === currentEditGroup
+      );
+      if (groupItem) {
+        groupItem.remove();
+      }
+      closeDeleteDialog();
+    }
+    
+    function openNewGroupDialog() {
+      document.querySelector('.overlay').classList.add('show');
+      document.querySelector('#groupName').value='';
+      document.querySelector('#error').textContent='';
+    }
+    
+    function closeNewGroupDialog() {
+      document.querySelector('.overlay').classList.remove('show');
+    }
+    
+    function confirmNewGroup() {
+      const name = document.querySelector('#groupName').value.trim();
+      if (!name) {
+        document.querySelector('#error').textContent='请输入分组名';
+        return;
+      }
+      if (name.length > 20) {
+        document.querySelector('#error').textContent='分组名最多20个字';
+        return;
+      }
+      // 模拟创建成功
+      closeNewGroupDialog();
+      alert(`已创建分组：${name}`);
+    }
+    
+    function selectGroup(element) {
+      document.querySelectorAll('.group-item').forEach(el => el.classList.remove('active'));
+      element.classList.add('active');
+    }
+  </script>
+</head>
+<body>
+  <div class="phone-frame">
+    <div class="top-bar">询价</div>
+    <div class="content">
+      <div class="compare-bar">
+        <label class="compare-toggle"><input type="checkbox" onchange="toggleCompare()"/> 显示设计稿叠层</label>
+      </div>
+      <iframe class="design-iframe" src="../询价.html"></iframe>
+      <div class="group-manage-sheet">
+        <div class="sheet-title">全部分组设置</div>
+        <div class="sheet-subtitle">显示分组</div>
+        <div class="group-list">
+          <div class="group-item active" onclick="selectGroup(this)"><span class="name">全部</span><span>(15)</span></div>
+          <div class="group-item" onclick="selectGroup(this)"><span class="name">持仓</span><span>(3)</span></div>
+          <div class="group-item" onclick="selectGroup(this)"><span class="name">核心资产</span><span>(5)</span></div>
+          <div class="group-item" onclick="selectGroup(this)"><span class="name">科技龙头</span><span>(4)</span></div>
+        </div>
+        <div class="sheet-actions">
+          <button class="btn" onclick="openNewGroupDialog()">新建分组</button>
+          <button class="btn" onclick="toggleEditMode()" id="editBtn">编辑分组</button>
+          <div class="spacer"></div>
+          <button class="btn">取消</button>
+          <button class="btn primary">确定</button>
+        </div>
+      </div>
+      
+      <!-- 新建分组弹窗 -->
+      <div class="overlay">
+        <div class="new-group-dialog">
+          <div class="dialog-title">新建分组</div>
+          <input id="groupName" class="input" placeholder="最多20个字" maxlength="20" />
+          <div id="error" class="input-error"></div>
+          <div class="dialog-actions">
+            <button class="btn" onclick="closeNewGroupDialog()">取消</button>
+            <button class="btn primary" onclick="confirmNewGroup()">确定</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 重命名分组弹窗 -->
+      <div class="overlay" id="renameOverlay">
+        <div class="new-group-dialog">
+          <div class="dialog-title">重命名分组</div>
+          <input id="renameInput" class="input" placeholder="最多20个字" maxlength="20" />
+          <div id="renameError" class="input-error"></div>
+          <div class="dialog-actions">
+            <button class="btn" onclick="closeRenameDialog()">取消</button>
+            <button class="btn primary" onclick="confirmRename()">确定</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 删除分组确认弹窗 -->
+      <div class="overlay" id="deleteOverlay">
+        <div class="new-group-dialog">
+          <div class="dialog-title">删除分组</div>
+          <div class="delete-content" id="deleteContent"></div>
+          <div class="picker-view" id="targetGroupPicker" style="display:none;">
+            <select id="targetGroupSelect">
+              <option value="holding">我的持仓</option>
+              <option value="g2">科技龙头</option>
+            </select>
+          </div>
+          <div class="dialog-actions">
+            <button class="btn" onclick="closeDeleteDialog()">取消</button>
+            <button class="btn danger" onclick="confirmDelete()">删除</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

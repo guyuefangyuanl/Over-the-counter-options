@@ -1,0 +1,235 @@
+/* 意见反馈页面样式 */
+.feedback-container {
+  padding: 0;
+  background-color: #f5f7fa;
+  min-height: 100vh;
+}
+
+/* 页面头部 */
+.feedback-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 40rpx 30rpx;
+  display: flex;
+  align-items: center;
+}
+
+.header-icon {
+  font-size: 60rpx;
+  margin-right: 25rpx;
+}
+
+.header-text {
+  flex: 1;
+}
+
+.title {
+  font-size: 36rpx;
+  font-weight: bold;
+  margin-bottom: 8rpx;
+}
+
+.subtitle {
+  font-size: 24rpx;
+  opacity: 0.8;
+}
+
+/* 反馈表单 */
+.feedback-form {
+  padding: 30rpx;
+}
+
+.form-group {
+  margin-bottom: 40rpx;
+}
+
+.form-label {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 15rpx;
+}
+
+/* 选择器样式 */
+.picker-display {
+  background: white;
+  padding: 25rpx;
+  border-radius: 15rpx;
+  border: 2rpx solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 28rpx;
+  color: #333;
+  box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05);
+}
+
+.picker-arrow {
+  color: #c0c0c0;
+}
+
+/* 文本域样式 */
+.feedback-textarea {
+  width: 100%;
+  min-height: 200rpx;
+  background: white;
+  padding: 25rpx;
+  border-radius: 15rpx;
+  border: 2rpx solid #e0e0e0;
+  font-size: 28rpx;
+  color: #333;
+  line-height: 1.6;
+  box-sizing: border-box;
+  box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05);
+}
+
+.feedback-textarea:focus {
+  border-color: #667eea;
+}
+
+.word-count {
+  text-align: right;
+  margin-top: 10rpx;
+}
+
+.count {
+  font-size: 22rpx;
+  color: #999;
+}
+
+.count.warning {
+  color: #ff9500;
+}
+
+/* 输入框样式 */
+.form-input {
+  width: 100%;
+  background: white;
+  padding: 25rpx;
+  border-radius: 15rpx;
+  border: 2rpx solid #e0e0e0;
+  font-size: 28rpx;
+  color: #333;
+  box-sizing: border-box;
+  box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05);
+}
+
+.form-input:focus {
+  border-color: #667eea;
+}
+
+.form-hint {
+  display: flex;
+  align-items: center;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #999;
+}
+
+.form-hint icon {
+  margin-right: 8rpx;
+}
+
+/* 提交按钮区域 */
+.submit-section {
+  padding: 30rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.submit-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 50rpx;
+  padding: 25rpx;
+  font-size: 30rpx;
+  font-weight: 500;
+  box-shadow: 0 6rpx 20rpx rgba(102, 126, 234, 0.3);
+}
+
+.submit-btn:disabled {
+  background: #e0e0e0;
+  color: #999;
+  box-shadow: none;
+}
+
+.submit-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.cancel-btn {
+  background: transparent;
+  color: #666;
+  border: 2rpx solid #e0e0e0;
+  border-radius: 50rpx;
+  padding: 25rpx;
+  font-size: 28rpx;
+}
+
+.cancel-btn:active {
+  background-color: #f8f8f8;
+}
+
+/* 反馈须知 */
+.feedback-notice {
+  margin: 20rpx 30rpx 60rpx;
+  background: white;
+  border-radius: 15rpx;
+  padding: 25rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05);
+}
+
+.notice-title {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 20rpx;
+}
+
+.notice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.notice-item {
+  display: flex;
+  align-items: flex-start;
+  font-size: 24rpx;
+  color: #666;
+  line-height: 1.5;
+}
+
+.notice-dot {
+  color: #667eea;
+  margin-right: 10rpx;
+  font-weight: bold;
+}
+
+/* 响应式适配 */
+@media (max-width: 750rpx) {
+  .feedback-header {
+    padding: 30rpx 20rpx;
+  }
+  
+  .feedback-form,
+  .submit-section {
+    padding: 25rpx 20rpx;
+  }
+  
+  .feedback-notice {
+    margin: 15rpx 20rpx 50rpx;
+    padding: 20rpx;
+  }
+  
+  .header-icon {
+    font-size: 50rpx;
+  }
+  
+  .title {
+    font-size: 32rpx;
+  }
+}

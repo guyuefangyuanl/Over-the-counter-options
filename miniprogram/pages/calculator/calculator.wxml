@@ -1,0 +1,163 @@
+<!--pages/calculator/calculator.wxml-->
+<view class="page-container">
+  <!-- Tab切换 -->
+  <view class="tabs">
+    <view class="tab-item {{calculatorMode === 'profit' ? 'active' : ''}}" data-mode="profit" bindtap="onTabChange">香草收益</view>
+    <view class="tab-item {{calculatorMode === 'breakeven' ? 'active' : ''}}" data-mode="breakeven" bindtap="onTabChange">香草盈亏平衡</view>
+  </view>
+
+  <!-- 输入表单 -->
+  <view class="form-container">
+    <!-- 标的 -->
+    <view class="form-group">
+      <text class="form-label">标的</text>
+      <view class="form-control clickable" bindtap="onUnderlyingTap">
+        <text>{{underlying.name}} {{underlying.code}}</text>
+        <image class="arrow-icon" src="../../images/arrow-right.png" />
+      </view>
+    </view>
+
+    <!-- 策略 -->
+    <view class="form-group">
+      <text class="form-label">策略</text>
+      <view class="form-control clickable" bindtap="onStrategySelect">
+        <text>{{strategy}}</text>
+        <image class="arrow-icon" src="../../images/arrow-right.png" />
+      </view>
+    </view>
+
+    <!-- 期权费率 -->
+    <view class="form-group">
+      <text class="form-label">期权费率</text>
+      <view class="form-control with-unit">
+        <input type="digit" placeholder="请输入" value="{{inputs.optionFeeRate}}" data-field="optionFeeRate" bindinput="onInputChange" />
+        <text class="unit">%</text>
+      </view>
+    </view>
+
+    <!-- 进场价 -->
+    <view class="form-group">
+      <text class="form-label">进场价</text>
+      <view class="form-control with-unit">
+        <input type="digit" placeholder="请输入" value="{{inputs.entryPrice}}" data-field="entryPrice" bindinput="onInputChange" />
+        <text class="unit">元</text>
+      </view>
+    </view>
+
+    <!-- 结算价 (仅香草收益模式显示) -->
+    <view class="form-group" wx:if="{{calculatorMode === 'profit'}}">
+      <text class="form-label">结算价</text>
+      <view class="form-control with-unit">
+        <input type="digit" placeholder="请输入" value="{{inputs.settlementPrice}}" data-field="settlementPrice" bindinput="onInputChange" />
+        <text class="unit">元</text>
+      </view>
+    </view>
+
+    <!-- 名义本金 -->
+    <view class="form-group">
+      <text class="form-label">名义本金</text>
+      <view class="form-control with-unit">
+        <input type="digit" placeholder="请输入" value="{{inputs.notionalPrincipal}}" data-field="notionalPrincipal" bindinput="onInputChange" />
+        <text class="unit">万元</text>
+      </view>
+    </view>
+
+    <!-- 其他费用 -->
+    <view class="form-group">
+      <text class="form-label">其他费用</text>
+      <view class="form-control with-unit">
+        <input type="digit" placeholder="（选填）请输入" value="{{inputs.otherFees}}" data-field="otherFees" bindinput="onInputChange" />
+        <text class="unit">万元</text>
+      </view>
+    </view>
+
+    <!-- 收益税率 -->
+    <view class="form-group">
+      <text class="form-label">收益税率</text>
+      <view class="form-control with-unit">
+        <input type="digit" placeholder="（选填）请输入" value="{{inputs.taxRate}}" data-field="taxRate" bindinput="onInputChange" />
+        <text class="unit">%</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 操作按钮 -->
+  <view class="action-buttons">
+    <button class="reset-btn" bindtap="reset">重置</button>
+    <button class="calculate-btn" bindtap="calculate" loading="{{calculating}}">
+      {{calculatorMode === 'profit' ? '计算收益' : '计算盈亏平衡点'}}
+    </button>
+  </view>
+
+  <!-- 结果展示 -->
+  <block wx:if="{{results}}">
+    <!-- 香草收益结果 -->
+    <view class="result-card" wx:if="{{calculatorMode === 'profit'}}">
+      <view class="result-header">
+        <text class="result-title">计算结果</text>
+        <button class="share-btn" bindtap="share">分享</button>
+      </view>
+      <view class="profit-details">
+        <view class="profit-item main">
+          <text class="label">结算收益</text>
+          <text class="value highlight">{{results.settlementPnl}} 元</text>
+        </view>
+        <view class="profit-item">
+          <text class="label">净收益</text>
+          <text class="value">{{results.netPnl}} 元</text>
+        </view>
+        <view class="profit-item">
+          <text class="label">收益率</text>
+          <text class="value">{{results.pnlRate}} %</text>
+        </view>
+      </view>
+      <view class="fee-details">
+        <text>期权费 {{results.optionFee}} 元</text>
+        <text>其他费用 {{results.otherFees}} 元</text>
+        <text>税费 {{results.tax}} 元</text>
+      </view>
+      <view class="record-prompt" bindtap="recordPosition">
+        <text>未完结？录入持仓随时跟踪</text>
+      </view>
+    </view>
+
+    <!-- 盈亏平衡结果 -->
+    <view class="result-card" wx:if="{{calculatorMode === 'breakeven'}}">
+      <view class="result-header">
+        <text class="result-title">计算结果</text>
+        <button class="share-btn" bindtap="share">分享</button>
+      </view>
+      <view class="breakeven-result">
+        <text class="value">{{results.breakevenPrice}}</text>
+        <text class="label">盈亏平衡点 (元)</text>
+      </view>
+      <view class="record-prompt" bindtap="recordPosition">
+        <text>未完结？录入持仓随时跟踪</text>
+      </view>
+    </view>
+  </block>
+
+  <!-- 策略选择弹窗 -->
+  <view class="popup-overlay" wx:if="{{showStrategyPicker}}" bindtap="onStrategyPickerClose">
+    <view class="popup-content" catchtap="">
+      <view class="popup-header">选择策略</view>
+      <scroll-view scroll-y class="strategy-list">
+        <view 
+          class="strategy-item {{strategy === item ? 'selected' : ''}}" 
+          wx:for="{{strategies}}" 
+          wx:key="*this" 
+          data-strategy="{{item}}"
+          bindtap="onStrategyChange"
+        >
+          {{item}}
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <!-- 加载态 -->
+  <view class="loading-overlay" wx:if="{{calculating}}">
+    <view class="loading-spinner"></view>
+    <text>计算中...</text>
+  </view>
+</view>

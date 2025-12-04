@@ -1,0 +1,140 @@
+/* app.wxss */
+
+page {
+  /* --- 主题色变量 --- */
+  --primary-color: #409EFF;
+  --success-color: #67C23A;
+  --warning-color: #E6A23C;
+  --danger-color: #F56C6C;
+  --info-color: #909399;
+  --background-color: #f5f7fa;
+  --text-color-primary: #303133;
+  --text-color-regular: #606266;
+  --white: #fff;
+  --gradient-primary: linear-gradient(135deg, var(--primary-color) 0%, #71B7FF 100%);
+  --van-icon-font-family: "vant-icon-local";
+
+  /* --- 全局样式 --- */
+  background-color: var(--background-color);
+  font-family: -apple-system-font, Helvetica Neue, Helvetica, sans-serif;
+  color: var(--text-color-primary);
+}
+
+.container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 200rpx 0;
+  box-sizing: border-box;
+}
+
+/* --- 通用组件样式 --- */
+.btn-primary {
+  background: var(--gradient-primary);
+  color: var(--white);
+  border: none;
+  border-radius: 44rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.btn-primary:after {
+  border: none;
+}
+
+.card {
+  background: var(--white);
+  border-radius: 16rpx;
+  /* 适当的阴影可以提升层次感，但过多的阴影会影响渲染性能 */
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.05);
+  margin-bottom: 24rpx;
+}
+
+/* --- 文本样式工具类 --- */
+.text-primary {
+  color: var(--primary-color);
+}
+
+.text-success {
+  color: var(--success-color);
+}
+
+.text-warning {
+  color: var(--warning-color);
+}
+
+.text-danger {
+  color: var(--danger-color);
+}
+
+.text-info {
+  color: var(--info-color);
+}
+
+/* --- 间距工具类 --- */
+.m-0 { margin: 0; }
+.m-1 { margin: 8rpx; }
+.m-2 { margin: 16rpx; }
+.m-3 { margin: 24rpx; }
+.m-4 { margin: 32rpx; }
+
+.p-0 { padding: 0; }
+.p-1 { padding: 8rpx; }
+.p-2 { padding: 16rpx; }
+.p-3 { padding: 24rpx; }
+.p-4 { padding: 32rpx; }
+
+/* --- Flex布局工具类 --- */
+.d-flex {
+  display: flex;
+}
+
+.flex-column {
+  flex-direction: column;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.align-center {
+  align-items: center;
+}
+
+/* --- 标签组件样式 --- */
+.tag {
+  display: inline-block;
+  padding: 4rpx 16rpx;
+  border-radius: 24rpx;
+  font-size: 24rpx;
+  color: var(--white);
+  margin-right: 8rpx;
+}
+
+.tag-primary {
+  background: var(--primary-color);
+}
+
+.tag-success {
+  background: var(--success-color);
+}
+
+.tag-warning {
+  background: var(--warning-color);
+}
+
+.tag-danger {
+  background: var(--danger-color);
+}
+
+/* 覆盖 Vant 图标字体，强制使用 https，避免 http 加载报错 */
+@font-face {
+  font-family: 'vant-icon-local';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://at.alicdn.com/t/c/font_2553510_kfwma2yq1rs.woff2?t=1694918397022') format('woff2'),
+       url('https://at.alicdn.com/t/c/font_2553510_kfwma2yq1rs.woff?t=1694918397022') format('woff');
+}

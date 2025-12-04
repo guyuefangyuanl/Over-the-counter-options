@@ -1,0 +1,206 @@
+<!--期权计算器页面-->
+<view class="calculator-container">
+  <!-- 计算器类型选择 -->
+  <view class="calculator-type">
+    <text class="section-title">计算器类型</text>
+    <picker bindchange="onCalculatorTypeChange" value="{{calculatorType}}" range="{{['black-scholes', 'binomial', 'monte-carlo']}}" range-key="label">
+      <view class="picker-display">
+        {{calculatorType === 'black-scholes' ? 'Black-Scholes模型' : calculatorType === 'binomial' ? '二项式模型' : '蒙特卡洛模拟'}}
+      </view>
+    </picker>
+  </view>
+
+  <!-- 输入参数 -->
+  <view class="input-section">
+    <text class="section-title">输入参数</text>
+    
+    <!-- 期权类型 -->
+    <view class="input-group">
+      <text class="input-label">期权类型</text>
+      <picker bindchange="onOptionTypeChange" value="{{inputs.optionType}}" range="{{['call', 'put']}}" range-key="label">
+        <view class="picker-display">
+          {{inputs.optionType === 'call' ? '看涨期权' : '看跌期权'}}
+        </view>
+      </picker>
+    </view>
+
+    <!-- 标的价格 -->
+    <view class="input-group">
+      <text class="input-label">标的价格 *</text>
+      <input 
+        class="input-field" 
+        type="digit" 
+        placeholder="请输入标的价格"
+        value="{{inputs.stockPrice}}"
+        data-field="stockPrice"
+        bindinput="onInputChange"
+      />
+    </view>
+
+    <!-- 执行价 -->
+    <view class="input-group">
+      <text class="input-label">执行价 *</text>
+      <input 
+        class="input-field" 
+        type="digit" 
+        placeholder="请输入执行价"
+        value="{{inputs.strikePrice}}"
+        data-field="strikePrice"
+        bindinput="onInputChange"
+      />
+    </view>
+
+    <!-- 到期时间 -->
+    <view class="input-group">
+      <text class="input-label">到期时间(天) *</text>
+      <input 
+        class="input-field" 
+        type="number" 
+        placeholder="请输入到期天数"
+        value="{{inputs.timeToExpiry}}"
+        data-field="timeToExpiry"
+        bindinput="onInputChange"
+      />
+    </view>
+
+    <!-- 无风险利率 -->
+    <view class="input-group">
+      <text class="input-label">无风险利率(%)</text>
+      <input 
+        class="input-field" 
+        type="digit" 
+        placeholder="年化利率"
+        value="{{inputs.riskFreeRate}}"
+        data-field="riskFreeRate"
+        bindinput="onInputChange"
+      />
+    </view>
+
+    <!-- 波动率 -->
+    <view class="input-group">
+      <text class="input-label">波动率(%)</text>
+      <input 
+        class="input-field" 
+        type="digit" 
+        placeholder="年化波动率"
+        value="{{inputs.volatility}}"
+        data-field="volatility"
+        bindinput="onInputChange"
+      />
+    </view>
+
+    <!-- 股息率 -->
+    <view class="input-group">
+      <text class="input-label">股息率(%)</text>
+      <input 
+        class="input-field" 
+        type="digit" 
+        placeholder="年化股息率"
+        value="{{inputs.dividendYield}}"
+        data-field="dividendYield"
+        bindinput="onInputChange"
+      />
+    </view>
+  </view>
+
+  <!-- 操作按钮 -->
+  <view class="action-buttons">
+    <button class="clear-btn" bindtap="clearInputs">清空</button>
+    <button class="calculate-btn" bindtap="calculate" loading="{{calculating}}">
+      {{calculating ? '计算中...' : '开始计算'}}
+    </button>
+  </view>
+
+  <!-- 计算结果 -->
+  <view class="results-section" wx:if="{{results}}">
+    <text class="section-title">计算结果</text>
+    
+    <!-- 期权价格 -->
+    <view class="result-card main-result">
+      <text class="result-label">期权价格</text>
+      <text class="result-value main">{{results.optionPrice}}</text>
+    </view>
+
+    <!-- 基本信息 -->
+    <view class="result-grid">
+      <view class="result-item">
+        <text class="result-label">内在价值</text>
+        <text class="result-value">{{results.intrinsicValue}}</text>
+      </view>
+      <view class="result-item">
+        <text class="result-label">时间价值</text>
+        <text class="result-value">{{results.timeValue}}</text>
+      </view>
+      <view class="result-item">
+        <text class="result-label">价性</text>
+        <text class="result-value">{{results.moneyness}}</text>
+      </view>
+    </view>
+
+    <!-- 希腊字母 -->
+    <view class="greeks-section">
+      <text class="subsection-title">希腊字母</text>
+      <view class="greeks-grid">
+        <view class="greek-item">
+          <text class="greek-label">Delta</text>
+          <text class="greek-value">{{results.delta}}</text>
+          <text class="greek-desc">价格敏感性</text>
+        </view>
+        <view class="greek-item">
+          <text class="greek-label">Gamma</text>
+          <text class="greek-value">{{results.gamma}}</text>
+          <text class="greek-desc">Delta敏感性</text>
+        </view>
+        <view class="greek-item">
+          <text class="greek-label">Theta</text>
+          <text class="greek-value">{{results.theta}}</text>
+          <text class="greek-desc">时间衰减</text>
+        </view>
+        <view class="greek-item">
+          <text class="greek-label">Vega</text>
+          <text class="greek-value">{{results.vega}}</text>
+          <text class="greek-desc">波动率敏感性</text>
+        </view>
+        <view class="greek-item">
+          <text class="greek-label">Rho</text>
+          <text class="greek-value">{{results.rho}}</text>
+          <text class="greek-desc">利率敏感性</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 历史记录 -->
+  <view class="history-section" wx:if="{{history.length > 0}}">
+    <text class="section-title">历史记录</text>
+    <view class="history-list">
+      <view 
+        class="history-item" 
+        wx:for="{{history}}" 
+        wx:key="id"
+        data-index="{{index}}"
+        bindtap="viewHistory"
+      >
+        <view class="history-header">
+          <text class="history-time">{{item.timestamp}}</text>
+          <view class="history-actions">
+            <button 
+              class="delete-btn" 
+              data-index="{{index}}"
+              bindtap="deleteHistory"
+              catchtap="deleteHistory"
+            >删除</button>
+          </view>
+        </view>
+        <view class="history-content">
+          <text class="history-params">
+            {{item.inputs.optionType === 'call' ? '看涨' : '看跌'}} | 
+            标的: {{item.inputs.stockPrice}} | 
+            执行价: {{item.inputs.strikePrice}}
+          </text>
+          <text class="history-result">期权价格: {{item.results.optionPrice}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

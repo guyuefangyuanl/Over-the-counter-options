@@ -1,0 +1,6 @@
+<view class="primary-tabs">
+  <view class="primary-tab-item {{active === 'self' ? 'is-active' : ''}}" data-tab="self" bindtap="onSwitch">自选</view>
+  <view class="primary-tab-item {{active === 'stock' ? 'is-active' : ''}}" data-tab="stock" bindtap="onSwitch">个股</view>
+  <view class="primary-tab-item {{active === 'index' ? 'is-active' : ''}}" data-tab="index" bindtap="onSwitch">指数</view>
+  <view class="primary-tab-item {{active === 'etf' ? 'is-active' : ''}}" data-tab="etf" bindtap="onSwitch">ETF</view>
+</view>

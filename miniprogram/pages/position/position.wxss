@@ -1,0 +1,709 @@
+/* pages/position/position.wxss */
+.container {
+  background-color: #f5f5f5;
+  min-height: 100vh;
+  padding-bottom: 40rpx;
+}
+
+/* 页面头部 */
+.header {
+  background: linear-gradient(135deg, #4298EF 0%, #6BB6FF 100%);
+  color: #fff;
+  padding: 30rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.title {
+  font-size: 36rpx;
+  font-weight: 600;
+}
+
+.header-actions {
+  display: flex;
+  gap: 20rpx;
+}
+
+.risk-check-btn, .export-btn {
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+}
+
+.action-icon {
+  width: 32rpx;
+  height: 32rpx;
+}
+
+/* 搜索和筛选栏 */
+.filter-bar {
+  background-color: #fff;
+  padding: 30rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.search-box {
+  position: relative;
+  margin-bottom: 20rpx;
+}
+
+.search-icon {
+  position: absolute;
+  left: 20rpx;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32rpx;
+  height: 32rpx;
+  opacity: 0.6;
+}
+
+.search-input {
+  background-color: #f8f9fa;
+  border-radius: 25rpx;
+  padding: 20rpx 30rpx 20rpx 70rpx;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.search-input::placeholder {
+  color: #999;
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 20rpx;
+}
+
+.filter-btn {
+  padding: 16rpx 24rpx;
+  border-radius: 20rpx;
+  font-size: 24rpx;
+  color: #666;
+  background-color: #f8f9fa;
+  border: 1rpx solid #e9ecef;
+  transition: all 0.3s ease;
+}
+
+.filter-btn.active {
+  background-color: #4298EF;
+  color: #fff;
+  border-color: #4298EF;
+}
+
+.filter-btn.risk-low.active {
+  background-color: #52c41a;
+  border-color: #52c41a;
+}
+
+.filter-btn.risk-medium.active {
+  background-color: #faad14;
+  border-color: #faad14;
+}
+
+.filter-btn.risk-high.active {
+  background-color: #ff4d4f;
+  border-color: #ff4d4f;
+}
+
+/* 标签栏 */
+.tab-bar {
+  background-color: #fff;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.tab-scroll {
+  white-space: nowrap;
+  padding: 0 30rpx;
+}
+
+.tab-item {
+  display: inline-block;
+  padding: 24rpx 0;
+  margin-right: 40rpx;
+  position: relative;
+  color: #666;
+}
+
+.tab-item.active {
+  color: #4298EF;
+}
+
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4rpx;
+  background-color: #4298EF;
+  border-radius: 2rpx;
+}
+
+.tab-text {
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.tab-count {
+  font-size: 24rpx;
+  margin-left: 8rpx;
+}
+
+/* 排序栏 */
+.sort-bar {
+  background-color: #fff;
+  padding: 20rpx 30rpx;
+  display: flex;
+  align-items: center;
+  gap: 30rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.sort-label {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.sort-item {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 24rpx;
+  color: #666;
+  padding: 8rpx 12rpx;
+  border-radius: 12rpx;
+  transition: all 0.3s ease;
+}
+
+.sort-item.active {
+  color: #4298EF;
+  background-color: #f0f8ff;
+}
+
+.sort-icon {
+  width: 20rpx;
+  height: 20rpx;
+}
+
+/* 持仓列表 */
+.position-list {
+  padding: 20rpx;
+}
+
+.position-item {
+  background-color: #fff;
+  border-radius: 12rpx;
+  padding: 30rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.08);
+  transition: transform 0.3s ease;
+}
+
+.position-item:active {
+  transform: scale(0.98);
+}
+
+/* 持仓头部 */
+.position-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+  padding-bottom: 20rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.position-basic {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.position-type {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #4298EF;
+}
+
+.position-underlying {
+  font-size: 28rpx;
+  color: #333;
+}
+
+.risk-badge {
+  padding: 6rpx 12rpx;
+  border-radius: 12rpx;
+  font-size: 20rpx;
+  font-weight: 600;
+}
+
+.risk-badge.risk-low {
+  background-color: #f6ffed;
+  color: #52c41a;
+  border: 1rpx solid #b7eb8f;
+}
+
+.risk-badge.risk-medium {
+  background-color: #fffbe6;
+  color: #faad14;
+  border: 1rpx solid #ffe58f;
+}
+
+.risk-badge.risk-high {
+  background-color: #fff2f0;
+  color: #ff4d4f;
+  border: 1rpx solid #ffb3b3;
+}
+
+.position-status {
+  text-align: right;
+}
+
+.status-text {
+  font-size: 26rpx;
+  font-weight: 600;
+  margin-bottom: 4rpx;
+}
+
+.status-text.status-open {
+  color: #4298EF;
+}
+
+.status-text.status-partial {
+  color: #faad14;
+}
+
+.status-text.status-closed {
+  color: #52c41a;
+}
+
+.remaining-days {
+  font-size: 22rpx;
+  color: #ff4d4f;
+}
+
+.days-number {
+  font-weight: 600;
+}
+
+/* 价格信息 */
+.price-info {
+  margin-bottom: 20rpx;
+}
+
+.price-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+
+.price-item {
+  text-align: center;
+}
+
+.price-label {
+  display: block;
+  font-size: 24rpx;
+  color: #666;
+  margin-bottom: 6rpx;
+}
+
+.price-value {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.distance-info {
+  display: flex;
+  gap: 40rpx;
+}
+
+.distance-item {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.distance-label {
+  font-size: 24rpx;
+  color: #666;
+}
+
+.distance-value {
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.distance-value.positive {
+  color: #52c41a;
+}
+
+.distance-value.negative {
+  color: #ff4d4f;
+}
+
+/* 规模和盈亏信息 */
+.scale-profit-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+  padding: 20rpx;
+  background-color: #f8f9fa;
+  border-radius: 8rpx;
+}
+
+.scale-info {
+  display: flex;
+  gap: 30rpx;
+}
+
+.scale-item {
+  text-align: center;
+}
+
+.scale-label {
+  display: block;
+  font-size: 22rpx;
+  color: #666;
+  margin-bottom: 6rpx;
+}
+
+.scale-value {
+  display: block;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.profit-info {
+  text-align: right;
+}
+
+.profit-amount {
+  font-size: 32rpx;
+  font-weight: 600;
+  margin-bottom: 4rpx;
+}
+
+.profit-rate {
+  font-size: 24rpx;
+}
+
+.profit-amount.profit, .profit-rate.profit {
+  color: #52c41a;
+}
+
+.profit-amount.loss, .profit-rate.loss {
+  color: #ff4d4f;
+}
+
+/* 时间信息 */
+.time-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+
+.time-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.time-label {
+  font-size: 22rpx;
+  color: #666;
+}
+
+.time-value {
+  font-size: 24rpx;
+  color: #333;
+}
+
+/* 操作按钮 */
+.position-actions {
+  display: flex;
+  gap: 20rpx;
+  justify-content: flex-end;
+}
+
+.action-btn {
+  font-size: 24rpx !important;
+  border-radius: 16rpx !important;
+  padding: 12rpx 24rpx !important;
+  line-height: 1.2 !important;
+}
+
+.action-btn.secondary {
+  background-color: #f8f9fa !important;
+  color: #666 !important;
+  border: 1rpx solid #e9ecef !important;
+}
+
+.action-btn.primary {
+  background-color: #4298EF !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+.action-btn.danger {
+  background-color: #ff4d4f !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100rpx 30rpx;
+  text-align: center;
+}
+
+.empty-icon {
+  width: 120rpx;
+  height: 120rpx;
+  margin-bottom: 30rpx;
+  opacity: 0.5;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: #999;
+  margin-bottom: 30rpx;
+}
+
+.empty-action {
+  background-color: #4298EF !important;
+  color: #fff !important;
+  border-radius: 25rpx !important;
+  padding: 20rpx 40rpx !important;
+}
+
+/* 持仓详情弹窗 */
+.position-detail-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.position-detail-mask.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.position-detail-popup {
+  background-color: #fff;
+  border-radius: 16rpx;
+  width: 680rpx;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow: hidden;
+  transform: translateY(50rpx);
+  transition: transform 0.3s ease;
+}
+
+.position-detail-mask.show .position-detail-popup {
+  transform: translateY(0);
+}
+
+/* 弹窗头部 */
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 30rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+  background-color: #f8f9fa;
+}
+
+.popup-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.close-btn {
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+  color: #666;
+  background-color: #e9ecef;
+  border-radius: 50%;
+}
+
+/* 弹窗内容 */
+.popup-content {
+  padding: 30rpx;
+  max-height: 60vh;
+}
+
+.detail-section {
+  margin-bottom: 40rpx;
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 20rpx;
+  padding-bottom: 10rpx;
+  border-bottom: 2rpx solid #4298EF;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20rpx;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.detail-label {
+  font-size: 24rpx;
+  color: #666;
+}
+
+.detail-value {
+  font-size: 26rpx;
+  color: #333;
+  font-weight: 600;
+}
+
+.detail-value.highlight {
+  color: #4298EF;
+  font-size: 28rpx;
+}
+
+.detail-value.risk-low {
+  color: #52c41a;
+}
+
+.detail-value.risk-medium {
+  color: #faad14;
+}
+
+.detail-value.risk-high {
+  color: #ff4d4f;
+}
+
+/* 希腊字母网格 */
+.greeks-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20rpx;
+}
+
+.greek-item {
+  text-align: center;
+  padding: 20rpx;
+  background-color: #f8f9fa;
+  border-radius: 8rpx;
+}
+
+.greek-name {
+  font-size: 24rpx;
+  color: #666;
+  margin-bottom: 8rpx;
+}
+
+.greek-value {
+  font-size: 26rpx;
+  color: #333;
+  font-weight: 600;
+}
+
+/* 盈亏分析 */
+.pnl-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.pnl-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx;
+  background-color: #f8f9fa;
+  border-radius: 8rpx;
+}
+
+.pnl-item.main {
+  background: linear-gradient(135deg, #f0f8ff 0%, #e6f4ff 100%);
+  border: 1rpx solid #d6e9ff;
+}
+
+.pnl-label {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.pnl-value {
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.pnl-value.profit {
+  color: #52c41a;
+}
+
+.pnl-value.loss {
+  color: #ff4d4f;
+}
+
+.pnl-value.profit-loss-profit {
+  color: #52c41a;
+}
+
+.pnl-value.profit-loss-loss {
+  color: #ff4d4f;
+}
+
+/* 弹窗操作按钮 */
+.popup-actions {
+  display: flex;
+  gap: 20rpx;
+  padding: 30rpx;
+  border-top: 1rpx solid #f0f0f0;
+  background-color: #f8f9fa;
+}
+
+.popup-actions .action-btn {
+  flex: 1;
+  height: 80rpx !important;
+  border-radius: 12rpx !important;
+  font-size: 28rpx !important;
+  font-weight: 600 !important;
+}

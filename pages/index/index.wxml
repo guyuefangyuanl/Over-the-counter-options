@@ -1,0 +1,325 @@
+<view class="container" style="width: 845rpx; display: flex; box-sizing: border-box; position: relative; left: -48rpx; top: 0rpx">
+  <!-- 加载状态 -->
+  <view class="loading-container" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <!-- 主内容 -->
+  <view class="main-content" wx:else>
+    <!-- 顶部用户信息 -->
+    <view class="header-section">
+      <view class="user-info" wx:if="{{hasUserInfo}}">
+        <image class="avatar" src="{{userInfo.avatarUrl}}" mode="aspectFill"></image>
+        <view class="user-detail">
+          <text class="username">{{userInfo.nickName}}</text>
+          <text class="welcome-text">欢迎使用期权助手</text>
+        </view>
+      </view>
+      <view class="user-info" wx:else>
+        <view class="avatar-placeholder">👤</view>
+        <view class="user-detail">
+          <button class="login-btn" bindtap="getUserProfile">
+            点击登录
+          </button>
+          <text class="welcome-text">登录后体验更多功能</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 搜索区域 -->
+    <view class="search-container">
+      <view class="search-box">
+        <view class="search-icon">🔍</view>
+        <input 
+          class="search-input" 
+          placeholder="搜索期权代码/名称" 
+          value="{{searchValue}}"
+          bindinput="onSearchInput"
+          bindfocus="onSearchFocus"
+          bindconfirm="onSearch"
+        />
+        <view class="search-btn" bindtap="onSearch" wx:if="{{searchValue}}">
+          搜索
+        </view>
+      </view>
+    </view>
+
+    <!-- 轮播图卡片 -->
+    <view class="banner-container enhanced-card" wx:if="{{!showSearchResults}}">
+      <swiper 
+        class="banner-swiper"
+        indicator-dots="{{swiperConfig.indicatorDots}}"
+        autoplay="{{swiperConfig.autoplay}}"
+        interval="{{swiperConfig.interval}}"
+        duration="{{swiperConfig.duration}}"
+        circular="{{swiperConfig.circular}}"
+        indicator-color="rgba(255,255,255,0.5)"
+        indicator-active-color="#4caf50"
+      >
+        <swiper-item 
+          wx:for="{{bannerList}}" 
+          wx:key="id"
+          data-index="{{index}}"
+          bindtap="onBannerTap"
+        >
+          <view class="banner-item">
+            <image 
+              class="banner-image" 
+              src="{{item.image}}" 
+              mode="aspectFill"
+            />
+            <view class="banner-overlay">
+              <view class="banner-content">
+                <text class="banner-title">{{item.title}}</text>
+                <text class="banner-desc">{{item.desc}}</text>
+              </view>
+            </view>
+          </view>
+        </swiper-item>
+      </swiper>
+    </view>
+
+    <!-- 搜索结果 -->
+    <view class="search-results" wx:if="{{showSearchResults}}">
+      <view class="search-header">
+        <text class="search-title">搜索结果</text>
+        <text class="search-cancel" bindtap="onSearchCancel">取消</text>
+      </view>
+
+      <!-- 搜索中状态 -->
+      <view class="searching-state" wx:if="{{isSearching}}">
+        <view class="loading-spinner small"></view>
+        <text class="searching-text">搜索中...</text>
+      </view>
+
+      <!-- 搜索结果列表 -->
+      <view class="result-list" wx:elif="{{searchResults.length > 0}}">
+        <view 
+          class="result-item" 
+          wx:for="{{searchResults}}" 
+          wx:key="code"
+          data-code="{{item.code}}"
+          bindtap="onOptionTap"
+        >
+          <view class="result-info">
+            <text class="result-name">{{item.name}}</text>
+            <text class="result-code">{{item.code}}</text>
+          </view>
+          <view class="result-price">
+            <text class="price">¥{{item.price}}</text>
+            <text class="change {{item.change >= 0 ? 'up' : 'down'}}">
+              {{item.change >= 0 ? '+' : ''}}{{item.changeRate}}
+            </text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 空结果 -->
+      <view class="empty-result" wx:elif="{{!isSearching && searchValue}}">
+        <text class="empty-icon">🔍</text>
+        <text class="empty-text">未找到相关期权</text>
+        <text class="empty-hint">请尝试其他关键词</text>
+      </view>
+
+      <!-- 搜索历史和热门搜索 -->
+      <view class="search-suggestions" wx:else>
+        <!-- 搜索历史 -->
+        <view class="suggestion-section" wx:if="{{searchHistory.length > 0}}">
+          <view class="section-header">
+            <text class="section-title">搜索历史</text>
+            <text class="clear-btn" bindtap="clearSearchHistory">清空</text>
+          </view>
+          <view class="tag-list">
+            <view 
+              class="tag-item" 
+              wx:for="{{searchHistory}}" 
+              wx:key="index"
+              data-keyword="{{item}}"
+              bindtap="onHistoryItemTap"
+            >
+              {{item}}
+            </view>
+          </view>
+        </view>
+
+        <!-- 热门搜索 -->
+        <view class="suggestion-section">
+          <view class="section-header">
+            <text class="section-title">热门搜索</text>
+          </view>
+          <view class="tag-list">
+            <view 
+              class="tag-item hot" 
+              wx:for="{{hotSearches}}" 
+              wx:key="index"
+              data-keyword="{{item}}"
+              bindtap="onHotSearchTap"
+            >
+              🔥 {{item}}
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 首页内容 -->
+    <view class="home-content" wx:if="{{!showSearchResults}}">
+      <!-- 快捷功能 -->
+      <view class="section quick-actions-section">
+        <view class="quick-actions">
+          <view 
+            class="action-item" 
+            wx:for="{{quickActions}}" 
+            wx:key="id"
+            data-path="{{item.path}}"
+            bindtap="onQuickActionTap"
+          >
+            <view class="action-icon" style="background: {{item.color}}">
+              <text>{{item.icon}}</text>
+            </view>
+            <text class="action-name">{{item.name}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 新增：持仓案例卡片 -->
+      <view class="section holding-section">
+        <view class="section-header">
+          <text class="section-title">持仓案例</text>
+        </view>
+
+        <view class="holding-card enhanced-card">
+          <!-- Tab导航 -->
+          <view class="holding-tabs">
+            <view 
+              class="holding-tab-item {{holdingsData.activeTab === 'active' ? 'active' : ''}}"
+              data-tab="active"
+              bindtap="onHoldingTabChange"
+            >存续持仓</view>
+            <view 
+              class="holding-tab-item {{holdingsData.activeTab === 'expiring' ? 'active' : ''}}"
+              data-tab="expiring"
+              bindtap="onHoldingTabChange"
+            >近期到期</view>
+            <view 
+              class="holding-tab-item {{holdingsData.activeTab === 'expired' ? 'active' : ''}}"
+              data-tab="expired"
+              bindtap="onHoldingTabChange"
+            >已到期</view>
+          </view>
+
+          <!-- 持仓列表 -->
+          <view class="holding-list {{holdingsAnimate ? 'fade-in' : ''}}">
+            <block wx:for="{{holdingsData.holdings}}" wx:key="id">
+              <view wx:if="{{item.status === holdingsData.activeTab}}" class="holding-item" data-id="{{item.id}}" bindtap="onHoldingItemTap">
+                <view class="holding-left">
+                  <text class="holding-name">{{item.name}}</text>
+                  <text class="holding-market">{{item.market}} {{item.code}}</text>
+                  <text class="holding-structure">{{item.structure}}</text>
+                </view>
+                <view class="holding-right">
+                  <text class="holding-fee">费率 {{item.feeRate}}</text>
+                  <text class="holding-scale">规模 {{item.scale}}</text>
+                  <view class="holding-profit">
+                    <text class="profit {{item.profit >= 0 ? 'up' : 'down'}}">净盈亏 ¥{{dataFormatter.formatNumber(item.profit, 2)}}</text>
+                    <text class="profit-rate {{item.profitRate >= 0 ? 'up' : 'down'}}">净利率 {{dataFormatter.formatPercent(item.profitRate, 2)}}</text>
+                  </view>
+                </view>
+              </view>
+            </block>
+          </view>
+
+          <!-- 知识推荐 -->
+          <view class="knowledge-section">
+            <block wx:for="{{holdingsData.knowledge}}" wx:key="id">
+              <view class="knowledge-item" data-id="{{item.id}}" bindtap="onKnowledgeItemTap">
+                <text class="knowledge-icon">{{item.type === 'option' ? '📘' : (item.type === 'vanilla' ? '📗' : '📙')}}</text>
+                <view class="knowledge-info">
+                  <text class="knowledge-title">{{item.title}}</text>
+                  <text class="knowledge-meta">{{item.date}}</text>
+                </view>
+                <text class="knowledge-arrow">→</text>
+              </view>
+            </block>
+          </view>
+        </view>
+      </view>
+
+      <!-- 市场指数 -->
+      <view class="section">
+        <view class="section-header">
+          <text class="section-title">市场指数</text>
+          <text class="more-btn" data-type="indices" bindtap="onViewMore">
+            更多 →
+          </text>
+        </view>
+        <view class="index-cards">
+          <view 
+            class="index-card enhanced-card" 
+            wx:for="{{marketIndices}}" 
+            wx:key="code"
+            data-code="{{item.code}}"
+            bindtap="onIndexTap"
+          >
+            <view class="index-info">
+              <text class="index-name">{{item.name}}</text>
+              <text class="index-code">{{item.code}}</text>
+            </view>
+            <view class="index-data">
+              <text class="index-price">{{item.formattedPrice}}</text>
+              <text class="index-change {{item.change >= 0 ? 'up' : 'down'}}">
+                {{item.change >= 0 ? '+' : ''}}{{item.changeRate}}
+              </text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 热门期权 -->
+      <view class="section">
+        <view class="section-header">
+          <text class="section-title">热门期权</text>
+          <text class="more-btn" data-type="options" bindtap="onViewMore">
+            更多 →
+          </text>
+        </view>
+        <view class="option-list">
+          <view 
+            class="option-card enhanced-card" 
+            wx:for="{{hotOptions}}" 
+            wx:key="code"
+            data-code="{{item.code}}"
+            bindtap="onOptionTap"
+          >
+            <view class="option-header">
+              <view class="option-info">
+                <text class="option-name">{{item.name}}</text>
+                <text class="option-code">{{item.code}}</text>
+              </view>
+              <view class="option-type {{item.type === 'call' ? 'call' : 'put'}}">
+                {{item.type === 'call' ? '认购' : '认沽'}}
+              </view>
+            </view>
+            <view class="option-data">
+              <view class="data-item">
+                <text class="data-label">最新价</text>
+                <text class="data-value price">¥{{item.formattedPrice}}</text>
+              </view>
+              <view class="data-item">
+                <text class="data-label">涨跌幅</text>
+                <text class="data-value {{item.change >= 0 ? 'up' : 'down'}}">
+                  {{item.change >= 0 ? '+' : ''}}{{item.changeRate}}
+                </text>
+              </view>
+              <view class="data-item">
+                <text class="data-label">成交量</text>
+                <text class="data-value">{{item.volume}}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

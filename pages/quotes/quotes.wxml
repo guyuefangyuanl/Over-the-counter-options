@@ -1,0 +1,216 @@
+<!--个股期权报价页面-->
+<view class="quotes-container">
+  <!-- 顶部状态栏 -->
+  <view class="status-bar">
+    <view class="time">1:21</view>
+    <view class="signal-battery">
+      <view class="signal"></view>
+      <view class="battery"></view>
+    </view>
+  </view>
+
+  <!-- 股票信息头部 -->
+  <view class="stock-header">
+    <view class="back-btn" bindtap="goBack">
+      <!-- 使用微信小程序内置图标 -->
+      <text class="back-icon">←</text>
+    </view>
+    <view class="stock-info">
+      <text class="stock-name">{{currentStock.name}}</text>
+      <text class="stock-price">{{currentStock.displayText}}</text>
+    </view>
+  </view>
+
+  <!-- 页面标题 -->
+  <view class="page-title">
+    <text>期权报价</text>
+  </view>
+
+  <!-- 股票选择区域 -->
+  <view class="stock-selection">
+    <view class="search-btn" bindtap="onSearchStock">
+      <text class="search-icon">🔍</text>
+    </view>
+    <view class="stock-detail">
+      <text class="stock-full-name">{{currentStock.name}} {{currentStock.code}}</text>
+    </view>
+    <view class="service-btn" bindtap="contactService">
+      <text class="service-icon">📞</text>
+      <text>客服</text>
+    </view>
+  </view>
+
+  <!-- 查询搜索弹窗 -->
+  <view class="search-modal {{showSearch ? 'show' : ''}}" wx:if="{{showSearch}}">
+    <view class="search-content">
+      <view class="search-input-wrapper">
+        <input 
+          class="search-input" 
+          placeholder="请输入股票代码或名称" 
+          value="{{searchKeyword}}"
+          bindinput="onSearchInput"
+          confirm-type="search"
+          bindconfirm="performSearch"
+        />
+        <button class="search-confirm-btn" bindtap="performSearch">查询</button>
+      </view>
+      <view class="search-close" bindtap="cancelSearch">x</view>
+    </view>
+  </view>
+
+  <!-- 筛选器区域 -->
+  <view class="filter-section">
+    <!-- 报价日选择 -->
+    <view class="filter-group">
+      <text class="filter-label">报价日</text>
+      <view class="filter-dropdown">
+        <view class="dropdown-btn" bindtap="toggleDatePicker">
+          <text>{{selectedQuoteDate}}</text>
+          <text class="dropdown-icon">▼</text>
+        </view>
+        
+        <!-- 日期选择器 -->
+        <view class="dropdown-options {{showDatePicker ? 'show' : ''}}" wx:if="{{showDatePicker}}">
+          <view 
+            class="dropdown-option {{item.isActive ? 'active' : ''}}"
+            wx:for="{{quoteDates}}"
+            wx:key="id"
+            bindtap="onQuoteDateChange"
+            data-date="{{item}}"
+          >
+            <text>{{item.label}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 交易商选择 -->
+    <view class="filter-group">
+      <text class="filter-label">交易商</text>
+      <view class="filter-dropdown">
+        <view class="dropdown-btn" bindtap="toggleTraderPicker">
+          <text>{{selectedTrader}}</text>
+          <text class="dropdown-icon">▼</text>
+        </view>
+        
+        <!-- 交易商选择器 -->
+        <view class="dropdown-options {{showTraderPicker ? 'show' : ''}}" wx:if="{{showTraderPicker}}">
+          <view 
+            class="dropdown-option {{item.isActive ? 'active' : ''}}"
+            wx:for="{{traders}}"
+            wx:key="code"
+            bindtap="onTraderChange"
+            data-trader="{{item}}"
+          >
+            <text>{{item.name}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 期权类型选择 -->
+  <view class="option-types">
+    <view class="type-btn {{filterOptions.optionType === 'ALL' ? 'active' : ''}}" bindtap="selectOptionType" data-type="ALL">
+      <text>全部</text>
+    </view>
+    <view class="type-btn {{filterOptions.optionType === 'VANILLA' ? 'active' : ''}}" bindtap="selectOptionType" data-type="VANILLA">
+      <text>香草</text>
+    </view>
+    <view class="type-btn {{filterOptions.optionType === 'SNOWBALL' ? 'active' : ''}}" bindtap="selectOptionType" data-type="SNOWBALL">
+      <text>雪球</text>
+    </view>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading-container" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <!-- 期权报价列表 -->
+  <view class="quotes-list" wx:else>
+    <view 
+      class="quote-item"
+      wx:for="{{optionQuotes}}"
+      wx:key="id"
+      data-quote="{{item}}"
+    >
+      <!-- 期权基本信息 -->
+      <view class="quote-header">
+        <view class="option-info">
+          <text class="option-type {{item.optionType === '看涨' ? 'call' : 'put'}}">{{item.optionType}}</text>
+          <text class="expiry-term">{{item.expiryTerm}}</text>
+        </view>
+        <view class="trader-info">
+          <text class="trader-name">{{item.trader.name}}</text>
+          <text class="update-time">{{item.updateTime}}</text>
+        </view>
+      </view>
+
+      <!-- 执行价和期权费 -->
+      <view class="quote-details">
+        <view class="strike-price">
+          <text class="label">执行价:</text>
+          <text class="value">{{item.strikePrice}}</text>
+        </view>
+        <view class="premium">
+          <text class="label">期权费:</text>
+          <text class="value premium-value">{{item.premium}}</text>
+          <text class="percentage">({{item.premiumPercent}}%)</text>
+        </view>
+      </view>
+
+      <!-- 买卖报价 -->
+      <view class="bid-ask-section">
+        <view class="bid">
+          <text class="label">买入价:</text>
+          <text class="price">{{item.bidPrice}}</text>
+        </view>
+        <view class="ask">
+          <text class="label">卖出价:</text>
+          <text class="price">{{item.askPrice}}</text>
+        </view>
+      </view>
+
+      <!-- 希腊字母 -->
+      <view class="greeks-section">
+        <view class="greek-item">
+          <text class="greek-label">Delta:</text>
+          <text class="greek-value">{{item.delta}}</text>
+        </view>
+        <view class="greek-item">
+          <text class="greek-label">Gamma:</text>
+          <text class="greek-value">{{item.gamma}}</text>
+        </view>
+        <view class="greek-item">
+          <text class="greek-label">Theta:</text>
+          <text class="greek-value">{{item.theta}}</text>
+        </view>
+        <view class="greek-item">
+          <text class="greek-label">Vega:</text>
+          <text class="greek-value">{{item.vega}}</text>
+        </view>
+      </view>
+
+      <!-- 操作按钮 -->
+      <view class="action-buttons">
+        <button class="detail-btn" bindtap="onViewDetail" data-quote="{{item}}">查看详情</button>
+        <button class="inquiry-btn" bindtap="onInquiry" data-quote="{{item}}">询价</button>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty-state" wx:if="{{optionQuotes.length === 0 && !loading}}">
+      <text class="empty-icon">📊</text>
+      <text class="empty-text">暂无报价数据</text>
+      <text class="empty-hint">请选择其他股票或刷新页面</text>
+    </view>
+  </view>
+
+  <!-- 底部操作栏 -->
+  <view class="bottom-actions">
+    <button class="calculator-btn" bindtap="openCalculator">计算器</button>
+    <button class="workspace-btn" bindtap="openWorkspace">工作台</button>
+  </view>
+</view>

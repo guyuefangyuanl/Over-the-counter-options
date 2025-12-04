@@ -1,0 +1,4 @@
+<!--pages/workbench/workbench.wxml-->
+<view class="container">
+  <text>工作台页面</text>
+</view>

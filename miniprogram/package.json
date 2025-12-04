@@ -1,0 +1,14 @@
+{
+  "name": "miniprogram-project",
+  "version": "1.0.0",
+  "description": "",
+  "dependencies": {
+    "@vant/weapp": "^1.11.6"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "scripts": {
+    "test": "jest -c ../jest.config.js"
+  }
+}

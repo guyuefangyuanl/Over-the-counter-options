@@ -1,0 +1,120 @@
+<!--我的页面模板-->
+<view class="profile-container">
+  <!-- 用户信息卡片 -->
+  <view class="user-card">
+    <view class="user-info">
+      <!-- 头像 -->
+      <view class="avatar-section" bindtap="onAvatarTap">
+        <image 
+          class="avatar {{userInfo.avatar ? '' : 'default-avatar'}}" 
+          src="{{userInfo.avatar || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMzIiIGN5PSIzMiIgcj0iMzIiIGZpbGw9IiNFNkYzRkYiLz4KPGNpcmNsZSBjeD0iMzIiIGN5PSIyNCIgcj0iOCIgZmlsbD0iIzQwOUVGRiIvPgo8cGF0aCBkPSJNMTYgNTJjMC04LjgzNyA3LjE2My0xNiAxNi0xNnMxNiA3LjE2MyAxNiAxNnY0SDE2di00eiIgZmlsbD0iIzQwOUVGRiIvPgo8L3N2Zz4='}}"
+          mode="aspectFill"
+          binderror="onAvatarError"
+        />
+      </view>
+      
+      <!-- 用户资料 -->
+      <view class="user-details">
+        <view class="nickname">{{userInfo.nickname}}</view>
+        <view class="vip-info" wx:if="{{userInfo.isLoggedIn}}">
+          <text class="vip-level">{{userInfo.vipLevel}}{{userInfo.memberType}}</text>
+          <text class="vip-id">（VID:{{userInfo.vipId}}）</text>
+        </view>
+        <view class="login-hint" wx:else>
+          <text class="hint-text">点击登录，体验更多功能</text>
+        </view>
+      </view>
+    </view>
+    
+    <!-- 登录/退出按钮 -->
+    <view class="auth-section">
+      <button 
+        class="auth-btn login-btn" 
+        wx:if="{{!userInfo.isLoggedIn}}"
+        bindtap="onLogin"
+      >
+        授权一键登录
+      </button>
+      <button 
+        class="auth-btn logout-btn" 
+        wx:else
+        bindtap="onLogout"
+      >
+        退出登录
+      </button>
+    </view>
+  </view>
+
+  <!-- 功能菜单 -->
+  <view class="menu-section">
+    <view class="menu-title">账户服务</view>
+    <view class="menu-list">
+      <view 
+        class="menu-item" 
+        wx:for="{{menuItems}}" 
+        wx:key="id"
+        data-item="{{item}}"
+        bindtap="onMenuTap"
+      >
+        <view class="menu-content">
+          <view class="menu-icon {{item.icon}}"></view>
+          <text class="menu-text">{{item.title}}</text>
+        </view>
+        <view class="menu-arrow" wx:if="{{item.showArrow}}">
+          <icon type="arrowright" size="16" color="#c0c0c0"></icon>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 未登录状态的功能说明 -->
+  <view class="feature-intro" wx:if="{{!userInfo.isLoggedIn}}">
+    <view class="intro-title">登录后可享受</view>
+    <view class="intro-list">
+      <view class="intro-item">
+        <icon type="success" size="16" color="#4caf50"></icon>
+        <text>个性化期权报价推荐</text>
+      </view>
+      <view class="intro-item">
+        <icon type="success" size="16" color="#4caf50"></icon>
+        <text>询价历史记录保存</text>
+      </view>
+      <view class="intro-item">
+        <icon type="success" size="16" color="#4caf50"></icon>
+        <text>VIP专属客服支持</text>
+      </view>
+      <view class="intro-item">
+        <icon type="success" size="16" color="#4caf50"></icon>
+        <text>更多高级功能权限</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 已登录状态的统计信息 -->
+  <view class="stats-section" wx:if="{{userInfo.isLoggedIn}}">
+    <view class="stats-title">我的统计</view>
+    <view class="stats-grid">
+      <view class="stat-item">
+        <view class="stat-number">12</view>
+        <view class="stat-label">累计询价</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-number">5</view>
+        <view class="stat-label">成功交易</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-number">8</view>
+        <view class="stat-label">关注标的</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-number">30</view>
+        <view class="stat-label">使用天数</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 版本信息 -->
+  <view class="version-info">
+    <text class="version-text">期权大师 v1.0.0</text>
+  </view>
+</view>

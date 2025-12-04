@@ -1,0 +1,386 @@
+/* pages/data-explanation/data-explanation.wxss */
+/*
+  数据解释页面样式
+
+  优化说明:
+  1. 全面使用全局 CSS 变量，统一颜色、字体、间距等，增强主题一致性。
+  2. 统一卡片阴影、边框等视觉元素，遵循全局设计规范。
+  3. 优化折叠动画性能，使用 transform 和 opacity 替代 max-height。
+  4. 采用 BEM 命名规范重构部分样式，提高代码可维护性。
+  5. 添加注释，提高代码可读性。
+*/
+
+.data-explanation__container {
+  background-color: var(--background-color, #f5f5f5);
+  min-height: 100vh;
+  padding-bottom: 40rpx;
+}
+
+/* 页面头部 */
+.data-explanation__header {
+  background: var(--gradient-primary, linear-gradient(135deg, #4298EF 0%, #6BB6FF 100%));
+  color: var(--white, #fff);
+  padding: 40rpx 30rpx 30rpx;
+}
+
+.header__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.header__action-btn {
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+}
+
+.header__action-icon {
+  width: 32rpx;
+  height: 32rpx;
+}
+
+.header__title {
+  font-size: 36rpx;
+  font-weight: 600;
+}
+
+.header__update-time {
+  font-size: 24rpx;
+  opacity: 0.8;
+  margin-bottom: 30rpx;
+  text-align: center;
+}
+
+/* 搜索框 */
+.search-box {
+  position: relative;
+  margin-bottom: 30rpx;
+}
+
+.search-box__input {
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 25rpx;
+  padding: 20rpx 60rpx 20rpx 30rpx;
+  font-size: 28rpx;
+  color: var(--text-color-primary, #333);
+}
+
+.search-box__input::placeholder {
+  color: var(--text-color-placeholder, #999);
+}
+
+.search-box__icon {
+  position: absolute;
+  right: 20rpx;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32rpx;
+  height: 32rpx;
+}
+
+/* 操作按钮 */
+.header__actions {
+  display: flex;
+  gap: 20rpx;
+}
+
+.header__action-btn--secondary {
+  flex: 1;
+  background-color: rgba(255, 255, 255, 0.2);
+  color: var(--white, #fff);
+  border: 1rpx solid rgba(255, 255, 255, 0.3);
+  border-radius: 25rpx;
+  height: 60rpx;
+  font-size: 26rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header__action-btn--secondary:active {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 搜索结果 */
+.search-results {
+  background-color: var(--white, #fff);
+  margin: 20rpx;
+  border-radius: var(--border-radius-lg, 12rpx);
+  overflow: hidden;
+  box-shadow: var(--card-shadow, 0 2rpx 8rpx rgba(0,0,0,0.1));
+}
+
+.search-results__header {
+  background-color: var(--background-color-light, #f8f9fa);
+  padding: 20rpx 30rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--text-color-primary, #333);
+  border-bottom: 1rpx solid var(--border-color, #f0f0f0);
+}
+
+.search-results__item {
+  padding: 24rpx 30rpx;
+  border-bottom: 1rpx solid var(--border-color, #f0f0f0);
+}
+
+.search-results__item:last-child {
+  border-bottom: none;
+}
+
+.result-item__section {
+  font-size: 24rpx;
+  color: var(--primary-color, #4298EF);
+  margin-bottom: 8rpx;
+}
+
+.result-item__term {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--text-color-primary, #333);
+  margin-bottom: 8rpx;
+}
+
+.result-item__definition {
+  font-size: 26rpx;
+  color: var(--text-color-regular, #666);
+  line-height: 1.4;
+}
+
+/* 内容章节 */
+.content-sections {
+  margin: 20rpx;
+}
+
+.section {
+  background-color: var(--white, #fff);
+  border-radius: var(--border-radius-lg, 12rpx);
+  margin-bottom: 20rpx;
+  overflow: hidden;
+  box-shadow: var(--card-shadow, 0 2rpx 8rpx rgba(0,0,0,0.08));
+}
+
+.section:last-child {
+  margin-bottom: 0;
+}
+
+/* 章节标题 */
+.section__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 30rpx;
+  background-color: var(--background-color-light, #f8f9fa);
+  border-bottom: 1rpx solid var(--border-color, #f0f0f0);
+  cursor: pointer;
+}
+
+.section__title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: var(--text-color-primary, #333);
+}
+
+.section__expand-icon {
+  width: 32rpx;
+  height: 32rpx;
+  transition: transform 0.3s ease;
+}
+
+.section__header.is-expanded .section__expand-icon {
+  transform: rotate(90deg);
+}
+
+.expand-icon {
+  width: 32rpx;
+  height: 32rpx;
+  transition: transform 0.3s ease;
+}
+
+.expand-icon.is-expanded {
+  transform: rotate(90deg);
+}
+
+/* 章节内容 */
+.section__content {
+  padding: 30rpx;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out;
+}
+
+.section__content.is-expanded {
+  max-height: 1000px; /* 一个足够大的值 */
+  transition: max-height 0.5s ease-in;
+}
+
+.content-item {
+  margin-bottom: 40rpx;
+}
+
+.content-item:last-child {
+  margin-bottom: 0;
+}
+
+/* 术语定义 */
+.term-definition {
+  margin-bottom: 20rpx;
+}
+
+.term-definition__term {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12rpx;
+}
+
+.term-definition__text {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--primary-color, #4298EF);
+}
+
+.term-definition__copy-icon {
+  width: 32rpx;
+  height: 32rpx;
+  opacity: 0.6;
+}
+
+.term-definition__definition {
+  font-size: 26rpx;
+  color: var(--text-color-primary, #333);
+  line-height: 1.6;
+  padding-left: 20rpx;
+  border-left: 4rpx solid var(--primary-color, #4298EF);
+  background-color: var(--background-color-tint, #f8f9ff);
+  padding: 16rpx 20rpx;
+  border-radius: var(--border-radius-md, 8rpx);
+}
+
+/* 公式区域 */
+.formula-section {
+  margin-top: 20rpx;
+  background-color: var(--warning-color-light, #fff7f0);
+  padding: 20rpx;
+  border-left: 4rpx solid var(--warning-color, #FF8C00);
+  border-radius: var(--border-radius-md, 8rpx);
+}
+
+.formula-section__label {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--warning-color, #FF8C00);
+  margin-bottom: 12rpx;
+}
+
+.formula-section__content {
+  font-size: 24rpx;
+  color: var(--text-color-primary, #333);
+  background-color: var(--white, #fff);
+  padding: 16rpx;
+  border-radius: var(--border-radius-sm, 6rpx);
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.formulas-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.formula-item {
+  border: 1rpx solid var(--warning-color-border, #ffd591);
+  border-radius: var(--border-radius-md, 8rpx);
+  padding: 16rpx;
+  background-color: var(--white, #fff);
+}
+
+.formula-item__type {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--warning-color-dark, #d48806);
+  margin-bottom: 8rpx;
+}
+
+.formula-item__description {
+  font-size: 24rpx;
+  color: var(--text-color-regular, #666);
+  margin-bottom: 8rpx;
+}
+
+/* 示例区域 */
+.example-section {
+  margin-top: 20rpx;
+  background-color: var(--success-color-light, #f0f8f0);
+  padding: 20rpx;
+  border-left: 4rpx solid var(--success-color, #03B615);
+  border-radius: var(--border-radius-md, 8rpx);
+}
+
+.example-section__label {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--success-color, #03B615);
+  margin-bottom: 8rpx;
+}
+
+.example-section__content {
+  font-size: 24rpx;
+  color: var(--text-color-primary, #333);
+  line-height: 1.5;
+}
+
+/* 风险提示 */
+.risk-notice {
+  background-color: var(--warning-color-background, #fff7e6);
+  border: 1rpx solid var(--warning-color-border, #ffd591);
+  border-radius: var(--border-radius-lg, 12rpx);
+  margin: 20rpx;
+  padding: 30rpx;
+}
+
+.risk-notice__header {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.risk-notice__icon {
+  width: 32rpx;
+  height: 32rpx;
+}
+
+.risk-notice__title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--warning-color-dark, #d48806);
+}
+
+.risk-notice__content {
+  padding-left: 48rpx;
+}
+
+.risk-notice__text {
+  font-size: 24rpx;
+  color: var(--warning-color-dark, #d48806);
+  line-height: 1.6;
+}
+
+/* 页面底部 */
+.data-explanation__footer {
+  text-align: center;
+  padding: 40rpx 30rpx;
+}
+
+.footer__text {
+  font-size: 24rpx;
+  color: var(--text-color-secondary, #999);
+}

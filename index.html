@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>首页 | 前端升级预览</title>
+    <!-- 自动跳转至前端开发服务器，保证资源路径与引用正确 -->
+    <meta http-equiv="refresh" content="0; url=http://localhost:5173/" />
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; }
+      .wrap { display: grid; place-items: center; min-height: 100vh; padding: 24px; }
+      .card { max-width: 720px; border: 1px solid #E5E7EB; border-radius: 8px; box-shadow: 0 6px 16px rgba(22,119,255,0.12); padding: 16px; }
+      .title { font-size: 18px; font-weight: 600; margin: 0 0 12px 0; }
+      .muted { color: #6B7280; }
+      .btn { display: inline-flex; gap: 8px; align-items: center; border: 1px solid #1677FF; color: #1677FF; padding: 10px 16px; border-radius: 4px; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <p class="title">正在打开前端开发预览…</p>
+        <p class="muted">若未自动跳转，请点击下方按钮（确保本地已运行 Vite 开发服务器）。</p>
+        <p><a class="btn" href="http://localhost:5173/" target="_blank" rel="noopener">打开前端预览</a></p>
+        <p class="muted">如需回滚旧版页面，可使用备份文件 <code>index.axure.html</code> 或 <code>index.backup.html</code>。</p>
+      </div>
+    </div>
+  </body>
+</html>

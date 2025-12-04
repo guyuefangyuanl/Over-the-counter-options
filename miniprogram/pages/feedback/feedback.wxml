@@ -1,0 +1,125 @@
+<!--pages/index/index.wxml-->
+<view class="index-container">
+  
+  <!-- 骨架屏和错误状态保持不变 -->
+  <!-- ... -->
+
+  <!-- 主内容区 -->
+  <scroll-view 
+    wx:if="{{!pageLoading && !pageError}}"
+    class="content-scroll" 
+    scroll-y 
+    enable-back-to-top
+    refresher-enabled
+    refresher-triggered="{{isRefreshing}}"
+    bindrefresherrefresh="onPullDownRefresh"
+  >
+    
+    <!-- ============ 新增：搜索模块 ============ -->
+    <view class="search-container card-shadow">
+      <view class="search-box">
+        <image class="search-icon" src="/images/icons/search.png" mode="aspectFit"></image>
+        <input 
+          class="search-input"
+          type="text"
+          placeholder="搜索股票代码或名称"
+          placeholder-class="search-placeholder"
+          value="{{searchKeyword}}"
+          bindinput="onSearchInput"
+          bindconfirm="onSearchConfirm"
+          bindfocus="onSearchFocus"
+          bindblur="onSearchBlur"
+          confirm-type="search"
+        />
+        <!-- 清除按钮 -->
+        <view 
+          wx:if="{{searchKeyword}}" 
+          class="search-clear"
+          bindtap="onSearchClear"
+        >
+          <image class="clear-icon" src="/images/icons/close.png" mode="aspectFit"></image>
+        </view>
+      </view>
+
+      <!-- 热门搜索 -->
+      <view class="search-hot" wx:if="{{showSearchPanel && !searchKeyword}}">
+        <view class="hot-header">
+          <text class="hot-title">热门搜索</text>
+        </view>
+        <view class="hot-tags">
+          <text 
+            wx:for="{{hotSearchTags}}" 
+            wx:key="id"
+            class="hot-tag"
+            data-keyword="{{item.keyword}}"
+            bindtap="onHotTagTap"
+          >
+            {{item.keyword}}
+          </text>
+        </view>
+      </view>
+
+      <!-- 搜索历史 -->
+      <view class="search-history" wx:if="{{showSearchPanel && !searchKeyword && searchHistory.length > 0}}">
+        <view class="history-header">
+          <text class="history-title">搜索历史</text>
+          <text class="history-clear" bindtap="onClearHistory">清空</text>
+        </view>
+        <view class="history-list">
+          <view 
+            wx:for="{{searchHistory}}" 
+            wx:key="index"
+            class="history-item"
+            data-keyword="{{item}}"
+            bindtap="onHistoryItemTap"
+          >
+            <image class="history-icon" src="/images/icons/clock.png" mode="aspectFit"></image>
+            <text class="history-text">{{item}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 搜索结果 -->
+      <view class="search-results" wx:if="{{showSearchPanel && searchKeyword && searchResults.length > 0}}">
+        <view class="results-header">
+          <text class="results-title">搜索结果（{{searchResults.length}}）</text>
+        </view>
+        <view class="results-list">
+          <view 
+            wx:for="{{searchResults}}" 
+            wx:key="code"
+            class="result-item"
+            data-stock="{{item}}"
+            bindtap="onSearchResultTap"
+          >
+            <view class="result-info">
+              <text class="result-name">{{item.name}}</text>
+              <text class="result-code">{{item.code}}</text>
+            </view>
+            <view class="result-price">
+              <text class="price-value">{{item.price}}</text>
+              <text class="price-change {{item.changeClass}}">{{item.change}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 无搜索结果 -->
+      <view class="search-empty" wx:if="{{showSearchPanel && searchKeyword && searchResults.length === 0 && !searchLoading}}">
+        <image class="empty-icon" src="/images/empty-search.png" mode="aspectFit"></image>
+        <text class="empty-text">未找到"{{searchKeyword}}"相关股票</text>
+      </view>
+
+      <!-- 搜索加载中 -->
+      <view class="search-loading" wx:if="{{searchLoading}}">
+        <view class="loading-spinner"></view>
+        <text class="loading-text">搜索中...</text>
+      </view>
+    </view>
+    <!-- ============ 搜索模块结束 ============ -->
+
+    <!-- 原有的市场指数、市场概览等模块保持不变 -->
+    <!-- ... -->
+    
+  </scroll-view>
+</view>

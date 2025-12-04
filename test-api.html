@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API测试</title>
+</head>
+<body>
+    <h1>API连接测试</h1>
+    <button onclick="testAPI()">测试API连接</button>
+    <div id="result"></div>
+
+    <script>
+        function testAPI() {
+            fetch('http://localhost:3001/api/test')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('result').innerHTML = '<p>成功: ' + JSON.stringify(data) + '</p>';
+                })
+                .catch(error => {
+                    document.getElementById('result').innerHTML = '<p>错误: ' + error.message + '</p>';
+                });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+
+<!-- pages/search/search.wxml -->
+<view class="search-page">
+  <!-- 1. 顶部固定搜索栏 -->
+  <view class="search-bar">
+    <view class="search-bar__input-wrapper">
+      <icon class="search-bar__icon" type="search" size="16"></icon>
+      <input 
+        class="search-bar__input" 
+        placeholder="搜索个股、指数、ETF期权" 
+        value="{{inputValue}}"
+        focus
+        confirm-type="search"
+        bindinput="onInput"
+        bindconfirm="onConfirm"
+      />
+      <icon wx:if="{{inputValue}}" class="search-bar__clear" type="clear" size="16" bindtap="onClearInput"></icon>
+    </view>
+    <view class="search-bar__cancel" bindtap="onCancel">取消</view>
+  </view>
+
+  <!-- 2. 主体内容区域 -->
+  <scroll-view class="search-content" scroll-y>
+
+    <!-- 2.1 历史记录 -->
+    <view wx:if="{{historyVisible && history.length > 0}}" class="history-section">
+      <view class="history-section__header">
+        <text class="history-section__title">搜索历史</text>
+        <view class="history-section__clear-btn" bindtap="onClearHistory">
+          <icon type="clear" size="14"></icon>
+          <text>清空</text>
+        </view>
+      </view>
+      <view class="history-section__tags">
+        <text 
+          wx:for="{{history}}"
+          wx:key="*this"
+          class="history-section__tag"
+          data-query="{{item}}"
+          bindtap="onTagTap"
+        >{{item}}</text>
+      </view>
+    </view>
+
+    <!-- 2.2 搜索建议 -->
+    <view wx:if="{{showSuggestions}}" class="suggestions-list">
+      <view 
+        wx:for="{{suggestions}}"
+        wx:key="id"
+        class="suggestions-list__item"
+        data-query="{{item.text}}"
+        bindtap="onConfirm"
+      >
+        <icon class="suggestions-list__icon" type="search" size="14"></icon>
+        <text>{{item.text}}</text>
+      </view>
+    </view>
+
+    <!-- 2.3 搜索结果 -->
+    <view wx:if="{{showResults}}" class="results-section">
+      <!-- 加载中 -->
+      <view wx:if="{{isLoading}}" class="results-section__loading">
+        <view class="loading-indicator"></view>
+        <text>正在加载...</text>
+      </view>
+
+      <!-- 空状态 -->
+      <view wx:if="{{isNoResult}}" class="results-section__empty">
+        <image class="results-section__empty-img" src="/images/icons/empty-box.png" mode="aspectFit"></image>
+        <text>没有找到相关内容</text>
+      </view>
+
+      <!-- 结果卡片 -->
+      <view wx:if="{{!isLoading && !isNoResult}}" class="results-section__cards">
+        <view 
+          wx:for="{{results}}"
+          wx:key="id"
+          class="result-card"
+          bindtap="onResultTap"
+          data-item="{{item}}"
+        >
+          <view class="result-card__title">{{item.title}}</view>
+          <view class="result-card__desc">{{item.description}}</view>
+          <view class="result-card__arrow">></view>
+        </view>
+      </view>
+    </view>
+
+  </scroll-view>
+</view>
