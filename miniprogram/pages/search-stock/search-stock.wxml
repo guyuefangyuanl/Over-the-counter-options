@@ -1,0 +1,67 @@
+<!-- 搜索股票页面 -->
+<view class="search-stock-container">
+  <!-- 顶部搜索栏 -->
+  <view class="search-header">
+    <view class="search-input-wrapper">
+      <input
+        class="search-input"
+        placeholder="请输入股票代码或名称"
+        value="{{keyword}}"
+        bindinput="onInput"
+        bindconfirm="onSearch"
+        focus="{{true}}"
+        confirm-type="search"
+      />
+      <text class="search-icon" bindtap="onSearch">🔍</text>
+    </view>
+    <text class="cancel-btn" bindtap="goBack">取消</text>
+  </view>
+
+  <!-- 搜索结果 -->
+  <scroll-view scroll-y class="search-results" wx:if="{{showResults}}">
+    <view wx:if="{{results.length}}">
+      <view
+        class="stock-item"
+        wx:for="{{results}}"
+        wx:key="code"
+        bindtap="onSelectStock"
+        data-item="{{item}}"
+      >
+        <view class="stock-left">
+          <text class="stock-name">{{item.name}}</text>
+          <text class="stock-code">{{item.code}}</text>
+        </view>
+        <view class="stock-right">
+          <text class="stock-price {{item.change >= 0 ? 'up' : 'down'}}">{{item.price}}</text>
+          <text class="stock-change {{item.change >= 0 ? 'up' : 'down'}}">{{item.changePercent}}%</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty-state" wx:else>
+      <text class="empty-icon">📈</text>
+      <text class="empty-text">未找到相关股票</text>
+      <text class="empty-hint">请检查输入的股票代码或名称</text>
+    </view>
+  </scroll-view>
+
+  <!-- 热门推荐（初始状态） -->
+  <view class="hot-stocks" wx:elif="{{!keyword}}">
+    <view class="hot-header">
+      <text class="hot-title">热门股票</text>
+    </view>
+    <view class="hot-list">
+      <view
+        class="hot-item"
+        wx:for="{{hotStocks}}"
+        wx:key="code"
+        bindtap="onSelectStock"
+        data-item="{{item}}"
+      >
+        <text class="hot-name">{{item.name}}</text>
+        <text class="hot-code">{{item.code}}</text>
+      </view>
+    </view>
+  </view>
+</view>

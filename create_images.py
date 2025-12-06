@@ -52,7 +52,9 @@ image_list = [
     'phone-icon.png',
     'guest-icon.png',
     'help.png',
-    'service.png'
+    'service.png',
+    'star.png',
+    'star_filled.png'
 ]
 
 def create_default_images():

@@ -1,0 +1,11 @@
+import express from "express";
+import { authRouter } from "./modules/auth/auth.controller";
+import { userRouter } from "./modules/user/user.controller";
+import { errorHandler } from "./middleware/errorHandler";
+const app = express();
+app.use(express.json());
+app.get("/health", (_req, res) => { res.json({ success: true, data: { status: "ok" }, error: null }); });
+app.use("/api", authRouter);
+app.use("/api", userRouter);
+app.use(errorHandler);
+export default app;

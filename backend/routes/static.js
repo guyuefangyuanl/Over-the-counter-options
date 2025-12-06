@@ -33,6 +33,7 @@ router.get('/images/:filename', (req, res) => {
     
     const imagePaths = [
       path.join(__dirname, '../../images', filename),
+      path.join(__dirname, '../../images/icons', filename),
       path.join(__dirname, '../../images/首页', filename),
       path.join(__dirname, '../../images/我的', filename),
       path.join(__dirname, '../../images/工作台', filename)
@@ -67,14 +68,21 @@ router.get('/images/:filename', (req, res) => {
       'signal1.png': createSignalIcon(),
       'signal2.png': createSignalIcon(),
       'battery.png': createBatteryIcon(),
-      'back.png': createArrowIcon(),
-      'dropdown-down.png': createArrowIcon(),
-      'info.png': createInfoIcon(),
       'arrow-right.png': createArrowIcon(),
       'home.png': createHomeIcon(),
       'inquiry.png': createInquiryIcon(),
       'account-active.png': createAccountIcon(),
-      'profile.png': createProfileIcon()
+      'profile.png': createProfileIcon(),
+      // 添加缺失的图标
+      'icon_entry_1.png': createEntryIcon(1),
+      'icon_entry_2.png': createEntryIcon(2),
+      'icon_entry_3.png': createEntryIcon(3),
+      'icon_entry_4.png': createEntryIcon(4),
+      'icon_search.png': createSearchIcon(),
+      'icon_info.png': createInfoIcon(),
+      'icon_support.png': createSupportIcon(),
+      'icon_star_empty.png': createStarEmptyIcon(),
+      'star.png': createStarEmptyIcon()
     };
     
     const defaultImage = defaultImages[filename] || createDefaultIcon();
@@ -230,6 +238,36 @@ function createProfileIcon() {
   return `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
     <circle cx="10" cy="6" r="3" stroke="#666" stroke-width="1.5" fill="none"/>
     <path d="M5 17v-1a4 4 0 014-4h2a4 4 0 014 4v1" stroke="#666" stroke-width="1.5" fill="none"/>
+  </svg>`;
+}
+
+function createEntryIcon(number) {
+  return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="24" height="24" fill="#f0f0f0" rx="4"/>
+    <text x="12" y="16" font-family="Arial" font-size="14" text-anchor="middle" fill="#666">${number}</text>
+  </svg>`;
+}
+
+function createSearchIcon() {
+  return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="11" cy="11" r="7" stroke="#666" stroke-width="2" fill="none"/>
+    <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="#666" stroke-width="2" stroke-linecap="round"/>
+  </svg>`;
+}
+
+function createSupportIcon() {
+  return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="9" stroke="#666" stroke-width="2" fill="none"/>
+    <circle cx="12" cy="12" r="1" fill="#666"/>
+    <path d="M12 8v5" stroke="#666" stroke-width="2" stroke-linecap="round"/>
+    <path d="M8 12h8" stroke="#666" stroke-width="2" stroke-linecap="round"/>
+  </svg>`;
+}
+
+function createStarEmptyIcon() {
+  return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9" 
+             stroke="#666" stroke-width="2" fill="none"/>
   </svg>`;
 }
 

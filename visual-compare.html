@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>视觉还原度像素比对工具</title>
+    <style>
+      body { font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif; margin: 20px; }
+      .row { display: flex; gap: 16px; flex-wrap: wrap; }
+      canvas { border: 1px solid #e5e7eb; border-radius: 6px; }
+      .panel { background: #f9fafb; border: 1px solid #e5e7eb; padding: 12px; border-radius: 8px; }
+      label { font-size: 14px; color: #374151; }
+      .result { margin-top: 8px; font-weight: 600; }
+      .btn { padding: 6px 12px; border: 1px solid #d1d5db; background: #fff; border-radius: 6px; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <h1>视觉还原度像素比对工具</h1>
+    <p>上传两张同尺寸截图（设计稿：询价.html 与 重构后：首页.html），自动计算像素差异率并生成差异图。</p>
+    <div class="row">
+      <div class="panel">
+        <label>截图A（设计稿）</label><br/>
+        <input type="file" id="fileA" accept="image/*" />
+      </div>
+      <div class="panel">
+        <label>截图B（实现稿）</label><br/>
+        <input type="file" id="fileB" accept="image/*" />
+      </div>
+      <div class="panel">
+        <label>阈值</label><br/>
+        <input type="range" id="threshold" min="0" max="64" value="16" />
+        <div class="result" id="result">等待图片...</div>
+        <button class="btn" id="btnClear">清空</button>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <canvas id="canvasA" width="360" height="640"></canvas>
+      <canvas id="canvasB" width="360" height="640"></canvas>
+      <canvas id="canvasDiff" width="360" height="640"></canvas>
+    </div>
+    <script>
+      const fileA = document.getElementById('fileA');
+      const fileB = document.getElementById('fileB');
+      const canvasA = document.getElementById('canvasA');
+      const canvasB = document.getElementById('canvasB');
+      const canvasD = document.getElementById('canvasDiff');
+      const ctxA = canvasA.getContext('2d');
+      const ctxB = canvasB.getContext('2d');
+      const ctxD = canvasD.getContext('2d');
+      const res = document.getElementById('result');
+      const thresholdEl = document.getElementById('threshold');
+
+      function drawImageToCanvas(file, canvas, ctx) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const img = new Image(); img.onload = () => {
+              canvas.width = img.width; canvas.height = img.height; ctx.drawImage(img, 0, 0);
+              resolve();
+            }; img.onerror = reject; img.src = reader.result;
+          };
+          reader.onerror = reject; reader.readAsDataURL(file);
+        });
+      }
+
+      async function compare() {
+        if (!canvasA.width || !canvasB.width) return;
+        const w = Math.min(canvasA.width, canvasB.width);
+        const h = Math.min(canvasA.height, canvasB.height);
+        const a = ctxA.getImageData(0,0,w,h).data;
+        const b = ctxB.getImageData(0,0,w,h).data;
+        const diff = ctxD.createImageData(w,h);
+        const th = Number(thresholdEl.value);
+        let mismatch = 0;
+        for (let i=0;i<a.length;i+=4) {
+          const dr = Math.abs(a[i]-b[i]);
+          const dg = Math.abs(a[i+1]-b[i+1]);
+          const db = Math.abs(a[i+2]-b[i+2]);
+          const da = Math.abs(a[i+3]-b[i+3]);
+          const d = dr+dg+db+da;
+          const idx = i;
+          if (d>th) { mismatch++; diff.data[idx]=255; diff.data[idx+1]=0; diff.data[idx+2]=0; diff.data[idx+3]=160; }
+          else { diff.data[idx]=0; diff.data[idx+1]=0; diff.data[idx+2]=0; diff.data[idx+3]=0; }
+        }
+        ctxD.putImageData(diff,0,0);
+        const total = (a.length/4);
+        const rate = (mismatch/total)*100;
+        res.textContent = `像素差异率：${rate.toFixed(2)}%（阈值=${th}）`;
+      }
+
+      fileA.addEventListener('change', async () => { if(fileA.files[0]) { await drawImageToCanvas(fileA.files[0], canvasA, ctxA); compare(); } });
+      fileB.addEventListener('change', async () => { if(fileB.files[0]) { await drawImageToCanvas(fileB.files[0], canvasB, ctxB); compare(); } });
+      thresholdEl.addEventListener('input', compare);
+      document.getElementById('btnClear').addEventListener('click', () => {
+        [ctxA, ctxB, ctxD].forEach(ctx=>ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height));
+        res.textContent = '等待图片...';
+      });
+    </script>
+  </body>
+</html>
+

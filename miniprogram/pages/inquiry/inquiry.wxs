@@ -1,0 +1,27 @@
+var formatChange = function(value) {
+  if (value === null || value === undefined) return '--';
+  var num = parseFloat(value);
+  if (isNaN(num)) return '--';
+  var sign = num > 0 ? '+' : '';
+  return sign + num.toFixed(2) + '%';
+};
+
+var formatRate = function(value) {
+  if (value === null || value === undefined) return '--';
+  var num = parseFloat(value);
+  if (isNaN(num)) return '--';
+  return num.toFixed(2) + '%';
+};
+
+var isSelected = function(id, arr) {
+  for (var i = 0; i < arr.length; i++) {
+    if (arr[i] == id) return true;
+  }
+  return false;
+};
+
+module.exports = {
+  formatChange: formatChange,
+  formatRate:   formatRate,
+  isSelected:   isSelected
+};

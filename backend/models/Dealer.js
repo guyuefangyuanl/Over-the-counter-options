@@ -333,3 +333,81 @@ dealerSchema.pre('save', function(next) {
 });
 
 module.exports = mongoose.model('Dealer', dealerSchema);
+
+// 简化的交易商模型，适配 SQLite
+
+class Dealer {
+  constructor(data) {
+    Object.assign(this, data);
+  }
+
+  // 静态方法：查找活跃的在线交易商
+  static async findActiveOnlineDealers() {
+    // 简化实现，返回模拟的交易商列表
+    return [
+      new Dealer({
+        id: '1',
+        dealerName: '中信证券',
+        displayName: '中信证券',
+        isActive: true,
+        isOnline: true,
+        quotingStrategy: {
+          autoQuoting: true
+        }
+      }),
+      new Dealer({
+        id: '2',
+        dealerName: '华泰证券',
+        displayName: '华泰证券',
+        isActive: true,
+        isOnline: true,
+        quotingStrategy: {
+          autoQuoting: true
+        }
+      }),
+      new Dealer({
+        id: '3',
+        dealerName: '国泰君安',
+        displayName: '国泰君安',
+        isActive: true,
+        isOnline: true,
+        quotingStrategy: {
+          autoQuoting: true
+        }
+      })
+    ];
+  }
+
+  // 实例方法：检查是否可以报价
+  canQuote(inquiryData) {
+    // 简化实现，总是返回可以报价
+    return { canQuote: true };
+  }
+
+  // 实例方法：生成报价
+  generateQuote(inquiryData, marketData) {
+    // 简化实现，生成模拟报价
+    const spotPrice = inquiryData.underlyingAsset.currentPrice;
+    const strikePrice = inquiryData.strikePrice;
+    const timeToExpiry = (new Date(inquiryData.expiryDate) - new Date()) / (1000 * 60 * 60 * 24 * 365); // 年化时间
+    
+    // 简单的期权定价模型（Black-Scholes 简化版）
+    const volatility = marketData.volatility || 0.25;
+    const riskFreeRate = marketData.riskFreeRate || 0.03;
+    
+    // 简化的溢价计算
+    const intrinsicValue = Math.max(0, spotPrice - strikePrice);
+    const timeValue = spotPrice * volatility * Math.sqrt(Math.max(0, timeToExpiry));
+    const premium = intrinsicValue + timeValue;
+    
+    return {
+      premium: parseFloat(premium.toFixed(2)),
+      bidPrice: parseFloat((premium * 0.99).toFixed(2)),
+      askPrice: parseFloat((premium * 1.01).toFixed(2)),
+      spread: parseFloat((premium * 0.02).toFixed(2)),
+      validUntil: new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30分钟有效期
+    };
+  }
+}
+
+module.exports = Dealer;

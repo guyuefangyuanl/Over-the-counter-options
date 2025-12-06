@@ -1,0 +1,228 @@
+/* pages/calculator/calculator.wxss */
+
+/*
+  优化说明:
+  1. 全面使用全局 CSS 变量，统一颜色、字体、间距等，增强主题一致性。
+  2. 重构按钮和表单样式，提取公共部分，使用 BEM 命名法提高可维护性。
+  3. 优化动画和过渡效果，使用 transform 和 opacity 提升性能。
+  4. 移除自定义弹窗样式，建议使用小程序原生组件。
+  5. 添加注释，提高代码可读性。
+*/
+
+page {
+  --profit-color: #ee0a24;
+  --loss-color: #03B615;
+}
+
+.page-container {
+  padding: 20rpx;
+  background-color: var(--background-color, #f7f8fa);
+  min-height: 100vh;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  background-color: var(--white, #fff);
+  border-radius: 8rpx;
+  overflow: hidden;
+  margin-bottom: 20rpx;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 20rpx 0;
+  font-size: 28rpx;
+  color: var(--text-color-regular, #666);
+  background-color: var(--background-color-light, #f2f3f5);
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.tab-item.is-active {
+  background-color: var(--white, #fff);
+  color: var(--primary-color, #1989fa);
+  font-weight: bold;
+}
+
+/* Form */
+.form-container {
+  background-color: var(--white, #fff);
+  border-radius: 8rpx;
+  padding: 0 30rpx;
+}
+
+.form-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 30rpx 0;
+  border-bottom: 1rpx solid var(--border-color, #ebedf0);
+}
+
+.form-group:last-child {
+  border-bottom: none;
+}
+
+.form-label {
+  font-size: 28rpx;
+  color: var(--text-color-primary, #333);
+}
+
+.form-control {
+  display: flex;
+  align-items: center;
+  font-size: 28rpx;
+  color: var(--text-color-primary, #333);
+  text-align: right;
+}
+
+.form-control.is-clickable {
+  color: var(--primary-color, #1989fa);
+}
+
+.form-control input {
+  text-align: right;
+  width: 300rpx;
+}
+
+.with-unit {
+  display: flex;
+  align-items: center;
+}
+
+.with-unit input {
+  margin-right: 10rpx;
+}
+
+.unit {
+  color: var(--text-color-secondary, #999);
+}
+
+.arrow-icon {
+  width: 24rpx;
+  height: 24rpx;
+  margin-left: 10rpx;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  margin-top: 40rpx;
+  gap: 20rpx;
+}
+
+.btn {
+  flex: 1;
+  border-radius: 8rpx;
+  font-size: 32rpx;
+  padding: 20rpx 0;
+  border: none;
+  transition: background-color 0.2s ease;
+}
+
+.btn--secondary {
+  background-color: var(--background-color-light, #f2f3f5);
+  color: var(--text-color-primary, #333);
+}
+
+.btn--primary {
+  background-color: var(--primary-color, #1989fa);
+  color: var(--white, #fff);
+}
+
+/* Result Card */
+.result-card {
+  background-color: var(--white, #fff);
+  border-radius: 8rpx;
+  margin-top: 40rpx;
+  padding: 30rpx;
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+
+.result-title {
+  font-size: 32rpx;
+  font-weight: bold;
+}
+
+.share-btn {
+  background-color: transparent;
+  color: var(--primary-color, #1989fa);
+  font-size: 24rpx;
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+  border: none;
+}
+
+.profit-details {
+  margin-bottom: 30rpx;
+}
+
+.profit-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 28rpx;
+  margin-bottom: 20rpx;
+}
+
+.profit-item.is-main .label {
+  font-size: 32rpx;
+}
+
+.profit-item.is-main .value {
+  font-size: 40rpx;
+  font-weight: bold;
+  color: var(--profit-color, #ee0a24);
+}
+
+.fee-details {
+  font-size: 24rpx;
+  color: var(--text-color-secondary, #999);
+  display: flex;
+  justify-content: space-between;
+  padding-top: 20rpx;
+  border-top: 1rpx solid var(--border-color, #ebedf0);
+}
+
+.breakeven-result {
+  text-align: center;
+  padding: 40rpx 0;
+}
+
+.breakeven-result .value {
+  font-size: 48rpx;
+  font-weight: bold;
+  color: var(--primary-color, #1989fa);
+}
+
+.breakeven-result .label {
+  font-size: 28rpx;
+  color: var(--text-color-regular, #666);
+  margin-top: 10rpx;
+}
+
+.record-prompt {
+  margin-top: 30rpx;
+  background-color: var(--background-color, #f7f8fa);
+  color: var(--primary-color, #1989fa);
+  text-align: center;
+  padding: 20rpx;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+}
+
+/*
+  自定义弹窗样式已移除。
+  建议使用小程序内置的 <popup> 组件或 cover-view, cover-image 组件来实现弹窗功能，
+  以获得更好的原生体验、性能和可访问性。
+  相关文档: https://developers.weixin.qq.com/miniprogram/dev/component/popup.html
+*/
+

@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, query, param, validationResult } = require('express-validator');
 const { Inquiry, Dealer, User } = require('../models');
+const mongoose = require('mongoose');
 const router = express.Router();
 
 // 验证请求参数的中间件
@@ -92,13 +93,13 @@ router.post('/', [
                 }
               };
               
-              await inquiry.addQuote(quoteData);
-              
-              // 通过Socket.IO推送报价更新
+            await inquiry.addQuote(quoteData);
+            if (req.io) {
               req.io.to(`user_${userId}`).emit('quote_received', {
                 inquiryId: inquiry.inquiryId,
                 quote: quoteData
               });
+            }
               
             } catch (quoteError) {
               console.error('生成报价失败:', quoteError);
@@ -355,10 +356,12 @@ router.post('/:inquiryId/accept-quote', [
     }
 
     // 推送交易创建通知
-    req.io.to(`user_${userId}`).emit('trade_created', {
-      tradeId: trade.tradeId,
-      trade
-    });
+    if (req.io) {
+      req.io.to(`user_${userId}`).emit('trade_created', {
+        tradeId: trade.tradeId,
+        trade
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -384,7 +387,7 @@ router.get('/stats/summary', async (req, res) => {
     const userId = req.user.userId;
 
     const stats = await Inquiry.aggregate([
-      { $match: { userId: new require('mongoose').Types.ObjectId(userId) } },
+      { $match: { userId: new mongoose.Types.ObjectId(userId) } },
       {
         $group: {
           _id: '$status',

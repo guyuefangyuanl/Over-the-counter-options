@@ -1,293 +1,592 @@
-// 首页
-const uiEnhancer = require('../../utils/ui-enhancer.js');
-const performanceOptimizer = require('../../utils/performance-optimizer.js');
-const api = require('../../utils/api.js');
+const app = getApp();
+const optionsService = require('../../services/options.js');
+const { uiEnhancer, dataFormatter, performanceMonitor } = require('../../utils/enhancedUtils');
 
 Page({
   data: {
-    // 页面状态
-    pageLoading: false,
-    pageError: false,
-    errorMessage: '',
-    
-    // 市场数据
-    marketData: {
-      overview: {
-        totalVolume: '12.5亿',
-        dailyChange: '+2.3%',
-        activeOptions: 156,
-        topGainers: 8
-      },
-      hotStocks: []
+    // 用户数据
+    userInfo: null,
+    hasUserInfo: false,
+    canIUseGetUserProfile: wx.canIUse('getUserProfile'),
+
+    // 搜索相关
+    searchValue: '',
+    showSearchResults: false,
+    searchResults: [],
+    searchHistory: [],
+    hotSearches: ['50ETF购', '300ETF沽', '沪深300', '上证50'],
+    isSearching: false,
+
+    // 轮播图配置
+    swiperConfig: {
+      indicatorDots: true,
+      autoplay: true,
+      interval: 3000,
+      duration: 500,
+      circular: true
     },
+    bannerList: [
+      {
+        id: 1,
+        image: '/images/首页/u258.png',
+        title: '期权交易新手指南',
+        desc: '从零开始学习期权交易',
+        link: '/pages/tutorial/tutorial'
+      },
+      {
+        id: 2,
+        image: '/images/首页/u119.png',
+        title: '市场行情实时更新',
+        desc: '把握每一个投资机会',
+        link: '/pages/quotes/quotes'
+      },
+      {
+        id: 3,
+        image: '/images/首页/u120.png',
+        title: '智能计算器',
+        desc: '精准计算期权价值',
+        link: '/pages/calculator/calculator'
+      },
+      {
+        id: 4,
+        image: '/images/首页/u121.png',
+        title: 'ETF期权专区',
+        desc: '探索ETF期权投资策略',
+        link: '/pages/etf/etf'
+      }
+    ],
+
+    // 市场指数
+    marketIndices: [],
+
+    // 热门期权
+    hotOptions: [],
+
+    // 快捷功能
     quickActions: [
-      { id: 'quotes', name: '实时报价', icon: 'chart', path: '/pages/quotes/quotes', desc: '查看最新期权报价' },
-      { id: 'calculator', name: '期权计算器', icon: 'calculator', path: '/pages/calculator/calculator', desc: '专业的期权定价工具' },
-      { id: 'inquiry', name: '询价中心', icon: 'message', path: '/pages/inquiry/inquiry', desc: '发起询价和管理订单' },
-      { id: 'profile', name: '我的', icon: 'folder', path: '/pages/profile/profile', desc: '个人中心和设置' }
+      { 
+        id: 1, 
+        icon: '📊', 
+        name: '自选', 
+        path: '/pages/quotes/quotes',
+        color: '#4caf50'
+      },
+      { 
+        id: 2, 
+        icon: '🧮', 
+        name: '期权计算器', 
+        path: '/pages/calculator/calculator',
+        color: '#2196f3'
+      },
+      { 
+        id: 3, 
+        icon: '📈', 
+        name: 'T型报价', 
+        path: '/pages/tquote/tquote',
+        color: '#ff9800'
+      },
+      { 
+        id: 4, 
+        icon: '📚', 
+        name: '个股', 
+        path: '/pages/learning/learning',
+        color: '#9c27b0'
+      },
+      { 
+        id: 5, 
+        icon: '💼', 
+        name: '策略分析', 
+        path: '/pages/strategy/strategy',
+        color: '#f44336'
+      },
+      { 
+        id: 6, 
+        icon: '🔔', 
+        name: 'ETF', 
+        path: '/pages/alert/alert',
+        color: '#00bcd4'
+      }
     ],
-    announcements: [
-      { id: 1, title: '系统维护通知', time: '2025-01-15', type: 'system' },
-      { id: 2, title: '新增期权品种公告', time: '2025-01-14', type: 'product' },
-      { id: 3, title: '交易规则更新', time: '2025-01-13', type: 'rule' }
-    ],
-    // 市场指数数据
-    marketIndices: [
-      { name: '上证指数', value: '3156.42', change: '+1.23%', color: '#4caf50' },
-      { name: '深证成指', value: '11247.89', change: '-0.45%', color: '#f44336' },
-      { name: '创业板指', value: '2456.78', change: '+2.11%', color: '#4caf50' }
-    ],
-    // 通知数据
-    notifications: {
-      unreadCount: 0,
-      latestNotification: null
+
+    // 新增：持仓案例动画开关
+    holdingsAnimate: false,
+
+    // 新增：持仓案例数据
+    holdingsData: {
+      activeTab: 'active', // active/expiring/expired
+      holdings: [
+        {
+          id: 1,
+          name: '平安银行',
+          code: '000001',
+          market: 'SZ',
+          structure: '100C1m',
+          feeRate: '5.28%',
+          scale: '100万',
+          profit: -4.91,
+          profitRate: -98.28,
+          status: 'active'
+        },
+        {
+          id: 2,
+          name: '上证50ETF',
+          code: '510050',
+          market: 'SH',
+          structure: '50P3m',
+          feeRate: '2.15%',
+          scale: '200万',
+          profit: 12.6,
+          profitRate: 8.2,
+          status: 'active'
+        },
+        {
+          id: 3,
+          name: '贵州茅台',
+          code: '600519',
+          market: 'SH',
+          structure: '100C6m',
+          feeRate: '4.85%',
+          scale: '50万',
+          profit: 34.2,
+          profitRate: 12.7,
+          status: 'active'
+        },
+        {
+          id: 4,
+          name: '招商银行',
+          code: '600036',
+          market: 'SH',
+          structure: '100C1m',
+          feeRate: '3.10%',
+          scale: '80万',
+          profit: -2.3,
+          profitRate: -1.8,
+          status: 'expiring'
+        },
+        {
+          id: 5,
+          name: '中国平安',
+          code: '601318',
+          market: 'SH',
+          structure: '100P1m',
+          feeRate: '2.90%',
+          scale: '100万',
+          profit: 1.2,
+          profitRate: 0.9,
+          status: 'expiring'
+        },
+        {
+          id: 6,
+          name: '宁德时代',
+          code: '300750',
+          market: 'SZ',
+          structure: '50C3m',
+          feeRate: '3.40%',
+          scale: '60万',
+          profit: 6.8,
+          profitRate: 5.3,
+          status: 'expired'
+        },
+        {
+          id: 7,
+          name: '隆基绿能',
+          code: '601012',
+          market: 'SH',
+          structure: '50P6m',
+          feeRate: '2.75%',
+          scale: '120万',
+          profit: -3.6,
+          profitRate: -2.4,
+          status: 'expired'
+        }
+      ],
+      knowledge: [
+        {
+          id: 1,
+          title: '沪深场外个股期权',
+          date: '24-12-08 14:58',
+          type: 'option',
+          link: '/pages/article/article?id=1'
+        },
+        {
+          id: 2,
+          title: '香草期权基础入门',
+          date: '24-12-12 09:30',
+          type: 'vanilla',
+          link: '/pages/article/article?id=2'
+        },
+        {
+          id: 3,
+          title: '持仓管理与风险控制',
+          date: '24-12-20 16:20',
+          type: 'knowledge',
+          link: '/pages/article/article?id=3'
+        }
+      ]
+    },
+
+    // 加载状态
+    loading: true,
+    refreshing: false
+  },
+
+  onLoad() {
+    performanceMonitor.markStart('pageLoad');
+    this.loadUserInfo();
+    this.loadSearchHistory();
+    this.initPageData();
+  },
+
+  onShow() {
+    if (this.data.hasUserInfo) {
+      this.refreshData();
     }
   },
 
-  onLoad: function (options) {
-    console.log('首页加载');
-    this.initPage();
+  onPullDownRefresh() {
+    this.refreshData().then(() => {
+      wx.stopPullDownRefresh();
+    });
   },
-  
-  // 初始化页面
-  async initPage() {
+
+  // 初始化页面数据
+  async initPageData() {
     try {
-      await uiEnhancer.pageLoadWithAnimation(this, async () => {
-        // 并行加载多个数据源
-        await Promise.all([
-          this.loadMarketData(),
-          this.loadAnnouncements(),
-          this.loadMarketIndices()
-        ]);
-      }, {
-        loadingText: '正在加载首页数据...',
-        errorText: '首页数据加载失败'
-      });
-      
-      // 页面加载成功后的操作
-      this.setupAutoRefresh();
-      
+      await Promise.all([
+        this.loadMarketIndices(),
+        this.loadHotOptions(),
+        this.loadHoldingsData()
+      ]);
+      performanceMonitor.markEnd('pageLoad');
     } catch (error) {
-      console.error('首页初始化失败:', error);
+      console.error('初始化数据失败:', error);
+      uiEnhancer.showToast('加载失败，请重试', 'error');
+    } finally {
+      this.setData({ loading: false });
     }
   },
 
-  // 页面显示时的处理
-  onShow: function () {
-    // 页面显示时刷新数据
-    this.refreshData(false);
-  },
-  
-  // 页面隐藏时的处理
-  onHide: function() {
-    // 清理定时器
-    if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
-      this.refreshTimer = null;
-    }
-  },
-  
-  // 页面卸载时的处理
-  onUnload: function() {
-    // 清理资源
-    if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
-      this.refreshTimer = null;
-    }
-    
-    // 清理UI增强器状态
-    uiEnhancer.cleanup();
-  },
-  
-  // 页面错误重试
-  onRetry: function() {
-    this.initPage();
-  },
-
-  // 加载市场数据（使用缓存优化）
-  async loadMarketData() {
+  // 刷新数据
+  async refreshData() {
+    this.setData({ refreshing: true });
     try {
-      // 使用性能优化器的数据预处理功能
-      const hotStocks = await performanceOptimizer.preprocessData(
-        'hot_stocks_data',
-        this.processStockData,
-        null,
-        { ttl: 5 * 60 * 1000 } // 5分钟缓存
-      );
+      await Promise.all([
+        this.loadMarketIndices(),
+        this.loadHotOptions()
+      ]);
+      uiEnhancer.showToast('刷新成功', 'success');
+    } catch (error) {
+      console.error('刷新失败:', error);
+      uiEnhancer.showToast('刷新失败', 'error');
+    } finally {
+      this.setData({ refreshing: false });
+    }
+  },
 
+  // 加载用户信息
+  loadUserInfo() {
+    const userInfo = app.globalData.userInfo;
+    if (userInfo) {
       this.setData({
-        'marketData.hotStocks': hotStocks
+        userInfo,
+        hasUserInfo: true
       });
-      
-    } catch (error) {
-      console.error('加载市场数据失败:', error);
-      throw error;
     }
   },
-  
-  // 处理股票数据
-  processStockData() {
-    // 模拟热门股票数据生成
-    return [
-      { code: '000001', name: '平安银行', price: '12.45', change: '+1.88%', volume: '2.1亿' },
-      { code: '000002', name: '万科A', price: '8.92', change: '-0.67%', volume: '1.8亿' },
-      { code: '000858', name: '五粮液', price: '128.67', change: '+2.34%', volume: '1.5亿' },
-      { code: '600036', name: '招商银行', price: '42.18', change: '+1.12%', volume: '3.2亿' }
-    ];
+
+  // 获取用户信息
+  getUserProfile() {
+    uiEnhancer.hapticFeedback('light');
+    wx.getUserProfile({
+      desc: '用于完善用户资料',
+      success: (res) => {
+        app.globalData.userInfo = res.userInfo;
+        this.setData({
+          userInfo: res.userInfo,
+          hasUserInfo: true
+        });
+        uiEnhancer.showToast('登录成功', 'success');
+      },
+      fail: (err) => {
+        console.error('获取用户信息失败:', err);
+        uiEnhancer.showToast('登录失败', 'error');
+      }
+    });
   },
-  
-  // 加载公告数据
-  async loadAnnouncements() {
-    try {
-      // 模拟从服务器加载公告
-      const announcements = await new Promise(resolve => {
-        setTimeout(() => {
-          resolve([
-            { id: 1, title: '系统维护通知', time: '2025-01-15', type: 'system' },
-            { id: 2, title: '新增期权品种公告', time: '2025-01-14', type: 'product' },
-            { id: 3, title: '交易规则更新', time: '2025-01-13', type: 'rule' }
-          ]);
-        }, 500); // 模拟网络延迟
-      });
-      
-      this.setData({ announcements });
-      
-    } catch (error) {
-      console.error('加载公告失败:', error);
-      throw error;
-    }
-  },
-  
+
   // 加载市场指数
   async loadMarketIndices() {
     try {
-      const marketIndices = [
-        { name: '上证指数', value: '3156.42', change: '+1.23%', color: '#4caf50' },
-        { name: '深证成指', value: '11247.89', change: '-0.45%', color: '#f44336' },
-        { name: '创业板指', value: '2456.78', change: '+2.11%', color: '#4caf50' }
-      ];
-      
-      this.setData({ marketIndices });
-      
+      const indices = await optionsService.getMarketIndices();
+      this.setData({
+        marketIndices: indices.map(index => ({
+          ...index,
+          changeRate: dataFormatter.formatPercent(index.changeRate),
+          formattedPrice: dataFormatter.formatNumber(index.price, 2)
+        }))
+      });
     } catch (error) {
       console.error('加载市场指数失败:', error);
       throw error;
     }
   },
 
-  // 设置自动刷新
-  setupAutoRefresh() {
-    // 每30秒自动刷新数据
-    this.refreshTimer = setInterval(() => {
-      this.refreshData(false); // 静默刷新，不显示加载提示
-    }, 30000);
-  },
-  // 刷新数据（增强版）
-  async refreshData(showLoading = true) {
+  // 加载热门期权
+  async loadHotOptions() {
     try {
-      if (showLoading) {
-        uiEnhancer.showLoading('正在刷新...', 'refresh');
-      }
-      
-      // 模拟数据更新
-      const updates = {
-        'marketData.overview.totalVolume': (Math.random() * 5 + 10).toFixed(1) + '亿',
-        'marketData.overview.dailyChange': (Math.random() * 4 - 2).toFixed(1) + '%',
-        'marketData.overview.activeOptions': Math.floor(Math.random() * 50 + 120),
-        'marketData.overview.topGainers': Math.floor(Math.random() * 10 + 5)
-      };
-
-      this.setData(updates);
-      
-      if (showLoading) {
-        uiEnhancer.hideLoading('refresh');
-        uiEnhancer.showSuccess('刷新成功');
-      }
-      
+      const options = await optionsService.getHotOptions();
+      this.setData({
+        hotOptions: options.map(option => ({
+          ...option,
+          formattedPrice: dataFormatter.formatNumber(option.price, 4),
+          changeRate: dataFormatter.formatPercent(option.changeRate),
+          volume: dataFormatter.formatVolume(option.volume)
+        }))
+      });
     } catch (error) {
-      console.error('刷新失败:', error);
-      if (showLoading) {
-        uiEnhancer.hideLoading('refresh');
-        uiEnhancer.showError('刷新失败，请重试');
-      }
+      console.error('加载热门期权失败:', error);
+      throw error;
     }
   },
 
-  // 快捷操作点击（增强版）
-  onQuickAction: function(e) {
-    const action = e.currentTarget.dataset.action;
-    const path = e.currentTarget.dataset.path;
-    
-    // 触感反馈
+  // 新增：加载持仓数据（可接后端数据源）
+  async loadHoldingsData() {
+    try {
+      const { holdingsData } = this.data;
+      this.setData({ holdingsData });
+    } catch (e) {
+      console.error('加载持仓数据失败:', e);
+      uiEnhancer.showToast('持仓数据加载失败', 'error');
+    }
+  },
+
+  // 新增：Tab 切换
+  onHoldingTabChange(e) {
+    try {
+      const tab = e.currentTarget.dataset.tab;
+      if (!tab) return;
+      if (typeof uiEnhancer.hapticFeedback === 'function') uiEnhancer.hapticFeedback('light');
+      this.setData({
+        'holdingsData.activeTab': tab,
+        holdingsAnimate: true
+      });
+      setTimeout(() => {
+        this.setData({ holdingsAnimate: false });
+      }, 300);
+    } catch (err) {
+      console.error('切换Tab失败:', err);
+    }
+  },
+
+  // 新增：持仓项点击
+  onHoldingItemTap(e) {
+    try {
+      const { id } = e.currentTarget.dataset;
+      if (typeof uiEnhancer.hapticFeedback === 'function') uiEnhancer.hapticFeedback('light');
+      wx.navigateTo({ url: `/pages/position/position?id=${id}` });
+    } catch (err) {
+      console.error('打开持仓失败:', err);
+      uiEnhancer.showToast('页面开发中', 'none');
+    }
+  },
+
+  // 新增：知识文章点击
+  onKnowledgeItemTap(e) {
+    try {
+      const { id } = e.currentTarget.dataset;
+      if (typeof uiEnhancer.hapticFeedback === 'function') uiEnhancer.hapticFeedback('light');
+      wx.navigateTo({ url: `/pages/data-explanation/data-explanation?from=home&id=${id}` });
+    } catch (err) {
+      console.error('打开文章失败:', err);
+      uiEnhancer.showToast('页面开发中', 'none');
+    }
+  },
+
+  // 搜索相关方法
+  onSearchInput(e) {
+    this.setData({
+      searchValue: e.detail.value
+    });
+  },
+
+  onSearchFocus() {
+    this.setData({
+      showSearchResults: true
+    });
+  },
+
+  async onSearch() {
+    const { searchValue } = this.data;
+    if (!searchValue.trim()) {
+      uiEnhancer.showToast('请输入搜索内容', 'none');
+      return;
+    }
+
     uiEnhancer.hapticFeedback('light');
-    
-    if (path) {
-      uiEnhancer.showLoading('正在跳转...', 'navigate');
+    this.setData({ isSearching: true });
+
+    try {
+      const results = await optionsService.searchOptions(searchValue);
+      this.setData({
+        searchResults: results,
+        showSearchResults: true
+      });
+      this.saveSearchHistory(searchValue);
+    } catch (error) {
+      console.error('搜索失败:', error);
+      uiEnhancer.showToast('搜索失败，请重试', 'error');
+    } finally {
+      this.setData({ isSearching: false });
+    }
+  },
+
+  onSearchCancel() {
+    uiEnhancer.hapticFeedback('light');
+    this.setData({
+      showSearchResults: false,
+      searchValue: '',
+      searchResults: []
+    });
+  },
+
+  onHotSearchTap(e) {
+    const { keyword } = e.currentTarget.dataset;
+    uiEnhancer.hapticFeedback('light');
+    this.setData({
+      searchValue: keyword
+    }, () => {
+      this.onSearch();
+    });
+  },
+
+  onHistoryItemTap(e) {
+    const { keyword } = e.currentTarget.dataset;
+    uiEnhancer.hapticFeedback('light');
+    this.setData({
+      searchValue: keyword
+    }, () => {
+      this.onSearch();
+    });
+  },
+
+  clearSearchHistory() {
+    uiEnhancer.hapticFeedback('medium');
+    wx.showModal({
+      title: '提示',
+      content: '确定要清空搜索历史吗？',
+      success: (res) => {
+        if (res.confirm) {
+          this.setData({ searchHistory: [] });
+          wx.removeStorageSync('searchHistory');
+          uiEnhancer.showToast('已清空', 'success');
+        }
+      }
+    });
+  },
+
+  loadSearchHistory() {
+    try {
+      const history = wx.getStorageSync('searchHistory') || [];
+      this.setData({ searchHistory: history });
+    } catch (error) {
+      console.error('加载搜索历史失败:', error);
+    }
+  },
+
+  saveSearchHistory(keyword) {
+    try {
+      let history = this.data.searchHistory;
+      history = history.filter(item => item !== keyword);
+      history.unshift(keyword);
+      history = history.slice(0, 10);
       
+      this.setData({ searchHistory: history });
+      wx.setStorageSync('searchHistory', history);
+    } catch (error) {
+      console.error('保存搜索历史失败:', error);
+    }
+  },
+
+  // 轮播图点击事件
+  onBannerTap(e) {
+    const { index } = e.currentTarget.dataset;
+    const banner = this.data.bannerList[index];
+    
+    if (typeof uiEnhancer.hapticFeedback === 'function') {
+      uiEnhancer.hapticFeedback('light');
+    }
+    
+    if (banner.link) {
       wx.navigateTo({
-        url: path,
-        success: () => {
-          uiEnhancer.hideLoading('navigate');
-        },
-        fail: (error) => {
-          uiEnhancer.hideLoading('navigate');
-          uiEnhancer.showError('跳转失败，请重试');
+        url: banner.link,
+        fail: () => {
+          uiEnhancer.showToast('页面开发中', 'none');
         }
       });
-    } else {
-      uiEnhancer.showToast('功能开发中，敬请期待');
     }
   },
 
-  // 查看股票详情（增强版）
-  onStockTap: function(e) {
-    const stock = e.currentTarget.dataset.stock;
-    
+  // 快捷功能点击
+  onQuickActionTap(e) {
+    const { path } = e.currentTarget.dataset;
     uiEnhancer.hapticFeedback('light');
-    
-    uiEnhancer.showLoading('正在加载股票详情...', 'stock-detail');
     
     wx.navigateTo({
-      url: `/pages/quotes/quotes?stock=${encodeURIComponent(JSON.stringify(stock))}`,
-      success: () => {
-        uiEnhancer.hideLoading('stock-detail');
-      },
-      fail: (error) => {
-        uiEnhancer.hideLoading('stock-detail');
-        uiEnhancer.showError('跳转失败，请重试');
+      url: path,
+      fail: () => {
+        uiEnhancer.showToast('页面开发中', 'none');
       }
     });
   },
 
-  // 查看公告详情（增强版）
-  async onAnnouncementTap(e) {
-    const announcement = e.currentTarget.dataset.item;
-    
+  // 市场指数点击
+  onIndexTap(e) {
+    const { code } = e.currentTarget.dataset;
     uiEnhancer.hapticFeedback('light');
     
-    const confirmed = await uiEnhancer.showConfirm(
-      announcement.title,
-      '这是公告的详细内容，包含重要信息，请仔细阅读。\n\n类型：' + announcement.type + '\n时间：' + announcement.time,
-      {
-        confirmText: '知道了',
-        showCancel: false
+    wx.navigateTo({
+      url: `/pages/indexDetail/indexDetail?code=${code}`,
+      fail: () => {
+        uiEnhancer.showToast('页面开发中', 'none');
       }
-    );
-  },
-
-  // 下拉刷新（增强版）
-  async onPullDownRefresh() {
-    await uiEnhancer.enhancedPullRefresh(this, async () => {
-      await this.refreshData(false); // 不显示加载提示，因为下拉刷新已有视觉反馈
-      await this.loadMarketData();
     });
   },
 
-  // 分享页面
-  onShareAppMessage: function() {
-    return {
-      title: '场外期权交易平台',
-      path: '/pages/index/index'
-    };
+  // 期权卡片点击
+  onOptionTap(e) {
+    const { code } = e.currentTarget.dataset;
+    uiEnhancer.hapticFeedback('light');
+    
+    wx.navigateTo({
+      url: `/pages/optionDetail/optionDetail?code=${code}`,
+      fail: () => {
+        uiEnhancer.showToast('页面开发中', 'none');
+      }
+    });
+  },
+
+  // 查看更多
+  onViewMore(e) {
+    const { type } = e.currentTarget.dataset;
+    uiEnhancer.hapticFeedback('light');
+    
+    let url = '';
+    switch(type) {
+      case 'options':
+        url = '/pages/quotes/quotes';
+        break;
+      case 'indices':
+        url = '/pages/market/market';
+        break;
+      default:
+        return;
+    }
+    
+    wx.navigateTo({
+      url,
+      fail: () => {
+        uiEnhancer.showToast('页面开发中', 'none');
+      }
+    });
   }
 });

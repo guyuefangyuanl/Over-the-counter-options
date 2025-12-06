@@ -1,295 +1,142 @@
-const mongoose = require('mongoose');
+// 简化的用户模型，适配 SQLite
 const bcrypt = require('bcryptjs');
+const { getDatabase } = require('../config/database');
 
-const userSchema = new mongoose.Schema({
-  // 用户基本信息
-  openId: {
-    type: String,
-    required: true,
-    unique: true,
-    index: true
-  },
-  unionId: {
-    type: String,
-    index: true
-  },
-  // QQ登录相关
-  qqOpenId: {
-    type: String,
-    unique: true,
-    sparse: true,
-    index: true
-  },
-  qqUnionId: {
-    type: String,
-    unique: true,
-    sparse: true,
-    index: true
-  },
-  // 登录方式记录
-  loginType: {
-    type: String,
-    enum: ['wechat', 'qq', 'phone', 'guest'],
-    default: 'wechat'
-  },
-  nickname: {
-    type: String,
-    required: true
-  },
-  avatar: {
-    type: String,
-    default: ''
-  },
-  phone: {
-    type: String,
-    unique: true,
-    sparse: true
-  },
-  email: {
-    type: String,
-    unique: true,
-    sparse: true
-  },
-  
-  // 认证信息
-  isVerified: {
-    type: Boolean,
-    default: false
-  },
-  idCard: {
-    type: String,
-    sparse: true
-  },
-  realName: {
-    type: String,
-    sparse: true
-  },
-  
-  // 风险等级评估
-  riskLevel: {
-    type: String,
-    enum: ['conservative', 'moderate', 'aggressive'],
-    default: 'conservative'
-  },
-  riskScore: {
-    type: Number,
-    default: 0
-  },
-  riskAssessmentDate: {
-    type: Date
-  },
-  
-  // 账户信息
-  accounts: [{
-    accountId: {
-      type: String,
-      required: true
-    },
-    accountName: {
-      type: String,
-      required: true
-    },
-    accountType: {
-      type: String,
-      enum: ['demo', 'real'],
-      default: 'demo'
-    },
-    balance: {
-      type: Number,
-      default: 0
-    },
-    frozenAmount: {
-      type: Number,
-      default: 0
-    },
-    currency: {
-      type: String,
-      default: 'CNY'
-    },
-    isActive: {
-      type: Boolean,
-      default: true
-    }
-  }],
-  
-  // 当前活跃账户
-  activeAccountId: {
-    type: String
-  },
-  
-  // 用户偏好设置
-  preferences: {
-    language: {
-      type: String,
-      default: 'zh-CN'
-    },
-    timezone: {
-      type: String,
-      default: 'Asia/Shanghai'
-    },
-    notifications: {
-      priceAlert: {
-        type: Boolean,
-        default: true
-      },
-      tradeAlert: {
-        type: Boolean,
-        default: true
-      },
-      marketNews: {
-        type: Boolean,
-        default: false
-      }
-    },
-    displaySettings: {
-      theme: {
-        type: String,
-        enum: ['light', 'dark'],
-        default: 'light'
-      },
-      priceFormat: {
-        type: String,
-        enum: ['decimal', 'fraction'],
-        default: 'decimal'
+class User {
+  constructor(data) {
+    Object.assign(this, data);
+    // 解析 accounts JSON 字符串
+    if (typeof this.accounts === 'string') {
+      try {
+        this.accounts = JSON.parse(this.accounts);
+      } catch (e) {
+        this.accounts = [];
       }
     }
-  },
-  
-  // 状态信息
-  status: {
-    type: String,
-    enum: ['active', 'suspended', 'disabled'],
-    default: 'active'
-  },
-  lastLoginTime: {
-    type: Date
-  },
-  lastActiveTime: {
-    type: Date,
-    default: Date.now
-  },
-  
-  // 系统字段
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
   }
-}, {
-  timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
-});
 
-// 索引
-userSchema.index({ openId: 1 });
-userSchema.index({ qqOpenId: 1 });
-userSchema.index({ qqUnionId: 1 });
-userSchema.index({ phone: 1 });
-userSchema.index({ email: 1 });
-userSchema.index({ createdAt: -1 });
-
-// 虚拟字段
-userSchema.virtual('activeAccount').get(function() {
-  return this.accounts.find(account => account.accountId === this.activeAccountId);
-});
-
-userSchema.virtual('totalBalance').get(function() {
-  return this.accounts.reduce((total, account) => total + account.balance, 0);
-});
-
-// 实例方法
-userSchema.methods.addAccount = function(accountData) {
-  this.accounts.push(accountData);
-  if (!this.activeAccountId) {
-    this.activeAccountId = accountData.accountId;
+  // 静态方法：根据 openId 查找用户
+  static async findByOpenId(openId) {
+    const db = getDatabase();
+    const user = db.prepare('SELECT * FROM users WHERE openId = ?').get(openId);
+    return user ? new User(user) : null;
   }
-  return this.save();
-};
 
-userSchema.methods.switchAccount = function(accountId) {
-  const account = this.accounts.find(acc => acc.accountId === accountId && acc.isActive);
-  if (!account) {
-    throw new Error('账户不存在或已禁用');
+  // 静态方法：根据手机号查找用户
+  static async findByPhone(phone) {
+    const db = getDatabase();
+    const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone);
+    return user ? new User(user) : null;
   }
-  this.activeAccountId = accountId;
-  return this.save();
-};
 
-userSchema.methods.updateBalance = function(accountId, amount, type = 'add') {
-  const account = this.accounts.find(acc => acc.accountId === accountId);
-  if (!account) {
-    throw new Error('账户不存在');
+  // 静态方法：根据 ID 查找用户
+  static async findById(id) {
+    const db = getDatabase();
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    return user ? new User(user) : null;
   }
-  
-  if (type === 'add') {
-    account.balance += amount;
-  } else if (type === 'subtract') {
-    if (account.balance < amount) {
-      throw new Error('余额不足');
+
+  // 静态方法：创建用户
+  static async create(userData) {
+    const db = getDatabase();
+    
+    // 将 accounts 对象转换为 JSON 字符串存储
+    const dataToStore = {
+      ...userData,
+      accounts: typeof userData.accounts === 'object' ? JSON.stringify(userData.accounts) : userData.accounts,
+      createdAt: userData.createdAt || new Date().toISOString(),
+      updatedAt: userData.updatedAt || new Date().toISOString()
+    };
+    
+    const stmt = db.prepare(`
+      INSERT INTO users (
+        openId, unionId, qqOpenId, qqUnionId, loginType, nickname, avatar, 
+        phone, email, isVerified, idCard, realName, riskLevel, riskScore, 
+        riskAssessmentDate, accounts, activeAccountId, status, lastLoginTime, 
+        lastActiveTime, createdAt, updatedAt
+      ) VALUES (
+        @openId, @unionId, @qqOpenId, @qqUnionId, @loginType, @nickname, @avatar,
+        @phone, @email, @isVerified, @idCard, @realName, @riskLevel, @riskScore,
+        @riskAssessmentDate, @accounts, @activeAccountId, @status, @lastLoginTime,
+        @lastActiveTime, @createdAt, @updatedAt
+      )
+    `);
+    
+    const result = stmt.run(dataToStore);
+    
+    return new User({ id: result.lastInsertRowid, ...userData });
+  }
+
+  // 实例方法：保存用户
+  async save() {
+    const db = getDatabase();
+    
+    // 将 accounts 对象转换为 JSON 字符串存储
+    const dataToStore = {
+      ...this,
+      accounts: typeof this.accounts === 'object' ? JSON.stringify(this.accounts) : this.accounts,
+      updatedAt: new Date().toISOString()
+    };
+    
+    const stmt = db.prepare(`
+      UPDATE users SET
+        openId = @openId, unionId = @unionId, qqOpenId = @qqOpenId, qqUnionId = @qqUnionId,
+        loginType = @loginType, nickname = @nickname, avatar = @avatar, phone = @phone,
+        email = @email, isVerified = @isVerified, idCard = @idCard, realName = @realName,
+        riskLevel = @riskLevel, riskScore = @riskScore, riskAssessmentDate = @riskAssessmentDate,
+        accounts = @accounts, activeAccountId = @activeAccountId, status = @status, 
+        lastLoginTime = @lastLoginTime, lastActiveTime = @lastActiveTime, updatedAt = @updatedAt
+      WHERE id = @id
+    `);
+    
+    stmt.run(dataToStore);
+    
+    return this;
+  }
+
+  // 实例方法：添加账户
+  async addAccount(accountData) {
+    // 确保 accounts 是数组
+    if (!this.accounts || !Array.isArray(this.accounts)) {
+      this.accounts = [];
     }
-    account.balance -= amount;
-  } else if (type === 'set') {
-    account.balance = amount;
+    this.accounts.push(accountData);
+    if (!this.activeAccountId) {
+      this.activeAccountId = accountData.accountId;
+    }
+    return this.save();
+  }
+
+  // 实例方法：切换账户
+  async switchAccount(accountId) {
+    if (!this.accounts || !Array.isArray(this.accounts)) {
+      throw new Error('账户不存在或已禁用');
+    }
+    
+    const account = this.accounts.find(acc => acc.accountId === accountId && acc.isActive);
+    if (!account) {
+      throw new Error('账户不存在或已禁用');
+    }
+    this.activeAccountId = accountId;
+    return this.save();
+  }
+
+  // 获取活跃账户
+  get activeAccount() {
+    if (!this.accounts || !Array.isArray(this.accounts)) return null;
+    return this.accounts.find(account => account.accountId === this.activeAccountId);
+  }
+
+  // 获取总余额
+  get totalBalance() {
+    if (!this.accounts || !Array.isArray(this.accounts)) return 0;
+    return this.accounts.reduce((total, account) => total + (account.balance || 0), 0);
   }
   
-  return this.save();
-};
-
-userSchema.methods.freezeAmount = function(accountId, amount) {
-  const account = this.accounts.find(acc => acc.accountId === accountId);
-  if (!account) {
-    throw new Error('账户不存在');
+  // 获取用户 ID
+  get userId() {
+    return this.id;
   }
-  
-  if (account.balance < amount) {
-    throw new Error('可用余额不足');
-  }
-  
-  account.balance -= amount;
-  account.frozenAmount += amount;
-  return this.save();
-};
+}
 
-userSchema.methods.unfreezeAmount = function(accountId, amount) {
-  const account = this.accounts.find(acc => acc.accountId === accountId);
-  if (!account) {
-    throw new Error('账户不存在');
-  }
-  
-  if (account.frozenAmount < amount) {
-    throw new Error('冻结金额不足');
-  }
-  
-  account.frozenAmount -= amount;
-  account.balance += amount;
-  return this.save();
-};
-
-// 静态方法
-userSchema.statics.findByOpenId = function(openId) {
-  return this.findOne({ openId });
-};
-
-userSchema.statics.findByQQOpenId = function(qqOpenId) {
-  return this.findOne({ qqOpenId });
-};
-
-userSchema.statics.findByPhone = function(phone) {
-  return this.findOne({ phone });
-};
-
-userSchema.statics.findActiveUsers = function() {
-  return this.find({ status: 'active' });
-};
-
-// 中间件
-userSchema.pre('save', function(next) {
-  this.updatedAt = new Date();
-  next();
-});
-
-module.exports = mongoose.model('User', userSchema);
+module.exports = User;

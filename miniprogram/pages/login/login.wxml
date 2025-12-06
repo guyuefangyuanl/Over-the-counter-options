@@ -1,0 +1,113 @@
+<view class="login-container">
+  <view class="bg-decoration">
+    <view class="circle circle1"></view>
+    <view class="circle circle2"></view>
+    <view class="circle circle3"></view>
+  </view>
+
+  <view class="header-section">
+    <text class="app-name">期权大师</text>
+    <text class="app-slogan">安全快捷的一键登录</text>
+  </view>
+
+  <view class="login-tabs">
+    <view class="tab-item {{currentTab === 'wechat' ? 'active' : ''}}" data-tab="wechat" bindtap="switchTab">
+      <text>微信登录</text>
+    </view>
+    <view class="tab-item {{currentTab === 'phone' ? 'active' : ''}}" data-tab="phone" bindtap="switchTab">
+      <text>手机号登录</text>
+    </view>
+    <view class="tab-item {{currentTab === 'qq' ? 'active' : ''}}" data-tab="qq" bindtap="switchTab">
+      <text>QQ登录</text>
+    </view>
+  </view>
+
+  <view class="login-content">
+    <view class="login-panel" wx:if="{{currentTab === 'wechat'}}">
+      <view class="panel-header">
+        <text class="panel-title">微信一键登录</text>
+        <text class="panel-desc">授权后快速创建或关联账号</text>
+      </view>
+      <button class="login-btn wechat-btn" bindtap="onWechatAuthLogin">
+        <image class="btn-icon" src="../../images/wechat-icon.png" mode="widthFix"></image>
+        微信一键登录
+      </button>
+      <view class="login-tips">
+        <text>登录用于保存询价记录与个性化推荐</text>
+        <text>登录前请先阅读并同意相关协议</text>
+      </view>
+    </view>
+
+    <view class="login-panel" wx:if="{{currentTab === 'phone'}}">
+      <view class="panel-header">
+        <text class="panel-title">手机号登录</text>
+        <text class="panel-desc">输入手机号获取验证码进行登录</text>
+      </view>
+      <view class="form-section">
+        <view class="input-group">
+          <image class="input-icon" src="../../images/phone-icon.png" mode="widthFix"></image>
+          <input class="phone-input" type="number" maxlength="11" placeholder="请输入手机号" bindinput="onPhoneInput" value="{{phoneForm.phone}}" />
+        </view>
+        <view class="input-group">
+          <image class="input-icon" src="../../images/info.png" mode="widthFix"></image>
+          <input class="code-input" type="number" maxlength="6" placeholder="请输入验证码" bindinput="onCodeInput" value="{{phoneForm.code}}" />
+          <button class="send-code-btn {{!canSendCode ? 'disabled' : ''}}" bindtap="sendSmsCode" disabled="{{!canSendCode}}">{{codeButtonText}}</button>
+        </view>
+      </view>
+      <button class="login-btn phone-btn" bindtap="onPhoneLogin">登录</button>
+    </view>
+
+    <view class="login-panel" wx:if="{{currentTab === 'qq'}}">
+      <view class="panel-header">
+        <text class="panel-title">QQ登录</text>
+        <text class="panel-desc">部分环境可能不支持QQ登录</text>
+      </view>
+      <button class="login-btn qq-btn" bindtap="onQQLogin">
+        <image class="btn-icon" src="../../images/qq-icon.png" mode="widthFix"></image>
+        QQ授权登录
+      </button>
+    </view>
+
+    <view class="agreement-section">
+      <view class="agreement-check" bindtap="toggleAgreement">
+        <checkbox-group>
+          <checkbox class="agreement-checkbox" checked="{{agreedToTerms}}" />
+        </checkbox-group>
+        <view class="agreement-text">
+          我已阅读并同意
+          <text class="link-text" bindtap="showUserAgreement">《用户协议》</text>
+          和
+          <text class="link-text" bindtap="showPrivacyPolicy">《隐私政策》</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="other-login">
+      <view class="divider"><text>其他方式</text></view>
+      <view class="quick-login">
+        <view class="quick-item" bindtap="onGuestLogin">
+          <image class="quick-icon" src="../../images/guest-icon.png" mode="widthFix"></image>
+          <text>游客模式</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="help-section">
+      <view class="help-item" bindtap="showUserAgreement">
+        <image class="help-icon" src="../../images/help.png" mode="widthFix"></image>
+        <text>查看用户协议</text>
+      </view>
+      <view class="help-item" bindtap="showPrivacyPolicy">
+        <image class="help-icon" src="../../images/info.png" mode="widthFix"></image>
+        <text>查看隐私政策</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="loading-overlay" wx:if="{{isLoading}}">
+    <view class="loading-content">
+      <view class="loading-spinner"></view>
+      <text class="loading-text">{{loadingText}}</text>
+    </view>
+  </view>
+</view>

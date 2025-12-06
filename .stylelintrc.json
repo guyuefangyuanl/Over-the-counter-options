@@ -1,0 +1,15 @@
+{
+  "extends": ["stylelint-config-standard"],
+  "rules": {
+    "selector-class-pattern": "^[a-z]([a-z0-9]|-|__|--)+$",
+    "color-hex-case": "lower",
+    "string-quotes": "double",
+    "block-no-empty": true
+  },
+  "overrides": [
+    {
+      "files": ["**/*.wxss"],
+      "customSyntax": "postcss-css"
+    }
+  ]
+}

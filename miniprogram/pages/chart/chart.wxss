@@ -1,0 +1,205 @@
+/* 价格趋势图表页面样式 */
+
+/*
+  优化说明:
+  1. 全面使用全局 CSS 变量，统一颜色、字体、间距等，增强主题一致性。
+  2. 强烈建议使用 ECharts for Wechat 组件库替代手动绘制图表，以获得更好的性能、交互和可维护性。
+  3. 重构按钮和 Tab 样式，提取公共部分，使用 BEM 命名法提高可维护性。
+  4. 添加注释，提高代码可读性。
+*/
+
+.chart-container {
+  padding: 0;
+  background-color: var(--background-color, #f5f7fa);
+  min-height: 100vh;
+}
+
+/* 页面头部 */
+.chart-header {
+  background-color: var(--white, white);
+  padding: 20rpx 30rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2rpx solid var(--border-color, #f0f0f0);
+}
+
+.option-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.option-name {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: var(--text-color-primary, #333);
+  margin-bottom: 8rpx;
+}
+
+.option-strike {
+  font-size: 24rpx;
+  color: var(--text-color-regular, #666);
+}
+
+.share-btn {
+  background-color: var(--primary-color, #007aff);
+  color: var(--white, white);
+  border: none;
+  padding: 15rpx 25rpx;
+  border-radius: 20rpx;
+  font-size: 24rpx;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+/* 图表类型切换 */
+.chart-types {
+  background-color: var(--white, white);
+  padding: 0 30rpx;
+}
+
+.type-tabs {
+  display: flex;
+  border-bottom: 2rpx solid var(--border-color, #f0f0f0);
+}
+
+.type-tab {
+  flex: 1;
+  text-align: center;
+  padding: 25rpx 0;
+  font-size: 28rpx;
+  color: var(--text-color-regular, #666);
+  position: relative;
+}
+
+.type-tab.is-active {
+  color: var(--primary-color, #007aff);
+  font-weight: bold;
+}
+
+.type-tab.is-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60rpx;
+  height: 4rpx;
+  background-color: var(--primary-color, #007aff);
+  border-radius: 2rpx;
+}
+
+.type-tab.is-active {
+  color: var(--primary-color, #007aff);
+  font-weight: bold;
+}
+
+.type-tab.is-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60rpx;
+  height: 4rpx;
+  background-color: var(--primary-color, #007aff);
+  border-radius: 2rpx;
+}
+
+/*
+  图表区域优化建议:
+  当前使用 WXSS 手动绘制图表，实现复杂、性能较差且难以维护。
+  强烈建议迁移到 ECharts for Wechat 组件库，可以极大地简化开发、提升性能和用户体验。
+  ECharts for Wechat: https://github.com/ecomfe/echarts-for-weixin
+*/
+.chart-area {
+  background-color: var(--white, white);
+  margin: 20rpx;
+  border-radius: 20rpx;
+  padding: 30rpx;
+  box-shadow: var(--card-shadow, 0 4rpx 20rpx rgba(0,0,0,0.1));
+}
+
+.chart-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: var(--text-color-primary, #333);
+  text-align: center;
+  margin-bottom: 30rpx;
+}
+
+/* 简易折线图格栅 */
+.simple-chart {}
+.chart-grid { display: grid; grid-template-columns: 80rpx 1fr; gap: 12rpx; }
+.y-axis { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; padding-right: 8rpx; }
+.y-label { font-size: 22rpx; color: var(--text-color-regular, #666); }
+.chart-content { position: relative; height: 280rpx; border-left: 2rpx solid #f0f0f0; border-bottom: 2rpx solid #f0f0f0; }
+.x-axis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8rpx; margin-top: 12rpx; }
+.x-label { text-align: center; font-size: 22rpx; color: var(--text-color-regular, #666); }
+
+/* ECharts 组件容器 */
+.ec-container {
+  width: 100%;
+  height: 500rpx; /* 高度可根据实际需求调整 */
+}
+
+.chart-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 400rpx;
+  color: var(--text-color-secondary, #999);
+}
+
+.chart-loading text {
+  margin-top: 20rpx;
+  font-size: 26rpx;
+}
+
+/* 时间范围选择 */
+.time-range {
+  background-color: var(--white, white);
+  margin: 20rpx;
+  border-radius: 20rpx;
+  padding: 20rpx;
+  box-shadow: var(--card-shadow, 0 4rpx 20rpx rgba(0,0,0,0.1));
+}
+
+.range-tabs {
+  display: flex;
+  background-color: var(--background-color-light, #f8f8f8);
+  border-radius: 15rpx;
+  padding: 8rpx;
+}
+
+.range-tab {
+  flex: 1;
+  text-align: center;
+  padding: 15rpx 0;
+  font-size: 26rpx;
+  color: var(--text-color-regular, #666);
+  border-radius: 10rpx;
+  transition: all 0.2s ease;
+}
+
+.range-tab.is-active {
+  background-color: var(--primary-color, #007aff);
+  color: var(--white, white);
+}
+
+/* 数据统计 */
+.chart-stats {
+  background-color: var(--white, white);
+  margin: 20rpx;
+  border-radius: 20rpx;
+  padding: 30rpx;
+  display: flex;
+  justify-content: space-around;
+  box-shadow: var(--card-shadow, 0 4rpx 20rpx rgba(0,0,0,0.1));
+}
+
+.stat-item {
+  text-align: center;
+}

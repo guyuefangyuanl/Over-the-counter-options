@@ -1,322 +1,225 @@
-const mongoose = require('mongoose');
+// 简化的询价模型，适配 SQLite
+const { getDatabase } = require('../config/database');
 
-const inquirySchema = new mongoose.Schema({
-  // 询价基本信息
-  inquiryId: {
-    type: String,
-    required: true,
-    unique: true,
-    index: true
-  },
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-    index: true
-  },
-  accountId: {
-    type: String,
-    required: true
-  },
-  
-  // 期权基本信息
-  optionType: {
-    type: String,
-    enum: ['call', 'put'],
-    required: true
-  },
-  underlyingAsset: {
-    symbol: {
-      type: String,
-      required: true
-    },
-    name: {
-      type: String,
-      required: true
-    },
-    market: {
-      type: String,
-      required: true
-    },
-    currentPrice: {
-      type: Number,
-      required: true
+class Inquiry {
+  constructor(data) {
+    Object.assign(this, data);
+    // 解析 JSON 字符串字段
+    if (typeof this.underlyingAsset === 'string') {
+      try {
+        this.underlyingAsset = JSON.parse(this.underlyingAsset);
+      } catch (e) {
+        this.underlyingAsset = {};
+      }
     }
-  },
-  
-  // 期权条款
-  strikePrice: {
-    type: Number,
-    required: true
-  },
-  expiryDate: {
-    type: Date,
-    required: true
-  },
-  exerciseStyle: {
-    type: String,
-    enum: ['european', 'american'],
-    default: 'european'
-  },
-  settlementType: {
-    type: String,
-    enum: ['cash', 'physical'],
-    default: 'cash'
-  },
-  
-  // 交易信息
-  notionalAmount: {
-    type: Number,
-    required: true
-  },
-  quantity: {
-    type: Number,
-    required: true
-  },
-  direction: {
-    type: String,
-    enum: ['buy', 'sell'],
-    required: true
-  },
-  
-  // 询价状态
-  status: {
-    type: String,
-    enum: ['pending', 'quoted', 'expired', 'cancelled', 'traded'],
-    default: 'pending'
-  },
-  
-  // 报价信息
-  quotes: [{
-    quoteId: {
-      type: String,
-      required: true
-    },
-    dealerId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Dealer',
-      required: true
-    },
-    dealerName: {
-      type: String,
-      required: true
-    },
     
-    // 报价详情
-    bidPrice: {
-      type: Number
-    },
-    askPrice: {
-      type: Number
-    },
-    premium: {
-      type: Number,
-      required: true
-    },
-    spread: {
-      type: Number
-    },
-    
-    // 希腊字母
-    greeks: {
-      delta: Number,
-      gamma: Number,
-      theta: Number,
-      vega: Number,
-      rho: Number
-    },
-    
-    // 报价有效期
-    validUntil: {
-      type: Date,
-      required: true
-    },
-    
-    // 报价状态
-    quoteStatus: {
-      type: String,
-      enum: ['active', 'expired', 'withdrawn', 'traded'],
-      default: 'active'
-    },
-    
-    // 时间戳
-    quotedAt: {
-      type: Date,
-      default: Date.now
+    if (typeof this.quotes === 'string') {
+      try {
+        this.quotes = JSON.parse(this.quotes);
+      } catch (e) {
+        this.quotes = [];
+      }
     }
-  }],
-  
-  // 最优报价
-  bestQuote: {
-    quoteId: String,
-    dealerId: mongoose.Schema.Types.ObjectId,
-    premium: Number,
-    quotedAt: Date
-  },
-  
-  // 市场数据快照
-  marketData: {
-    spotPrice: Number,
-    volatility: Number,
-    riskFreeRate: Number,
-    dividendYield: Number,
-    timeToExpiry: Number,
-    capturedAt: {
-      type: Date,
-      default: Date.now
+    
+    if (typeof this.bestQuote === 'string') {
+      try {
+        this.bestQuote = JSON.parse(this.bestQuote);
+      } catch (e) {
+        this.bestQuote = null;
+      }
     }
-  },
-  
-  // 风险评估
-  riskMetrics: {
-    probabilityOfProfit: Number,
-    maxPotentialLoss: Number,
-    maxPotentialGain: Number,
-    breakEvenPoint: Number,
-    riskLevel: {
-      type: String,
-      enum: ['low', 'medium', 'high'],
-      default: 'medium'
+    
+    if (typeof this.marketData === 'string') {
+      try {
+        this.marketData = JSON.parse(this.marketData);
+      } catch (e) {
+        this.marketData = {};
+      }
     }
-  },
-  
-  // 询价来源
-  source: {
-    type: String,
-    enum: ['manual', 'strategy', 'api'],
-    default: 'manual'
-  },
-  
-  // 备注信息
-  notes: {
-    type: String,
-    maxlength: 500
-  },
-  
-  // 有效期
-  validUntil: {
-    type: Date,
-    required: true
-  },
-  
-  // 时间戳
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
+    
+    if (typeof this.riskMetrics === 'string') {
+      try {
+        this.riskMetrics = JSON.parse(this.riskMetrics);
+      } catch (e) {
+        this.riskMetrics = {};
+      }
+    }
   }
-}, {
-  timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
-});
 
-// 索引
-inquirySchema.index({ inquiryId: 1 });
-inquirySchema.index({ userId: 1, createdAt: -1 });
-inquirySchema.index({ 'underlyingAsset.symbol': 1, status: 1 });
-inquirySchema.index({ status: 1, validUntil: 1 });
-inquirySchema.index({ expiryDate: 1 });
-inquirySchema.index({ createdAt: -1 });
+  // 静态方法：创建询价
+  static async create(inquiryData) {
+    const db = getDatabase();
+    
+    // 将对象字段转换为 JSON 字符串存储
+    const dataToStore = {
+      ...inquiryData,
+      underlyingAsset: typeof inquiryData.underlyingAsset === 'object' ? JSON.stringify(inquiryData.underlyingAsset) : inquiryData.underlyingAsset,
+      quotes: typeof inquiryData.quotes === 'object' ? JSON.stringify(inquiryData.quotes) : inquiryData.quotes,
+      bestQuote: typeof inquiryData.bestQuote === 'object' ? JSON.stringify(inquiryData.bestQuote) : inquiryData.bestQuote,
+      marketData: typeof inquiryData.marketData === 'object' ? JSON.stringify(inquiryData.marketData) : inquiryData.marketData,
+      riskMetrics: typeof inquiryData.riskMetrics === 'object' ? JSON.stringify(inquiryData.riskMetrics) : inquiryData.riskMetrics,
+      createdAt: inquiryData.createdAt || new Date().toISOString(),
+      updatedAt: inquiryData.updatedAt || new Date().toISOString(),
+      validUntil: inquiryData.validUntil || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 默认24小时有效期
+    };
+    
+    const stmt = db.prepare(`
+      INSERT INTO inquiries (
+        inquiryId, userId, accountId, optionType, underlyingAsset, strikePrice, 
+        expiryDate, exerciseStyle, settlementType, notionalAmount, quantity, 
+        direction, status, quotes, bestQuote, marketData, riskMetrics, source, 
+        notes, validUntil, createdAt, updatedAt
+      ) VALUES (
+        @inquiryId, @userId, @accountId, @optionType, @underlyingAsset, @strikePrice,
+        @expiryDate, @exerciseStyle, @settlementType, @notionalAmount, @quantity,
+        @direction, @status, @quotes, @bestQuote, @marketData, @riskMetrics, @source,
+        @notes, @validUntil, @createdAt, @updatedAt
+      )
+    `);
+    
+    const result = stmt.run(dataToStore);
+    
+    return new Inquiry({ id: result.lastInsertRowid, ...inquiryData });
+  }
 
-// 虚拟字段
-inquirySchema.virtual('timeToExpiry').get(function() {
-  return (this.expiryDate - Date.now()) / (1000 * 60 * 60 * 24);
-});
+  // 静态方法：根据 inquiryId 查找询价
+  static async findOne(query) {
+    const db = getDatabase();
+    let inquiry;
+    
+    if (query.inquiryId && query.userId) {
+      inquiry = db.prepare('SELECT * FROM inquiries WHERE inquiryId = ? AND userId = ?').get(query.inquiryId, query.userId);
+    } else if (query.inquiryId) {
+      inquiry = db.prepare('SELECT * FROM inquiries WHERE inquiryId = ?').get(query.inquiryId);
+    }
+    
+    return inquiry ? new Inquiry(inquiry) : null;
+  }
 
-inquirySchema.virtual('activeQuotes').get(function() {
-  return this.quotes.filter(quote => 
-    quote.quoteStatus === 'active' && 
-    quote.validUntil > new Date()
-  );
-});
+  // 静态方法：查找询价列表
+  static async find(query, options = {}) {
+    const db = getDatabase();
+    let inquiries = [];
+    
+    if (query.userId) {
+      // 根据用户ID查询
+      let sql = 'SELECT * FROM inquiries WHERE userId = ?';
+      let params = [query.userId];
+      
+      // 添加状态过滤
+      if (query.status) {
+        sql += ' AND status = ?';
+        params.push(query.status);
+      }
+      
+      // 添加标的资产过滤
+      if (query['underlyingAsset.symbol']) {
+        // 注意：这里简化处理，实际项目中可能需要更复杂的查询
+        sql += ' AND underlyingAsset LIKE ?';
+        params.push(`%"symbol":"${query['underlyingAsset.symbol']}%"`);
+      }
+      
+      // 添加排序和分页
+      sql += ' ORDER BY createdAt DESC';
+      
+      if (options.skip) {
+        sql += ` LIMIT ${options.skip}`;
+      }
+      
+      if (options.limit) {
+        sql += options.skip ? `, ${options.limit}` : ` LIMIT ${options.limit}`;
+      }
+      
+      inquiries = db.prepare(sql).all(...params);
+    } else {
+      // 查询所有询价（简化处理）
+      inquiries = db.prepare('SELECT * FROM inquiries ORDER BY createdAt DESC').all();
+    }
+    
+    return inquiries.map(inquiry => new Inquiry(inquiry));
+  }
 
-inquirySchema.virtual('isExpired').get(function() {
-  return this.validUntil < new Date();
-});
+  // 静态方法：统计询价数量
+  static async countDocuments(query) {
+    const db = getDatabase();
+    
+    if (query.userId) {
+      let sql = 'SELECT COUNT(*) as count FROM inquiries WHERE userId = ?';
+      let params = [query.userId];
+      
+      if (query.status) {
+        sql += ' AND status = ?';
+        params.push(query.status);
+      }
+      
+      const result = db.prepare(sql).get(...params);
+      return result.count;
+    } else {
+      const result = db.prepare('SELECT COUNT(*) as count FROM inquiries').get();
+      return result.count;
+    }
+  }
 
-// 实例方法
-inquirySchema.methods.addQuote = function(quoteData) {
-  this.quotes.push(quoteData);
-  this.status = 'quoted';
-  this.updateBestQuote();
-  return this.save();
-};
+  // 实例方法：保存询价
+  async save() {
+    const db = getDatabase();
+    
+    // 将对象字段转换为 JSON 字符串存储
+    const dataToStore = {
+      ...this,
+      underlyingAsset: typeof this.underlyingAsset === 'object' ? JSON.stringify(this.underlyingAsset) : this.underlyingAsset,
+      quotes: typeof this.quotes === 'object' ? JSON.stringify(this.quotes) : this.quotes,
+      bestQuote: typeof this.bestQuote === 'object' ? JSON.stringify(this.bestQuote) : this.bestQuote,
+      marketData: typeof this.marketData === 'object' ? JSON.stringify(this.marketData) : this.marketData,
+      riskMetrics: typeof this.riskMetrics === 'object' ? JSON.stringify(this.riskMetrics) : this.riskMetrics,
+      updatedAt: new Date().toISOString()
+    };
+    
+    const stmt = db.prepare(`
+      UPDATE inquiries SET
+        inquiryId = @inquiryId, userId = @userId, accountId = @accountId, optionType = @optionType,
+        underlyingAsset = @underlyingAsset, strikePrice = @strikePrice, expiryDate = @expiryDate,
+        exerciseStyle = @exerciseStyle, settlementType = @settlementType, notionalAmount = @notionalAmount,
+        quantity = @quantity, direction = @direction, status = @status, quotes = @quotes,
+        bestQuote = @bestQuote, marketData = @marketData, riskMetrics = @riskMetrics,
+        source = @source, notes = @notes, validUntil = @validUntil, updatedAt = @updatedAt
+      WHERE id = @id
+    `);
+    
+    stmt.run(dataToStore);
+    
+    return this;
+  }
 
-inquirySchema.methods.updateBestQuote = function() {
-  const activeQuotes = this.activeQuotes;
-  if (activeQuotes.length === 0) {
-    this.bestQuote = null;
-    return;
+  // 实例方法：添加报价
+  async addQuote(quoteData) {
+    if (!this.quotes || !Array.isArray(this.quotes)) {
+      this.quotes = [];
+    }
+    this.quotes.push(quoteData);
+    
+    // 更新最优报价
+    if (!this.bestQuote || quoteData.premium < this.bestQuote.premium) {
+      this.bestQuote = {
+        quoteId: quoteData.quoteId,
+        dealerId: quoteData.dealerId,
+        premium: quoteData.premium,
+        quotedAt: quoteData.quotedAt || new Date().toISOString()
+      };
+    }
+    
+    // 更新状态
+    if (this.status === 'pending') {
+      this.status = 'quoted';
+    }
+    
+    return this.save();
   }
   
-  // 找到最低权利金的报价
-  const bestQuote = activeQuotes.reduce((best, current) => {
-    return current.premium < best.premium ? current : best;
-  });
-  
-  this.bestQuote = {
-    quoteId: bestQuote.quoteId,
-    dealerId: bestQuote.dealerId,
-    premium: bestQuote.premium,
-    quotedAt: bestQuote.quotedAt
-  };
-};
-
-inquirySchema.methods.expireQuotes = function() {
-  this.quotes.forEach(quote => {
-    if (quote.validUntil < new Date() && quote.quoteStatus === 'active') {
-      quote.quoteStatus = 'expired';
-    }
-  });
-  this.updateBestQuote();
-  return this.save();
-};
-
-inquirySchema.methods.cancel = function() {
-  if (this.status === 'traded') {
-    throw new Error('已成交的询价无法取消');
+  // 获取询价 ID
+  get inquiryId() {
+    return this.inquiryId || this.id;
   }
-  this.status = 'cancelled';
-  return this.save();
-};
+}
 
-// 静态方法
-inquirySchema.statics.findByUserId = function(userId, options = {}) {
-  const query = { userId };
-  if (options.status) {
-    query.status = options.status;
-  }
-  return this.find(query).sort({ createdAt: -1 });
-};
-
-inquirySchema.statics.findActiveInquiries = function() {
-  return this.find({
-    status: { $in: ['pending', 'quoted'] },
-    validUntil: { $gt: new Date() }
-  });
-};
-
-inquirySchema.statics.findBySymbol = function(symbol) {
-  return this.find({ 'underlyingAsset.symbol': symbol });
-};
-
-// 中间件
-inquirySchema.pre('save', function(next) {
-  this.updatedAt = new Date();
-  
-  // 检查询价是否过期
-  if (this.validUntil < new Date() && this.status === 'pending') {
-    this.status = 'expired';
-  }
-  
-  next();
-});
-
-// 自动过期处理
-inquirySchema.index({ validUntil: 1 }, { expireAfterSeconds: 0 });
-
-module.exports = mongoose.model('Inquiry', inquirySchema);
+module.exports = Inquiry;

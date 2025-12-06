@@ -1,0 +1,246 @@
+/*
+  意见反馈页面样式
+
+  优化说明:
+  1. 全面使用全局 CSS 变量，统一颜色、字体、间距等，增强主题一致性。
+  2. 统一卡片阴影、边框等视觉元素，遵循全局设计规范。
+  3. 重构表单和按钮样式，提取公共部分，使用 BEM 命名法提高可维护性。
+  4. 添加注释，提高代码可读性。
+*/
+
+.feedback__container {
+  padding: 0;
+  background-color: var(--background-color, #f5f7fa);
+  min-height: 100vh;
+}
+
+/* 页面头部 */
+.feedback__header {
+  background: var(--gradient-secondary, linear-gradient(135deg, #667eea 0%, #764ba2 100%));
+  color: var(--white, white);
+  padding: 40rpx 30rpx;
+  display: flex;
+  align-items: center;
+}
+
+.header__icon {
+  font-size: 60rpx;
+  margin-right: 25rpx;
+}
+
+.header__text-group {
+  flex: 1;
+}
+
+.header__title {
+  font-size: 36rpx;
+  font-weight: bold;
+  margin-bottom: 8rpx;
+}
+
+.header__subtitle {
+  font-size: 24rpx;
+  opacity: 0.8;
+}
+
+/* 反馈表单 */
+.feedback__form {
+  padding: 30rpx;
+}
+
+.form__group {
+  margin-bottom: 40rpx;
+}
+
+.form__label {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 500;
+  color: var(--text-color-primary, #333);
+  margin-bottom: 15rpx;
+}
+
+/* 选择器样式 */
+.form__picker {
+  background: var(--white, white);
+  padding: 25rpx;
+  border-radius: var(--border-radius-lg, 15rpx);
+  border: 2rpx solid var(--border-color, #e0e0e0);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 28rpx;
+  color: var(--text-color-primary, #333);
+  box-shadow: var(--form-element-shadow, 0 2rpx 10rpx rgba(0,0,0,0.05));
+}
+
+.form__picker-arrow {
+  color: var(--text-color-placeholder, #c0c0c0);
+}
+
+/* 文本域样式 */
+.form__textarea {
+  width: 100%;
+  min-height: 200rpx;
+  background: var(--white, white);
+  padding: 25rpx;
+  border-radius: var(--border-radius-lg, 15rpx);
+  border: 2rpx solid var(--border-color, #e0e0e0);
+  font-size: 28rpx;
+  color: var(--text-color-primary, #333);
+  line-height: 1.6;
+  box-sizing: border-box;
+  box-shadow: var(--form-element-shadow, 0 2rpx 10rpx rgba(0,0,0,0.05));
+}
+
+.form__textarea:focus {
+  border-color: var(--primary-color, #667eea);
+}
+
+.form__word-count {
+  text-align: right;
+  margin-top: 10rpx;
+}
+
+.word-count__text {
+  font-size: 22rpx;
+  color: var(--text-color-secondary, #999);
+}
+
+.word-count__text--warning {
+  color: var(--warning-color, #ff9500);
+}
+
+/* 输入框样式 */
+.form__input {
+  width: 100%;
+  background: var(--white, white);
+  padding: 25rpx;
+  border-radius: var(--border-radius-lg, 15rpx);
+  border: 2rpx solid var(--border-color, #e0e0e0);
+  font-size: 28rpx;
+  color: var(--text-color-primary, #333);
+  box-sizing: border-box;
+  box-shadow: var(--form-element-shadow, 0 2rpx 10rpx rgba(0,0,0,0.05));
+}
+
+.form__input:focus {
+  border-color: var(--primary-color, #667eea);
+}
+
+.form__hint {
+  display: flex;
+  align-items: center;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: var(--text-color-secondary, #999);
+}
+
+.form__hint-icon {
+  margin-right: 8rpx;
+}
+
+/* 提交按钮区域 */
+.feedback__submission {
+  padding: 30rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.btn {
+  border-radius: 50rpx;
+  padding: 25rpx;
+  font-size: 30rpx;
+  font-weight: 500;
+  text-align: center;
+}
+
+.btn--primary {
+  background: var(--gradient-secondary, linear-gradient(135deg, #667eea 0%, #764ba2 100%));
+  color: var(--white, white);
+  border: none;
+  box-shadow: var(--btn-shadow-primary, 0 6rpx 20rpx rgba(102, 126, 234, 0.3));
+}
+
+.btn--primary:disabled {
+  background: var(--background-color-disabled, #e0e0e0);
+  color: var(--text-color-disabled, #999);
+  box-shadow: none;
+}
+
+.btn--primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn--secondary {
+  background: transparent;
+  color: var(--text-color-regular, #666);
+  border: 2rpx solid var(--border-color, #e0e0e0);
+  font-size: 28rpx;
+}
+
+.btn--secondary:active {
+  background-color: var(--background-color-light, #f8f8f8);
+}
+
+/* 反馈须知 */
+.feedback__notice {
+  margin: 20rpx 30rpx 60rpx;
+  background: var(--white, white);
+  border-radius: var(--border-radius-lg, 15rpx);
+  padding: 25rpx;
+  box-shadow: var(--card-shadow-light, 0 2rpx 10rpx rgba(0,0,0,0.05));
+}
+
+.notice__title {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: var(--text-color-primary, #333);
+  margin-bottom: 20rpx;
+}
+
+.notice__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.notice__item {
+  display: flex;
+  align-items: flex-start;
+  font-size: 24rpx;
+  color: var(--text-color-regular, #666);
+  line-height: 1.5;
+}
+
+.notice__dot {
+  color: var(--primary-color, #667eea);
+  margin-right: 10rpx;
+  font-weight: bold;
+}
+
+/* 响应式适配 */
+@media (max-width: 750rpx) {
+  .feedback__header {
+    padding: 30rpx 20rpx;
+  }
+  
+  .feedback__form,
+  .feedback__submission {
+    padding: 25rpx 20rpx;
+  }
+  
+  .feedback__notice {
+    margin: 15rpx 20rpx 50rpx;
+    padding: 20rpx;
+  }
+  
+  .header__icon {
+    font-size: 50rpx;
+  }
+  
+  .header__title {
+    font-size: 32rpx;
+  }
+}

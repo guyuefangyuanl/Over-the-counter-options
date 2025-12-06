@@ -124,7 +124,6 @@ router.patch('/preferences', [
   body('notifications.priceAlert').optional().isBoolean().withMessage('价格提醒设置必须是布尔值'),
   body('notifications.tradeAlert').optional().isBoolean().withMessage('交易提醒设置必须是布尔值'),
   body('notifications.marketNews').optional().isBoolean().withMessage('市场新闻设置必须是布尔值'),
-  body('displaySettings.theme').optional().isIn(['light', 'dark']).withMessage('主题设置不正确'),
   body('displaySettings.priceFormat').optional().isIn(['decimal', 'fraction']).withMessage('价格格式设置不正确')
 ], validateRequest, async (req, res) => {
   try {

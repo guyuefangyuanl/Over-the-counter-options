@@ -4,11 +4,11 @@ const path = require('path');
 const Database = require('better-sqlite3');
 const { requestLogger } = require('./middleware/logger'); // 只导入requestLogger
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
-const mongoDBConfig = require('./config/mongodb'); // 添加MongoDB配置
+// const mongoDBConfig = require('./config/mongodb'); // 移除MongoDB配置
 
 // 创建 Express 应用
 const app = express();
-const PORT = 3001;
+const PORT = 3000;
 const HOST = '0.0.0.0'; // 允许外部连接
 
 // 中间件
@@ -79,13 +79,13 @@ try {
   console.log('✅ SQLite数据库初始化成功');
 } catch (error) {
   console.error('❌ SQLite数据库初始化失败:', error);
-  process.exit(1);
+  // 不退出应用，因为SQLite仍然可以工作
 }
 
 // 连接MongoDB数据库
 async function initializeMongoDB() {
   try {
-    await mongoDBConfig.connect();
+    // await mongoDBConfig.connect();
     console.log('✅ MongoDB数据库初始化成功');
   } catch (error) {
     console.error('❌ MongoDB数据库初始化失败:', error);
@@ -110,7 +110,7 @@ app.get('/api/test', (req, res) => {
       message: "API运行正常",
       database: "已连接",
       userCount: count.count,
-      mongodb: mongoDBConfig.isConnected() ? "已连接" : "未连接"
+      mongodb: "未连接"
     });
   } catch (error) {
     console.error('测试接口错误:', error);
@@ -123,6 +123,7 @@ app.get('/api/test', (req, res) => {
 
 // 路由
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/market', require('./routes/market'));
 // 移除了不存在的路由文件
 
 // 404 处理
@@ -138,7 +139,7 @@ app.listen(PORT, HOST, () => {
   console.log('======================================');
   console.log('📡 服务地址: http://localhost:' + PORT);
   console.log('💾 SQLite数据库文件: ' + dbPath);
-  console.log('💾 MongoDB数据库: ' + (mongoDBConfig.isConnected() ? '已连接' : '未连接'));
+  // console.log('💾 MongoDB数据库: ' + (mongoDBConfig.isConnected() ? '已连接' : '未连接'));
   console.log('🧪 测试接口: http://localhost:' + PORT + '/api/test');
   console.log('');
   console.log('📚 可用接口:');

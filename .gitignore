@@ -1,14 +1,37 @@
-# Windows
-[Dd]esktop.ini
-Thumbs.db
-$RECYCLE.BIN/
-
-# macOS
+# 操作系统与编辑器
 .DS_Store
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
+Thumbs.db
+*.log
+*.tmp
+*.swp
+.idea/
+.vscode/
 
-# Node.js
+# 依赖与构建产物
 node_modules/
+dist/
+build/
+coverage/
+
+# 小程序相关（按需保留）
+miniprogram-dist/
+.project/
+.temp/
+.cache/
+
+# 图片与二进制大文件缓存（保留源文件即可）
+*.psd
+*.ai
+*.zip
+
+# 本地配置（敏感/环境差异）
+*.local
+*.env
+.env.*
+
+# 备份与输出
+backup/
+output/
+
+# 其他
+.svn/
