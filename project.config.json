@@ -50,6 +50,7 @@
   },
   "compileType": "miniprogram",
   "miniprogramRoot": "./miniprogram/",
+  "cloudfunctionRoot": "./cloudfunctions/",
   "libVersion": "3.10.2",
   "appid": "wx83166cb97bfc0d4c",
   "projectname": "场外期权交易小程序",
@@ -75,5 +76,6 @@
     }
   },
   "simulatorPluginLibVersion": {},
-  "editorSetting": {}
+  "editorSetting": {},
+  "cloudfunctionTemplateRoot": "cloudfunctionTemplate/"
 }

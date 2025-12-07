@@ -1,5 +1,6 @@
 // miniprogram/pages/inquiry/inquiry.js
 const FAVORITES_STORAGE_KEY = 'INQUIRY_FAVORITES_V1';
+const api = require('../../utils/api.js');
 
 const logic = require('../../utils/inquiry-logic.js');
 
@@ -62,14 +63,8 @@ Page({
       { id: 'GJS', name: '国君' },
     ],
 
-    // 完整的报价列表 (模拟数据)
-    _fullQuoteList: [
-      { id: 1, group: 'group1', type: 'stock', name: '贵州茅台', code: '600519', changePercent: 1.23, term: '1M', structure: 'vanilla', dealers: ['CICC', 'CITIC'], rates: { '100': 10.50, '105': 8.30, '110': 6.50 } },
-      { id: 2, group: 'group1', type: 'stock', name: '宁德时代', code: '300750', changePercent: -2.45, term: '1M', structure: 'vanilla', dealers: ['CICC', 'GJS'], rates: { '100': 12.80, '105': 10.20, '110': 8.90 } },
-      { id: 3, group: 'group2', type: 'stock', name: '比亚迪', code: '002594', changePercent: 3.10, term: '2M', structure: 'vanilla', dealers: ['CITIC'], rates: { '100': 15.25, '105': 12.85, '110': 10.45 } },
-      { id: 4, group: 'holding', type: 'stock', name: '药明康德', code: '603259', changePercent: 0.55, term: '3M', structure: 'snowball', dealers: ['CICC', 'CITIC', 'GJS'], rates: { '100': 18.00, '105': 15.50, '110': 13.00 } },
-      { id: 5, group: 'all', type: 'index', name: '沪深300指数', code: '000300', changePercent: -0.55, term: '1M', structure: 'vanilla', dealers: ['GJS'], rates: { '100': 5.50, '105': 4.30, '110': 3.50 } },
-    ],
+    // 完整的报价列表 (初始为空)
+    _fullQuoteList: [],
 
     // 过滤后的报价列表
     quoteList: [],
@@ -129,7 +124,7 @@ Page({
 
   onLoad() {
     this.loadFavorites();
-    this.filterQuoteList();
+    this.fetchQuoteList(); // 从后端获取数据
     this.updateCurrentTime();
     this.computeGroupCounts();
     this.setData({ canEditFavorites: (this.data.groupCountsById.all || 0) > 0 });
@@ -166,6 +161,31 @@ Page({
     if (this.timer) {
       clearInterval(this.timer);
     }
+  },
+
+  // 获取报价列表
+  fetchQuoteList() {
+    const db = wx.cloud.database();
+    // 从云数据库 'quotes' 集合获取数据
+    db.collection('quotes').limit(20).get().then(res => {
+      // 数据处理：添加一些前端需要的辅助字段
+      const list = res.data.map((item, index) => ({
+        ...item,
+        id: item._id || index, // 确保有id字段
+        type: 'stock', // 默认为股票类型
+        group: 'all',  // 默认分组
+        term: '1M',    // 默认期限
+        structure: 'vanilla', // 默认结构
+        rates: { '100': item.price || 0 } // 模拟报价结构
+      }));
+      
+      this.setData({ _fullQuoteList: list });
+      this.filterQuoteList();
+      console.log('云数据库获取行情成功', list);
+    }).catch(err => {
+      console.error('云数据库获取失败', err);
+      wx.showToast({ title: '行情加载失败', icon: 'none' });
+    });
   },
 
   // 加载收藏数据
@@ -440,12 +460,24 @@ Page({
     
     this.setData({ isSubmitting: true });
     
-    // 模拟提交
-    setTimeout(() => {
+    // 提交到云数据库 'inquires' 集合
+    const db = wx.cloud.database();
+    db.collection('inquires').add({
+      data: {
+        ...inquiryForm,
+        createTime: db.serverDate(),
+        status: 'pending'
+      }
+    }).then(res => {
       wx.showToast({ title: '询价提交成功', icon: 'success' });
       this.hideInquiryForm();
+      console.log('询价提交成功', res._id);
+    }).catch(err => {
+      console.error('提交询价失败', err);
+      wx.showToast({ title: '提交失败，请重试', icon: 'none' });
+    }).finally(() => {
       this.setData({ isSubmitting: false });
-    }, 1500);
+    });
   },
 
   // 批量询价
@@ -511,7 +543,7 @@ Page({
   },
 
   // 打开新建分组弹窗
-  openNewGroupDialog() {
+  openNewGroupDialog() {4
     this.setData({ 
       showNewGroupDialog: true,
       newGroupName: '',
@@ -754,14 +786,11 @@ Page({
   },
 
   toggleEditSelection(e) {
-    const rawId = (e && e.detail && e.detail.id) !== undefined ? e.detail.id : (e.currentTarget && e.currentTarget.dataset ? e.currentTarget.dataset.id : undefined);
-    if (rawId === undefined || rawId === null || rawId === '') return;
-    let id = Number(rawId);
-    if (Number.isNaN(id)) {
-      id = parseInt(rawId, 10);
-      if (Number.isNaN(id)) return;
-    }
-    const selected = this.data.selectedForEdit.map(Number);
+    const id = (e && e.detail && e.detail.id) !== undefined ? e.detail.id : (e.currentTarget && e.currentTarget.dataset ? e.currentTarget.dataset.id : undefined);
+    if (id === undefined || id === null || id === '') return;
+    
+    // 移除之前的 Number 转换逻辑
+    const selected = [...this.data.selectedForEdit];
     const idx = selected.indexOf(id);
     if (idx > -1) {
       selected.splice(idx, 1);
@@ -871,7 +900,7 @@ Page({
         id: item.id,
         name: item.name,
         code: item.code,
-        price: `${item.rates['100']}%`,
+        price: `${item.rates ? item.rates['100'] : 0}%`, // 兼容 rates 可能为空的情况
         changePercent: item.changePercent,
         category: item.group || '全部'
       }));
@@ -937,9 +966,8 @@ Page({
 
   // 快速添加股票
   quickAddStock(e) {
-    const rawId = e.currentTarget.dataset.id;
-    const stockId = Number(rawId);
-    const stock = this.data.addFavoritesStockList.find(s => Number(s.id) === stockId);
+    const stockId = e.currentTarget.dataset.id; // 直接使用原始ID，不转Number
+    const stock = this.data.addFavoritesStockList.find(s => s.id == stockId); // 使用双等号兼容类型
 
     if (!stock || this.data.favoritesById[stockId]) {
       return;

@@ -1,41 +1,90 @@
-# 项目协作与版本管理规范
+# Flask期权数据服务
 
-## 代码托管（Gitee/码云）
-- 远程仓库：使用 Gitee 作为唯一远程仓库
-- 本地关联：建议配置 SSH Key；初次推送后，统一以 `origin` 为默认远程
-- 推送约束：禁止直接推送到 `main`，通过分支合并与 PR 控制
+这是一个基于Flask的期权数据服务应用，提供期权数据查询和分析功能。
 
-## 分支策略（简化 GitFlow）
-- `main`：稳定发布分支，仅合入正式版本
-- `develop`：日常开发集成分支
-- `feature/<name>`：功能分支，来源 `develop`，完成后合并回 `develop`
-- `release/<version>`：预发布分支，来源 `develop`，回归后合并回 `main` 与 `develop`
-- `hotfix/<issue>`：紧急修复，来源 `main`，合并回 `main` 与 `develop`
+## 项目结构
 
-## 版本与标签（SemVer）
-- 版本号：`vMAJOR.MINOR.PATCH`（如 `v1.0.0`）
-- 发布：`release/<version>` 合并入 `main` 后创建 Tag，并在 Gitee Releases 撰写变更说明
+```
+flask_app/
+├── app.py              # Flask应用主入口
+├── config.py           # 配置管理
+├── requirements.txt    # 项目依赖
+├── .env               # 环境变量配置文件
+└── README.md          # 项目说明文档
+```
 
-## 提交与消息格式
-- 约定格式：`type(scope): subject [#TAPD-<ID>]`
-- 常用类型：`feat`/`fix`/`refactor`/`docs`/`test`/`chore`
-- 示例：`feat(profile): 简约化个人页样式 #TAPD-123456`
+## 功能特性
 
-## TAPD 测试与缺陷
-- 迭代与需求：在 TAPD 建立迭代，关联需求与任务
-- 测试管理：维护用例（冒烟/回归/功能/边界），执行记录与缺陷闭环
-- 缺陷：统一模板（环境/复现步骤/日志截图/期望/影响/优先级），在提交中附带 `#TAPD-ID`
+1. **Flask应用框架** - 基于Flask的Web应用框架
+2. **CORS支持** - 支持跨域资源共享
+3. **配置管理** - 使用类和环境变量管理配置
+4. **健康检查** - 提供应用健康状态检查端点
+5. **错误处理** - 完善的错误处理机制
 
-## 合并与发布流程
-- `feature → develop`：优先 Squash 合并，保证主线清晰
-- `release → main`：合并并打 Tag，在 Releases 填写变更日志
-- `hotfix → main`：合并并打补丁版本，回灌 `develop`
+## 安装依赖
 
-## TortoiseGit 使用建议（Windows）
-- 分支：右键 → TortoiseGit → Create Branch… / Switch…
-- 拉取/推送：右键 → Git Pull… / Git Push…（发布时勾选 Push tags）
-- 冲突：右键 → Git Sync… → Merge，使用 TortoiseGit Merge 工具解决
+```bash
+pip install -r requirements.txt
+```
 
-## 目录与忽略
-- 在仓库根维护 `.gitignore`，忽略构建产物、IDE 配置、临时文件与日志
-- 变更说明统一在 Releases 与 `CHANGELOG.md` 维护
+## 环境变量配置
+
+在 `.env` 文件中配置以下环境变量：
+
+```env
+# Flask应用配置
+FLASK_HOST=127.0.0.1
+FLASK_PORT=5000
+FLASK_DEBUG=True
+
+# Flask密钥（生产环境必须更改）
+SECRET_KEY=dev-secret-key-change-in-production
+
+# MongoDB数据库配置
+MONGO_URI=mongodb://localhost:27017/option_data
+DEV_MONGO_URI=mongodb://localhost:27017/option_data_dev
+PROD_MONGO_URI=mongodb://localhost:27017/option_data_prod
+TEST_MONGO_URI=mongodb://localhost:27017/option_data_test
+
+# 数据库名称
+DATABASE_NAME=option_trading
+
+# AkShare数据源配置
+AKSHARE_DATA_SOURCE=default
+
+# 日志配置
+LOG_LEVEL=INFO
+LOG_FILE=app.log
+
+# 跨域配置
+CORS_ORIGINS=*
+
+# 应用配置
+APP_NAME=期权数据服务
+```
+
+## 启动应用
+
+```bash
+python app.py
+```
+
+## API端点
+
+- `GET /` - 健康检查
+- `GET /health` - 健康检查
+- `GET /api/version` - API版本信息
+
+## 配置类
+
+- `DevelopmentConfig` - 开发环境配置
+- `ProductionConfig` - 生产环境配置
+- `TestingConfig` - 测试环境配置
+
+## 访问应用
+
+启动应用后，可以通过以下URL访问：
+
+- 应用地址: http://127.0.0.1:5000
+- 健康检查: http://127.0.0.1:5000/health
+- API版本: http://127.0.0.1:5000/api/version

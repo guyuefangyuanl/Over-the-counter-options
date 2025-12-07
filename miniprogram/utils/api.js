@@ -1,5 +1,5 @@
 // API 工具类
-const BASE_URL = 'http://localhost:3000/api';
+const BASE_URL = 'http://localhost:5000/api';
 const performanceOptimizer = require('./performance-optimizer.js').getInstance();
 
 // API响应缓存
@@ -33,7 +33,7 @@ const ENV = 'development'; // 可以从配置文件读取
 // API基础URL配置
 const API_CONFIG = {
   development: {
-    nodeBase: 'http://localhost:3000/api',
+    nodeBase: 'http://localhost:5000/api', // 已切换至 Flask
     flaskBase: 'http://localhost:5000/api'
   },
   production: {
