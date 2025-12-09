@@ -1,0 +1,9 @@
+{"_id":"idx_000001","code":"000001","name":"上证指数","price":3420.35,"change":12.48,"changePercent":0.37,"type":"index","updateTime":"2025-09-28 15:00:00"}
+{"_id":"idx_399001","code":"399001","name":"深证成指","price":10856.24,"change":-45.67,"changePercent":-0.42,"type":"index","updateTime":"2025-09-28 15:00:00"}
+{"_id":"idx_399006","code":"399006","name":"创业板指","price":2198.76,"change":8.93,"changePercent":0.41,"type":"index","updateTime":"2025-09-28 15:00:00"}
+{"_id":"idx_000300","code":"000300","name":"沪深300","price":3521.12,"change":5.12,"changePercent":0.15,"type":"index","updateTime":"2025-09-28 15:00:00"}
+{"_id":"idx_510050","code":"510050","name":"上证50ETF","price":2.445,"change":-0.016,"changePercent":-0.65,"type":"index","updateTime":"2025-09-28 15:00:00"}
+{"_id":"opt_510050_202506_C_2500","underlying":"510050","underlyingName":"上证50ETF","name":"上证50ETF 2025-06 看涨 2.50","type":"call","strike":2.5,"expiry":"2025-06-28","iv":0.25,"lastPrice":0.32,"change":0.03,"collection":"quotes"}
+{"_id":"opt_510050_202506_P_2300","underlying":"510050","underlyingName":"上证50ETF","name":"上证50ETF 2025-06 看跌 2.30","type":"put","strike":2.3,"expiry":"2025-06-28","iv":0.27,"lastPrice":0.21,"change":-0.01,"collection":"quotes"}
+{"_id":"opt_000300_202507_C_3500","underlying":"000300","underlyingName":"沪深300","name":"沪深300 2025-07 看涨 3500","type":"call","strike":3500,"expiry":"2025-07-30","iv":0.22,"lastPrice":58.3,"change":1.8,"collection":"quotes"}
+{"_id":"opt_600519_202506_C_1800","underlying":"600519","underlyingName":"贵州茅台","name":"贵州茅台 2025-06 看涨 1800","type":"call","strike":1800,"expiry":"2025-06-28","iv":0.28,"lastPrice":45.6,"change":2.1,"collection":"quotes"}

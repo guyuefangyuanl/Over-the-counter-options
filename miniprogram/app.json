@@ -26,10 +26,12 @@
     "backgroundColor": "#f5f7fa"
   },
   "tabBar": {
+    "custom": true,
     "color": "#999999",
     "selectedColor": "#409EFF",
     "backgroundColor": "#ffffff",
     "borderStyle": "black",
+    "fontSize": 16,
     "list": [
       {
         "pagePath": "pages/index/index",

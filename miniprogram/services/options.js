@@ -1,7 +1,14 @@
 // services/options.js
-// 市场指数、热门期权与搜索服务（可直接使用，零依赖）
+// 市场指数、热门期权与搜索服务（优先使用云开发数据库）
 
 const CACHE_TTL = 60 * 1000; // 1 分钟缓存
+
+// 初始化云开发数据库
+let db = null;
+if (wx.cloud) {
+  wx.cloud.init();
+  db = wx.cloud.database();
+}
 
 const MARKET_INDICES = [
   { code: '000001', name: '上证指数', price: 3420.35, change: +12.48, changePercent: +0.37, updatedAt: Date.now() },
@@ -69,10 +76,28 @@ const _cache = {
 
 function _isFresh(ts) { return (Date.now() - ts) < CACHE_TTL; }
 
-function getMarketIndices(forceRefresh) {
+async function getMarketIndices(forceRefresh) {
   if (!forceRefresh && _isFresh(_cache.indices.ts)) {
-    return Promise.resolve(_cache.indices.data);
+    return _cache.indices.data;
   }
+
+  // 优先尝试从云数据库获取
+  if (db) {
+    try {
+      const res = await db.collection('quotes').where({ type: 'index' }).get();
+      if (res.data && res.data.length > 0) {
+        const data = res.data.map(item => ({
+          ...item,
+          updatedAt: Date.now()
+        }));
+        _cache.indices = { ts: Date.now(), data };
+        return data;
+      }
+    } catch (e) {
+      console.warn('云数据库获取指数失败，降级为模拟数据:', e);
+    }
+  }
+
   // 模拟刷新：复制并更新时间
   const refreshed = _cache.indices.data.map(i => ({
     code: i.code,
@@ -83,20 +108,45 @@ function getMarketIndices(forceRefresh) {
     updatedAt: Date.now()
   }));
   _cache.indices = { ts: Date.now(), data: refreshed };
-  return Promise.resolve(refreshed);
+  return refreshed;
 }
 
-function getHotOptions(forceRefresh) {
+async function getHotOptions(forceRefresh) {
   if (!forceRefresh && _isFresh(_cache.hot.ts)) {
-    return Promise.resolve(_cache.hot.data);
+    return _cache.hot.data;
   }
+  
+  // 优先尝试从云数据库获取 (假设热门期权就是最近更新的或者特定的)
+  if (db) {
+    try {
+      // 示例：获取 type 为 call 或 put 的前5条
+      const _ = db.command;
+      const res = await db.collection('quotes')
+        .where({ type: _.in(['call', 'put']) })
+        .limit(5)
+        .get();
+        
+      if (res.data && res.data.length > 0) {
+        const data = res.data.map(item => ({
+          ...item,
+          id: item._id, // 确保 id 字段存在
+          lastPrice: item.lastPrice || item.price || 0
+        }));
+        _cache.hot = { ts: Date.now(), data };
+        return data;
+      }
+    } catch (e) {
+      console.warn('云数据库获取热门期权失败，降级为模拟数据:', e);
+    }
+  }
+
   const refreshed = _cache.hot.data.map(o => ({
     ...o,
     lastPrice: +(o.lastPrice + (Math.random() * 1 - 0.5)).toFixed(2),
     change: +(Math.random() * 0.2 - 0.1).toFixed(2)
   }));
   _cache.hot = { ts: Date.now(), data: refreshed };
-  return Promise.resolve(refreshed);
+  return refreshed;
 }
 
 function _normalize(s) { return String(s || '').trim().toLowerCase(); }
@@ -124,7 +174,7 @@ function _relevanceScore(o, tokens, mode) {
   return score;
 }
 
-function searchOptions(params) {
+async function searchOptions(params) {
   const {
     keyword = '',
     type,
@@ -138,6 +188,71 @@ function searchOptions(params) {
     pageSize = 20,
     sortBy = 'relevance'  // 'relevance' | 'price' | 'iv'
   } = params || {};
+
+  // 优先尝试从云数据库获取
+  if (db) {
+    try {
+      const _ = db.command;
+      const query = {};
+      
+      // 基础过滤
+      if (type) query.type = type;
+      if (underlying) query.underlying = underlying;
+      if (expiryFrom || expiryTo) {
+        query.expiry = {};
+        if (expiryFrom) query.expiry = _.gte(expiryFrom);
+        if (expiryTo) query.expiry = _.lte(expiryTo);
+      }
+      if (strikeMin !== undefined || strikeMax !== undefined) {
+        query.strike = {};
+        if (strikeMin !== undefined) query.strike = _.gte(Number(strikeMin));
+        if (strikeMax !== undefined) query.strike = _.lte(Number(strikeMax));
+      }
+      
+      // 关键词搜索（使用正则）
+      if (keyword) {
+        query.name = db.RegExp({
+          regexp: keyword,
+          options: 'i',
+        });
+      }
+
+      // 计算分页
+      const skip = (Number(page) - 1) * Number(pageSize);
+      
+      // 排序
+      let orderByField = 'updateTime';
+      let orderByDirection = 'desc';
+      if (sortBy === 'price') orderByField = 'lastPrice';
+      if (sortBy === 'iv') orderByField = 'iv';
+
+      const res = await db.collection('quotes')
+        .where(query)
+        .orderBy(orderByField, orderByDirection)
+        .skip(skip)
+        .limit(Number(pageSize))
+        .get();
+        
+      const countRes = await db.collection('quotes').where(query).count();
+      
+      if (res.data) {
+        const items = res.data.map(item => ({
+          ...item,
+          id: item._id,
+          lastPrice: item.lastPrice || item.price || 0
+        }));
+        
+        return { 
+          items, 
+          total: countRes.total, 
+          page: Number(page), 
+          pageSize: Number(pageSize) 
+        };
+      }
+    } catch (e) {
+      console.warn('云数据库搜索失败，降级为模拟数据:', e);
+    }
+  }
 
   const tokens = _tokenize(keyword);
   let list = _cache.options.data.slice();
@@ -166,7 +281,7 @@ function searchOptions(params) {
   const total = list.length;
   const start = Math.max(0, (Number(page) - 1) * Number(pageSize));
   const items = list.slice(start, start + Number(pageSize));
-  return Promise.resolve({ items, total, page: Number(page), pageSize: Number(pageSize) });
+  return { items, total, page: Number(page), pageSize: Number(pageSize) };
 }
 
 function getSuggestions({ keyword = '', limit = 8 } = {}) {

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "openapi": []
+  },
+  "triggers": [
+    {
+      "name": "marketHoursUpdate",
+      "type": "timer",
+      "config": "0 0/30 9-15 * * 1-5 *"
+    },
+    {
+      "name": "dailyClosingUpdate",
+      "type": "timer",
+      "config": "0 0 16 * * * *"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "updateQuotes",
+  "version": "1.0.0",
+  "description": "Automatically update stock quotes",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

@@ -3,14 +3,14 @@
 
 <view class="container">
   <!-- 顶部固定内容 -->
-  <view class="top-fixed-section">
+  <view class="top-fixed-section" style="position: sticky; left: NaNrpx; top: -177rpx; height: 492rpx; display: block; box-sizing: border-box">
     
-    <market-bar indexes="{{marketIndexes}}" currentTime="{{currentTime}}" />
+    <market-bar style="position: relative; left: 0rpx; top: -203rpx" indexes="{{marketIndexes}}" currentTime="{{currentTime}}" />
 
     <!-- 2. Tab导航容器 -->
-    <view class="tabs-container">
+    <view class="tabs-container" style="position: relative; left: 0rpx; top: -172rpx">
       
-      <primary-tabs active="{{activePrimaryTab}}" bind:change="switchPrimaryTabFromComponent" />
+      <primary-tabs style="position: relative; left: 0rpx; top: -39rpx" active="{{activePrimaryTab}}" bind:change="switchPrimaryTabFromComponent" />
       
       <!-- 子Tab (自选时显示) -->
       <view class="sub-tabs" wx:if="{{activePrimaryTab === 'self'}}">
@@ -52,7 +52,7 @@
     </view>
 
     <!-- 3. 搜索与筛选 -->
-    <filter-bar keyword="{{searchKeyword}}" activeTerm="{{activeTerm}}" activeStructure="{{activeStructure}}"
+    <filter-bar style="position: relative; left: 0rpx; top: -172rpx" keyword="{{searchKeyword}}" activeTerm="{{activeTerm}}" activeStructure="{{activeStructure}}"
                 bind:searchinput="onSearchInputFromComponent"
                 bind:searchconfirm="openSearchPage"
                 bind:clear="onSearchClear"
@@ -181,7 +181,7 @@
 
   <!-- 4. 金融卡片式列表 -->
   <scroll-view class="cards-wrapper" scroll-y enable-flex="true" show-scrollbar="{{false}}">
-    <cards-list list="{{quoteList}}"
+    <cards-list style="position: relative; left: 0rpx; top: -31rpx" list="{{quoteList}}"
                 selectedSet="{{selectedForEditSet}}"
                 favoritesById="{{favoritesById}}"
                 animatingFavoriteId="{{animatingFavoriteId}}"
@@ -367,22 +367,22 @@
       <!-- 股票列表 -->
       <scroll-view scroll-y class="stock-list">
         <block wx:for="{{addFavoritesStockList}}" wx:key="code">
-          <view class="stock-item" hover-class="press" bindtap="openOptionQuote" data-id="{{item.id}}">
-            <view class="stock-info">
-              <view class="stock-name">{{item.name}}</view>
-              <view class="stock-code">{{item.code}}</view>
-              <view class="stock-category">{{item.category}}</view>
+          <view class="popup-stock-item" hover-class="press" bindtap="openOptionQuote" data-id="{{item.id}}">
+            <view class="popup-stock-info">
+              <view class="popup-stock-name">{{item.name}}</view>
+              <view class="popup-stock-code">{{item.code}}</view>
+              <view class="popup-stock-category">{{item.category}}</view>
             </view>
-            <view class="stock-price-info">
-              <view class="stock-price {{item.changePercent > 0 ? 'is-rise' : (item.changePercent < 0 ? 'is-fall' : '')}}">{{item.price}}</view>
-              <view class="stock-change {{item.changePercent > 0 ? 'is-rise' : (item.changePercent < 0 ? 'is-fall' : '')}}">{{utils.formatChange(item.changePercent)}}</view>
+            <view class="popup-stock-price-info">
+              <view class="popup-stock-price {{item.changePercent > 0 ? 'is-rise' : (item.changePercent < 0 ? 'is-fall' : '')}}">{{item.price}}</view>
+              <view class="popup-stock-change {{item.changePercent > 0 ? 'is-rise' : (item.changePercent < 0 ? 'is-fall' : '')}}">{{utils.formatChange(item.changePercent)}}</view>
             </view>
-            <view class="stock-action">
+            <view class="popup-stock-action">
               <view wx:if="{{item.favorited}}" class="added-status">
                 <van-icon name="success" size="16px" />
                 <text>已添加</text>
               </view>
-              <view wx:else class="add-btn" hover-class="press" bindtap="quickAddStock" data-id="{{item.id}}">
+              <view wx:else class="popup-add-btn" hover-class="press" bindtap="quickAddStock" data-id="{{item.id}}">
                 <text>+</text>
               </view>
             </view>
@@ -403,20 +403,5 @@
     </view>
   </van-popup>
 
-  <!-- 快捷入口 -->
-  <view class="quick-actions {{isDraggingQuickActions ? 'dragging' : ''}}" 
-        style="{{isDraggingQuickActions ? ('left: ' + quickActionsPosition.x + 'px; top: ' + quickActionsPosition.y + 'px;') : ''}}" 
-        bindtouchstart="onQuickActionsTouchStart" 
-        bindtouchmove="onQuickActionsTouchMove" 
-        bindtouchend="onQuickActionsTouchEnd">
-    <view class="quick-action-item" data-type="calculator" hover-class="press" bindtap="onQuickActionItemTap">
-      <image src="../../images/calculator.png" class="quick-action-icon" mode="aspectFit" lazy-load="true" />
-      <text class="quick-action-text">计算器</text>
-    </view>
-    <view class="quick-action-item" data-type="workspace" hover-class="press" bindtap="onQuickActionItemTap">
-      <image src="../../images/workbench.png" class="quick-action-icon" mode="aspectFit" lazy-load="true" />
-      <text class="quick-action-text">工作台</text>
-    </view>
-    <view wx:if="{{isDraggingQuickActions}}" class="drag-hint">拖动中...</view>
-  </view>
+
 </view>

@@ -57,7 +57,7 @@ Page({
     // 确保 tabBar 正确显示
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
       this.getTabBar().setData({
-        selected: 4
+        selected: 3
       });
     }
   },

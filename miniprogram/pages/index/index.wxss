@@ -42,14 +42,14 @@
 
 /* ====== 主内容区 ====== */
 .main-content {
-  padding: 0 24rpx;
+  padding: 24rpx;
   width: 100%;
   box-sizing: border-box;
 }
 
 /* ====== 顶部用户信息 ====== */
 .header-section {
-  padding: 48rpx 0 32rpx;
+  display: none;
 }
 
 .user-info {
@@ -66,17 +66,7 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
-.avatar-placeholder {
-  width: 96rpx;
-  height: 96rpx;
-  border-radius: 50%;
-  border: 4rpx solid rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 48rpx;
-}
+
 
 .user-detail {
   flex: 1;
@@ -106,16 +96,13 @@
   border: none;
 }
 
-.welcome-text {
-  font-size: 24rpx;
-  color: #8593a3;
-}
+
 
 /* ====== 搜索区域 ====== */
 .search-container {
   margin-bottom: 24rpx;
 }
-.advanced-toggle{margin-top:12rpx;color:#409EFF;font-size:26rpx}
+.advanced-toggle{margin-top:12rpx;color:#1296db;font-size:26rpx}
 .advanced-panel{margin-top:12rpx;background:#fff;border-radius:16rpx;padding:12rpx 16rpx;box-shadow:0 4rpx 12rpx rgba(0,0,0,0.06);display:flex;flex-direction:column;gap:10rpx}
 .advanced-row{display:flex;align-items:center;gap:12rpx}
 .label{color:#666;font-size:26rpx;white-space:nowrap}
@@ -144,7 +131,7 @@
 
 .search-btn {
   padding: 8rpx 24rpx;
-  background: #409EFF;
+  background: #1296db;
   color: #ffffff;
   font-size: 26rpx;
   font-weight: 600;
@@ -165,6 +152,7 @@
   height: 360rpx;
   border-radius: 20rpx;
   overflow: hidden;
+  transform: translateY(0);
 }
 
 .banner-item {
@@ -251,7 +239,7 @@
 
 .search-cancel {
   font-size: 28rpx;
-  color: #667eea;
+  color: #1296db;
 }
 
 .searching-state {
@@ -295,8 +283,8 @@
 
 .result-item.is-selected {
   background: #EEF6FF;
-  border-color: #409EFF;
-  box-shadow: 0 4rpx 12rpx rgba(64, 158, 255, 0.16);
+  border-color: #1296db;
+  box-shadow: 0 4rpx 12rpx rgba(18, 150, 219, 0.16);
   transform: scale(1.01);
   animation: select-spring 0.26s cubic-bezier(.22,.61,.36,1) both;
 }
@@ -307,7 +295,7 @@
   top: 50%;
   width: 24rpx;
   height: 24rpx;
-  background: rgba(64,158,255,0.22);
+  background: rgba(18,150,219,0.22);
   border-radius: 50%;
   transform: translate(-50%, -50%) scale(0);
   pointer-events: none;
@@ -444,8 +432,8 @@
 }
 
 .tag-item.hot {
-  background: linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%);
-  color: #f44336;
+  background: #f0f8ff; /* 浅蓝背景 */
+  color: #1296db;
 }
 
 /* ====== 首页内容 ====== */
@@ -476,7 +464,7 @@
 
 .more-btn {
   font-size: 26rpx;
-  color: #409EFF;
+  color: #1296db;
 }
 
 /* ====== 增强卡片样式 ====== */
@@ -527,7 +515,8 @@
   align-items: center;
   justify-content: center;
   font-size: 48rpx;
-  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+  background: transparent !important; /* 强制透明背景 */
+  color: #1296db; /* 统一图标颜色 */
 }
 
 .action-name {
@@ -573,8 +562,8 @@
 }
 
 .holding-tab-item.active {
-  color: #409EFF;
-  border-bottom-color: #409EFF;
+  color: #1296db;
+  border-bottom-color: #1296db;
 }
 
 .holding-list {
@@ -643,19 +632,19 @@
 }
 
 .profit.up {
-  color: #67C23A;
+  color: #1296db;
 }
 
 .profit.down {
-  color: #F56C6C;
+  color: #1296db;
 }
 
 .profit-rate.up {
-  color: #67C23A;
+  color: #1296db;
 }
 
 .profit-rate.down {
-  color: #F56C6C;
+  color: #1296db;
 }
 
 .knowledge-section {
@@ -749,13 +738,11 @@
 }
 
 .index-change.up {
-  background: #ffebee;
-  color: #f44336;
+  color: #1296db;
 }
 
 .index-change.down {
-  background: #e8f5e9;
-  color: #4caf50;
+  color: #1296db;
 }
 
 /* ====== 热门期权 ====== */
@@ -803,13 +790,13 @@
 }
 
 .option-type.call {
-  background: #ffebee;
-  color: #f44336;
+  color: #1296db;
+  border: 1rpx solid #1296db;
 }
 
 .option-type.put {
-  background: #e8f5e9;
-  color: #4caf50;
+  color: #1296db;
+  border: 1rpx solid #1296db;
 }
 
 .option-data {
@@ -843,11 +830,11 @@
 }
 
 .data-value.up {
-  color: #f44336;
+  color: #1296db;
 }
 
 .data-value.down {
-  color: #4caf50;
+  color: #1296db;
 }
 
 /* ====== 响应式适配 ====== */
@@ -908,4 +895,4 @@
 .option-card:nth-child(4) { animation-delay: 0.2s; }
 .option-card:nth-child(5) { animation-delay: 0.25s; }
 .pager{display:flex;justify-content:center;margin-top:12rpx}
-.load-more{padding:12rpx 24rpx;border:1rpx solid #409EFF;color:#409EFF;border-radius:12rpx}
+.load-more{padding:12rpx 24rpx;border:1rpx solid #1296db;color:#1296db;border-radius:12rpx}

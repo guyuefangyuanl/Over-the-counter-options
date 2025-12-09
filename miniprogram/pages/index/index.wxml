@@ -1,4 +1,4 @@
-<view class="container">
+<view class="container" style="height: 3945rpx; display: flex; box-sizing: border-box; position: relative; left: 0rpx; top: -142rpx">
   <!-- 加载状态 -->
   <view class="loading-container" wx:if="{{loading}}">
     <view class="loading-spinner"></view>
@@ -6,26 +6,8 @@
   </view>
 
   <!-- 主内容 -->
-  <view class="main-content" wx:else>
-    <!-- 顶部用户信息 -->
-    <view class="header-section">
-      <view class="user-info" wx:if="{{hasUserInfo}}">
-        <image class="avatar" src="{{userInfo.avatarUrl}}" mode="aspectFill"></image>
-        <view class="user-detail">
-          <text class="username">{{userInfo.nickName}}</text>
-          <text class="welcome-text">欢迎使用期权助手</text>
-        </view>
-      </view>
-      <view class="user-info" wx:else>
-        <view class="avatar-placeholder">👤</view>
-        <view class="user-detail">
-          <button class="login-btn" bindtap="getUserProfile">
-            点击登录
-          </button>
-          <text class="welcome-text">登录后体验更多功能</text>
-        </view>
-      </view>
-    </view>
+  <view class="main-content" wx:else style="position: relative; left: 0rpx; top: -64rpx">
+
 
     <!-- 搜索区域 -->
   <view class="search-container">
@@ -102,7 +84,7 @@
         duration="{{swiperConfig.duration}}"
         circular="{{swiperConfig.circular}}"
         indicator-color="rgba(255,255,255,0.5)"
-        indicator-active-color="#4caf50"
+        indicator-active-color="#1296db"
       >
         <swiper-item 
           wx:for="{{bannerList}}" 

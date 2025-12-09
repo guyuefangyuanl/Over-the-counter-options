@@ -77,42 +77,42 @@ Page({
         icon: '📊', 
         name: '自选', 
         path: '/pages/quotes/quotes',
-        color: '#4caf50'
+        color: '#1296db'
       },
       { 
         id: 2, 
         icon: '🧮', 
         name: '期权计算器', 
         path: '/pages/calculator/calculator',
-        color: '#2196f3'
+        color: '#1296db'
       },
       { 
         id: 3, 
         icon: '📈', 
         name: 'T型报价', 
         path: '/pages/quotes/quotes',
-        color: '#ff9800'
+        color: '#1296db'
       },
       { 
         id: 4, 
         icon: '📚', 
         name: '个股', 
         path: '/pages/quotes/quotes',
-        color: '#9c27b0'
+        color: '#1296db'
       },
       { 
         id: 5, 
         icon: '💼', 
         name: '策略分析', 
         path: '/pages/quotes/quotes',
-        color: '#f44336'
+        color: '#1296db'
       },
       { 
         id: 6, 
         icon: '🔔', 
         name: 'ETF', 
         path: '/pages/quotes/quotes',
-        color: '#00bcd4'
+        color: '#1296db'
       }
     ],
 
@@ -255,6 +255,9 @@ Page({
   },
 
   onShow() {
+    if (typeof this.getTabBar === 'function' && this.getTabBar()) {
+      this.getTabBar().setData({ selected: 0 });
+    }
     if (this.data.hasUserInfo) {
       this.refreshData();
     }
