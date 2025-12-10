@@ -1,5 +1,6 @@
 const app = getApp();
 const optionsService = require('../../services/options.js');
+const holdingsService = require('../../services/holdings.js');
 const { uiEnhancer, dataFormatter, performanceMonitor } = require('../../utils/enhancedUtils');
 
 Page({
@@ -36,31 +37,24 @@ Page({
     bannerList: [
       {
         id: 1,
-        image: '/images/首页/u258.png',
+        image: 'https://foruda.gitee.com/images/1753933592927170033/941a7b09_15547261.png',
         title: '期权交易新手指南',
         desc: '从零开始学习期权交易',
         link: '/pages/quotes/quotes'
       },
       {
         id: 2,
-        image: '/images/首页/u119.png',
+        image: 'https://foruda.gitee.com/images/1753933678767460248/b6cdc705_15547261.png',
         title: '市场行情实时更新',
         desc: '把握每一个投资机会',
         link: '/pages/quotes/quotes'
       },
       {
         id: 3,
-        image: '/images/首页/u120.png',
+        image: 'https://foruda.gitee.com/images/1753933748782644798/7113f0b4_15547261.png',
         title: '智能计算器',
         desc: '精准计算期权价值',
         link: '/pages/calculator/calculator'
-      },
-      {
-        id: 4,
-        image: '/images/首页/u121.png',
-        title: 'ETF期权专区',
-        desc: '探索ETF期权投资策略',
-        link: '/pages/account/account'
       }
     ],
 
@@ -74,45 +68,45 @@ Page({
     quickActions: [
       { 
         id: 1, 
-        icon: '📊', 
+        icon: 'data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTAyNCAxMDI0IiBmaWxsPSIjMTY3N0ZGIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik05MDguMSAzNTMuMWwtMjUzLjktMzYuOUw1NDAuNyA4Ni4xYy0zLjEtNi4zLTguMi0xMS40LTE0LjUtMTQuNS0xMS44LTUuOC0yNi4yLTEuMS0zMiAxMC43TDM2OS44IDMxNi4ybC0yNTMuOSAzNi45Yy03IDEtMTMuNCA0LjMtMTguMyA5LjMtOS41IDkuNi05LjQgMjUuMiAwLjMgMzQuN0wyODEuNyA1NzYgMjM4LjMgODI4LjljLTEuMiA3LS4xIDE0LjEgMy4yIDIwLjMgNi4yIDExLjcgMjAuOCAxNi4yIDMyLjUgOS45TDUwMCA3MzkuN2wyMjYgMTE5LjRjNi4zIDMuMyAxMy40IDQuNCAyMC4zIDMuMiAxMy0yLjMgMjEuNi0xNC45IDE5LjMtMjcuOWwtNDMuNC0yNTIuOSAxODMuNy0xNzguOGM1LTQuOSA4LjMtMTEuMyA5LjMtMTguMyAxLjctMTMuMi03LjUtMjUuMy0yMC43LTI3eiIvPjwvc3ZnPg==', 
         name: '自选', 
         path: '/pages/quotes/quotes',
-        color: '#1296db'
+        color: '#F0F7FF'
       },
       { 
         id: 2, 
-        icon: '🧮', 
+        icon: 'data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTAyNCAxMDI0IiBmaWxsPSIjMTY3N0ZGIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik03MDQgMTkySDMyMGMtNzAuNyAwLTEyOCA1Ny4zLTEyOCAxMjh2Mzg0YzAgNzAuNyA1Ny4zIDEyOCAxMjggMTI4aDM4NGM3MC43IDAgMTI4LTU3LjMgMTI4LTEyOFYzMjBjMC03MC43LTU3LjMtMTI4LTEyOC0xMjh6TTMyMCAyNTZoMzg0YzM1LjMgMCA2NCAyOC43IDY0IDY0djMySDI1NnYtMzJjMC0zNS4zIDI4LjctNjQgNjQtNjR6IG0wIDUxMmMtMzUuMyAwLTY0LTI4LjctNjQtNjRWNDQ4aDUxMnYyNTZjMCAzNS4zLTI4LjcgNjQtNjQgNjRIMzIweiIvPjxwYXRoIGQ9Ik0zODQgNTQ0aDY0djY0aC02NHpNNTc2IDU0NGg2NHY2NGgtNjR6TTM4NCA2NDBoNjR2NjRoLTY0ek01NzYgNjQwaDY0djY0aC02NHoiLz48L3N2Zz4=', 
         name: '期权计算器', 
         path: '/pages/calculator/calculator',
-        color: '#1296db'
+        color: '#F0F7FF'
       },
       { 
         id: 3, 
-        icon: '📈', 
+        icon: 'data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTAyNCAxMDI0IiBmaWxsPSIjMTY3N0ZGIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik04OTYgMTI4SDEyOGMtMzUuMyAwLTY0IDI4LjctNjQgNjR2NjQwYzAgMzUuMyAyOC43IDY0IDY0IDY0aDc2OGMzNS4zIDAgNjQtMjguNyA2NC02NFYxOTJjMC0zNS4zLTI4LjctNjQtNjQtNjR6TTEyOCAxOTJoNzY4djEyOEgxMjhWMTkyeiBtMCA2NDBWMzg0aDM1MnY0NDhIMTI4eiBtNDE2IDBWMzg0aDM1MnY0NDhINTQ0eiIvPjwvc3ZnPg==', 
         name: 'T型报价', 
         path: '/pages/quotes/quotes',
-        color: '#1296db'
+        color: '#F0F7FF'
       },
       { 
         id: 4, 
-        icon: '📚', 
+        icon: 'data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTAyNCAxMDI0IiBmaWxsPSIjMTY3N0ZGIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik0xMjggMTI4aDY0djY0MGg3MDR2NjRIMTI4eiIvPjxwYXRoIGQ9Ik0yNTYgNTc2bDE5Mi0xOTIgMTI4IDEyOCAyNTYtMjU2LTQ1LjMtNDUuM0w1NzYgNDE2IDQ0OCAyODggMjU2IDQ4MHoiLz48L3N2Zz4=', 
         name: '个股', 
         path: '/pages/quotes/quotes',
-        color: '#1296db'
+        color: '#F0F7FF'
       },
       { 
         id: 5, 
-        icon: '💼', 
+        icon: 'data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTAyNCAxMDI0IiBmaWxsPSIjMTY3N0ZGIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik04MzIgMjU2SDY3MlYxNjBjMC0xNy43LTE0LjMtMzItMzItMzJIMzg0Yy0xNy43IDAtMzIgMTQuMy0zMiAzMnY5NkgxOTJjLTE3LjcgMC0zMiAxNC4zLTMyIDMydjQ0OGMwIDE3LjcgMTQuMyAzMiAzMiAzMmg2NDBjMTcuNyAwIDMyLTE0LjMgMzItMzJWMjg4YzAtMTcuNy0xNC4zLTMyLTMyLTMyek00MTYgMTkyaDE5MnY2NEg0MTZWMTkyeiBtNDE2IDU3NkgxOTJWMzIwaDY0MHY0NDh6Ii8+PC9zdmc+', 
         name: '策略分析', 
         path: '/pages/quotes/quotes',
-        color: '#1296db'
+        color: '#F0F7FF'
       },
       { 
         id: 6, 
-        icon: '🔔', 
+        icon: 'data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTAyNCAxMDI0IiBmaWxsPSIjMTY3N0ZGIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik01MTIgMTI4Yy0yMTIgMC0zODQgMTcyLTM4NCAzODRzMTcyIDM4NCAzODQgMzg0IDM4NC0xNzIgMzg0LTM4NC0xNzItMzg0LTM4NC0zODR6IG0wIDcwNGMtMTc2LjcgMC0zMjAtMTQzLjMtMzIwLTMyMHMxNDMuMy0zMjAgMzIwLTMyMCAzMjAgMTQzLjMgMzIwIDMyMC0xNDMuMyAzMjAtMzIwIDMyMHoiLz48cGF0aCBkPSJNNTEyIDUxMlYyNTZjLTE0MS40IDAtMjU2IDExNC42LTI1NiAyNTZINTEyeiIvPjwvc3ZnPg==', 
         name: 'ETF', 
         path: '/pages/quotes/quotes',
-        color: '#1296db'
+        color: '#F0F7FF'
       }
     ],
 
@@ -121,116 +115,9 @@ Page({
 
     // 新增：持仓案例数据
     holdingsData: {
-      activeTab: 'active', // active/expiring/expired
-      holdings: [
-        {
-          id: 1,
-          name: '平安银行',
-          code: '000001',
-          market: 'SZ',
-          structure: '100C1m',
-          feeRate: '5.28%',
-          scale: '100万',
-          profit: -4.91,
-          profitRate: -98.28,
-          status: 'active'
-        },
-        {
-          id: 2,
-          name: '上证50ETF',
-          code: '510050',
-          market: 'SH',
-          structure: '50P3m',
-          feeRate: '2.15%',
-          scale: '200万',
-          profit: 12.6,
-          profitRate: 8.2,
-          status: 'active'
-        },
-        {
-          id: 3,
-          name: '贵州茅台',
-          code: '600519',
-          market: 'SH',
-          structure: '100C6m',
-          feeRate: '4.85%',
-          scale: '50万',
-          profit: 34.2,
-          profitRate: 12.7,
-          status: 'active'
-        },
-        {
-          id: 4,
-          name: '招商银行',
-          code: '600036',
-          market: 'SH',
-          structure: '100C1m',
-          feeRate: '3.10%',
-          scale: '80万',
-          profit: -2.3,
-          profitRate: -1.8,
-          status: 'expiring'
-        },
-        {
-          id: 5,
-          name: '中国平安',
-          code: '601318',
-          market: 'SH',
-          structure: '100P1m',
-          feeRate: '2.90%',
-          scale: '100万',
-          profit: 1.2,
-          profitRate: 0.9,
-          status: 'expiring'
-        },
-        {
-          id: 6,
-          name: '宁德时代',
-          code: '300750',
-          market: 'SZ',
-          structure: '50C3m',
-          feeRate: '3.40%',
-          scale: '60万',
-          profit: 6.8,
-          profitRate: 5.3,
-          status: 'expired'
-        },
-        {
-          id: 7,
-          name: '隆基绿能',
-          code: '601012',
-          market: 'SH',
-          structure: '50P6m',
-          feeRate: '2.75%',
-          scale: '120万',
-          profit: -3.6,
-          profitRate: -2.4,
-          status: 'expired'
-        }
-      ],
-      knowledge: [
-        {
-          id: 1,
-          title: '沪深场外个股期权',
-          date: '24-12-08 14:58',
-          type: 'option',
-          link: '/pages/data-explanation/data-explanation?id=1'
-        },
-        {
-          id: 2,
-          title: '香草期权基础入门',
-          date: '24-12-12 09:30',
-          type: 'vanilla',
-          link: '/pages/data-explanation/data-explanation?id=2'
-        },
-        {
-          id: 3,
-          title: '持仓管理与风险控制',
-          date: '24-12-20 16:20',
-          type: 'knowledge',
-          link: '/pages/data-explanation/data-explanation?id=3'
-        }
-      ]
+      activeTab: 'active',
+      holdings: [],
+      knowledge: []
     },
 
     // 加载状态
@@ -372,12 +259,20 @@ Page({
   // 新增：加载持仓数据（可接后端数据源）
   async loadHoldingsData() {
     try {
-      const { holdingsData } = this.data;
-      this.setData({ holdingsData });
+      const data = await holdingsService.getAllHoldingsData();
+      this.setData({ holdingsData: data });
     } catch (e) {
       console.error('加载持仓数据失败:', e);
       uiEnhancer.showToast('持仓数据加载失败', 'error');
     }
+  },
+
+  onExpiryFromChange(e) {
+    this.setData({ 'filters.expiryFrom': e.detail.value });
+  },
+
+  onExpiryToChange(e) {
+    this.setData({ 'filters.expiryTo': e.detail.value });
   },
 
   // 新增：Tab 切换

@@ -49,8 +49,16 @@
       </view>
       <view class="advanced-row">
         <text class="label">到期范围</text>
-        <input class="advanced-input" placeholder="开始 YYYY-MM-DD" value="{{filters.expiryFrom}}" bindinput="onExpiryFromInput" />
-        <input class="advanced-input" placeholder="结束 YYYY-MM-DD" value="{{filters.expiryTo}}" bindinput="onExpiryToInput" />
+        <picker mode="date" value="{{filters.expiryFrom}}" bindchange="onExpiryFromChange" class="advanced-input-picker">
+          <view class="picker-inner {{filters.expiryFrom ? '' : 'placeholder'}}">
+            {{filters.expiryFrom || '开始 YYYY-MM-DD'}}
+          </view>
+        </picker>
+        <picker mode="date" value="{{filters.expiryTo}}" bindchange="onExpiryToChange" class="advanced-input-picker">
+          <view class="picker-inner {{filters.expiryTo ? '' : 'placeholder'}}">
+            {{filters.expiryTo || '结束 YYYY-MM-DD'}}
+          </view>
+        </picker>
       </view>
       <view class="advanced-row">
         <text class="label">执行价范围</text>
@@ -204,8 +212,8 @@
             data-path="{{item.path}}"
             bindtap="onQuickActionTap"
           >
-            <view class="action-icon" style="background: {{item.color}}">
-              <text>{{item.icon}}</text>
+            <view class="action-icon" style="background: {{item.color}}; display: flex; align-items: center; justify-content: center;">
+              <image src="{{item.icon}}" mode="aspectFit" style="width: 60%; height: 60%;" />
             </view>
             <text class="action-name">{{item.name}}</text>
           </view>

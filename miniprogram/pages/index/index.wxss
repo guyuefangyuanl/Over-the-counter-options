@@ -107,6 +107,20 @@
 .advanced-row{display:flex;align-items:center;gap:12rpx}
 .label{color:#666;font-size:26rpx;white-space:nowrap}
 .advanced-input{flex:1;height:64rpx;border:1rpx solid #E5E6EB;border-radius:12rpx;padding:0 12rpx;font-size:26rpx}
+.advanced-input-picker { flex: 1; }
+.picker-inner {
+  height: 64rpx;
+  line-height: 64rpx;
+  border: 1rpx solid #E5E6EB;
+  border-radius: 12rpx;
+  padding: 0 12rpx;
+  font-size: 26rpx;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.picker-inner.placeholder { color: #808080; }
 .radio-item{margin-right:16rpx;color:#666}
 
 .search-box {
@@ -515,8 +529,8 @@
   align-items: center;
   justify-content: center;
   font-size: 48rpx;
-  background: transparent !important; /* 强制透明背景 */
-  color: #1296db; /* 统一图标颜色 */
+  /* background color set inline */
+  color: #fff; 
 }
 
 .action-name {

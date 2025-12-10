@@ -560,9 +560,9 @@
   background-color: var(--white);
   border-top:       1rpx solid var(--border-color);
   box-shadow:       0 -2rpx 8rpx rgba(0, 0, 0, 0.06);
-  z-index:          100;
+  z-index:          10000; /* 提高层级，覆盖自定义 TabBar (z-index: 9999) */
   gap:              12rpx;
-  padding-bottom:   10rpx;
+  padding-bottom:   calc(10rpx + env(safe-area-inset-bottom));
 }
 
 .bottom-actions van-button {
@@ -842,7 +842,8 @@
   position:         fixed;
   left:             0;
   right:            0;
-  bottom:           0;
+  bottom:           60px; /* 位于 TabBar 上方 */
+  padding-bottom:   calc(16rpx + env(safe-area-inset-bottom)); /* 适配安全区域 */
   display:          flex;
   align-items:      center;
   justify-content: space-between;

@@ -146,12 +146,6 @@ Page({
 
     wx.navigateTo({
       url: '/pages/login/login?type=wechat',
-      success: () => {
-        wx.showToast({
-          title: '已打开登录页',
-          icon: 'none'
-        });
-      },
       fail: (err) => {
         console.error('跳转登录页失败:', err);
         wx.showModal({
