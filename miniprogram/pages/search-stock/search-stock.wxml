@@ -59,8 +59,16 @@
         bindtap="onSelectStock"
         data-item="{{item}}"
       >
-        <text class="hot-name">{{item.name}}</text>
-        <text class="hot-code">{{item.code}}</text>
+        <view class="stock-left">
+           <text class="hot-name">{{item.name}}</text>
+           <text class="hot-code-tag">{{item.code}}</text>
+        </view>
+        <view class="stock-right-center">
+           <text class="all-tag">all</text>
+           <text class="hot-percent {{item.changePercent >= 0 ? 'up' : 'down'}}">{{item.changePercent}}%</text>
+           <text class="hot-change {{item.change >= 0 ? 'up' : 'down'}}">{{item.change >= 0 ? '+' : ''}}{{item.change}}%</text>
+           <view class="add-btn">+</view>
+        </view>
       </view>
     </view>
   </view>

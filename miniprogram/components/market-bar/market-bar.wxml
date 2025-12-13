@@ -1,4 +1,4 @@
-<wxs src="../../pages/inquiry/inquiry.wxs" module="utils" />
+<wxs src="../../pages/quotes/quotes.wxs" module="utils" />
 <view class="market-header">
   <scroll-view class="market-indexes" scroll-x show-scrollbar="{{false}}">
     <view class="market-index-item" wx:for="{{indexes}}" wx:key="name">
@@ -7,4 +7,5 @@
       <view class="market-index-change {{item.changePercent > 0 ? 'is-rise' : (item.changePercent < 0 ? 'is-fall' : '')}}">{{utils.formatChange(item.changePercent)}}</view>
     </view>
   </scroll-view>
+  <view class="current-time">{{currentTime}}</view>
 </view>

@@ -207,7 +207,7 @@ Page({
     if (!quoteDetail) return;
     
     wx.navigateTo({
-      url: `/pages/inquiry/inquiry?underlying=${quoteDetail.underlying}&strike=${quoteDetail.strikeType}&period=${quoteDetail.period}`
+      url: `/pages/quotes/quotes?underlying=${quoteDetail.underlying}&strike=${quoteDetail.strikeType}&period=${quoteDetail.period}`
     });
   },
 

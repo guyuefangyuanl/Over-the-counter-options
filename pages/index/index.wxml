@@ -1,4 +1,4 @@
-<view class="container" style="width: 845rpx; display: flex; box-sizing: border-box; position: relative; left: -48rpx; top: 0rpx">
+<view class="container" style="width: 750rpx; display: flex; flex-direction: column; box-sizing: border-box;">
   <!-- 加载状态 -->
   <view class="loading-container" wx:if="{{loading}}">
     <view class="loading-spinner"></view>
@@ -7,33 +7,14 @@
 
   <!-- 主内容 -->
   <view class="main-content" wx:else>
-    <!-- 顶部用户信息 -->
-    <view class="header-section">
-      <view class="user-info" wx:if="{{hasUserInfo}}">
-        <image class="avatar" src="{{userInfo.avatarUrl}}" mode="aspectFill"></image>
-        <view class="user-detail">
-          <text class="username">{{userInfo.nickName}}</text>
-          <text class="welcome-text">欢迎使用期权助手</text>
-        </view>
-      </view>
-      <view class="user-info" wx:else>
-        <view class="avatar-placeholder">👤</view>
-        <view class="user-detail">
-          <button class="login-btn" bindtap="getUserProfile">
-            点击登录
-          </button>
-          <text class="welcome-text">登录后体验更多功能</text>
-        </view>
-      </view>
-    </view>
-
+    
     <!-- 搜索区域 -->
     <view class="search-container">
       <view class="search-box">
         <view class="search-icon">🔍</view>
         <input 
           class="search-input" 
-          placeholder="搜索期权代码/名称" 
+          placeholder="搜索" 
           value="{{searchValue}}"
           bindinput="onSearchInput"
           bindfocus="onSearchFocus"
@@ -41,6 +22,22 @@
         />
         <view class="search-btn" bindtap="onSearch" wx:if="{{searchValue}}">
           搜索
+        </view>
+      </view>
+    </view>
+
+    <!-- 快捷功能 (Moved Up) -->
+    <view class="section quick-actions-section" wx:if="{{!showSearchResults}}">
+      <view class="quick-actions">
+        <view 
+          class="action-item" 
+          wx:for="{{quickActions}}" 
+          wx:key="id"
+          data-path="{{item.path}}"
+          bindtap="onQuickActionTap"
+        >
+          <image class="action-icon-img" src="{{item.icon}}" mode="aspectFit" />
+          <text class="action-name">{{item.name}}</text>
         </view>
       </view>
     </view>
@@ -69,6 +66,7 @@
               src="{{item.image}}" 
               mode="aspectFill"
             />
+            <!-- Overlay removed to match cleaner style if needed, but keeping for readability -->
             <view class="banner-overlay">
               <view class="banner-content">
                 <text class="banner-title">{{item.title}}</text>
@@ -165,28 +163,12 @@
 
     <!-- 首页内容 -->
     <view class="home-content" wx:if="{{!showSearchResults}}">
-      <!-- 快捷功能 -->
-      <view class="section quick-actions-section">
-        <view class="quick-actions">
-          <view 
-            class="action-item" 
-            wx:for="{{quickActions}}" 
-            wx:key="id"
-            data-path="{{item.path}}"
-            bindtap="onQuickActionTap"
-          >
-            <view class="action-icon" style="background: {{item.color}}">
-              <text>{{item.icon}}</text>
-            </view>
-            <text class="action-name">{{item.name}}</text>
-          </view>
-        </view>
-      </view>
-
-      <!-- 新增：持仓案例卡片 -->
+      
+      <!-- 持仓案例卡片 -->
       <view class="section holding-section">
         <view class="section-header">
           <text class="section-title">持仓案例</text>
+          <text class="more-btn">></text>
         </view>
 
         <view class="holding-card enhanced-card">
@@ -207,6 +189,11 @@
               data-tab="expired"
               bindtap="onHoldingTabChange"
             >已到期</view>
+            <view 
+              class="holding-tab-item {{holdingsData.activeTab === 'finished' ? 'active' : ''}}"
+              data-tab="finished"
+              bindtap="onHoldingTabChange"
+            >已完结</view>
           </view>
 
           <!-- 持仓列表 -->
@@ -214,74 +201,31 @@
             <block wx:for="{{holdingsData.holdings}}" wx:key="id">
               <view wx:if="{{item.status === holdingsData.activeTab}}" class="holding-item" data-id="{{item.id}}" bindtap="onHoldingItemTap">
                 <view class="holding-left">
-                  <text class="holding-name">{{item.name}}</text>
-                  <text class="holding-market">{{item.market}} {{item.code}}</text>
-                  <text class="holding-structure">{{item.structure}}</text>
+                  <text class="holding-name">{{item.name}} {{item.structure}}</text>
+                  <!-- Combined name and structure for compact look -->
+                  <view class="holding-row">
+                     <text class="holding-fee">{{item.feeRate}}</text>
+                     <text class="holding-scale">{{item.scale}}</text>
+                  </view>
                 </view>
                 <view class="holding-right">
-                  <text class="holding-fee">费率 {{item.feeRate}}</text>
-                  <text class="holding-scale">规模 {{item.scale}}</text>
                   <view class="holding-profit">
-                    <text class="profit {{item.profit >= 0 ? 'up' : 'down'}}">净盈亏 ¥{{dataFormatter.formatNumber(item.profit, 2)}}</text>
-                    <text class="profit-rate {{item.profitRate >= 0 ? 'up' : 'down'}}">净利率 {{dataFormatter.formatPercent(item.profitRate, 2)}}</text>
+                    <text class="profit {{item.profit >= 0 ? 'up' : 'down'}}">{{item.profit >= 0 ? '+' : ''}}{{item.profit}}万</text>
+                    <text class="profit-rate {{item.profitRate >= 0 ? 'up' : 'down'}}">{{item.profitRate >= 0 ? '+' : ''}}{{item.profitRate}}%</text>
                   </view>
                 </view>
               </view>
             </block>
           </view>
-
-          <!-- 知识推荐 -->
-          <view class="knowledge-section">
-            <block wx:for="{{holdingsData.knowledge}}" wx:key="id">
-              <view class="knowledge-item" data-id="{{item.id}}" bindtap="onKnowledgeItemTap">
-                <text class="knowledge-icon">{{item.type === 'option' ? '📘' : (item.type === 'vanilla' ? '📗' : '📙')}}</text>
-                <view class="knowledge-info">
-                  <text class="knowledge-title">{{item.title}}</text>
-                  <text class="knowledge-meta">{{item.date}}</text>
-                </view>
-                <text class="knowledge-arrow">→</text>
-              </view>
-            </block>
-          </view>
         </view>
       </view>
 
-      <!-- 市场指数 -->
+      <!-- 热门产品 (Renamed from Hot Options) -->
       <view class="section">
         <view class="section-header">
-          <text class="section-title">市场指数</text>
-          <text class="more-btn" data-type="indices" bindtap="onViewMore">
-            更多 →
-          </text>
-        </view>
-        <view class="index-cards">
-          <view 
-            class="index-card enhanced-card" 
-            wx:for="{{marketIndices}}" 
-            wx:key="code"
-            data-code="{{item.code}}"
-            bindtap="onIndexTap"
-          >
-            <view class="index-info">
-              <text class="index-name">{{item.name}}</text>
-              <text class="index-code">{{item.code}}</text>
-            </view>
-            <view class="index-data">
-              <text class="index-price">{{item.formattedPrice}}</text>
-              <text class="index-change {{item.change >= 0 ? 'up' : 'down'}}">
-                {{item.change >= 0 ? '+' : ''}}{{item.changeRate}}
-              </text>
-            </view>
-          </view>
-        </view>
-      </view>
-
-      <!-- 热门期权 -->
-      <view class="section">
-        <view class="section-header">
-          <text class="section-title">热门期权</text>
+          <text class="section-title">热门产品</text>
           <text class="more-btn" data-type="options" bindtap="onViewMore">
-            更多 →
+            >
           </text>
         </view>
         <view class="option-list">
@@ -293,33 +237,38 @@
             bindtap="onOptionTap"
           >
             <view class="option-header">
-              <view class="option-info">
+              <view class="option-info-row">
+                <view class="market-badge {{item.market === 'SH' ? 'sh' : 'sz'}}">{{item.market || 'SH'}}</view>
                 <text class="option-name">{{item.name}}</text>
                 <text class="option-code">{{item.code}}</text>
+                <text class="option-structure">{{item.structure || '100C6m'}}</text>
               </view>
-              <view class="option-type {{item.type === 'call' ? 'call' : 'put'}}">
-                {{item.type === 'call' ? '认购' : '认沽'}}
-              </view>
-            </view>
-            <view class="option-data">
-              <view class="data-item">
-                <text class="data-label">最新价</text>
-                <text class="data-value price">¥{{item.formattedPrice}}</text>
-              </view>
-              <view class="data-item">
-                <text class="data-label">涨跌幅</text>
-                <text class="data-value {{item.change >= 0 ? 'up' : 'down'}}">
-                  {{item.change >= 0 ? '+' : ''}}{{item.changeRate}}
-                </text>
-              </view>
-              <view class="data-item">
-                <text class="data-label">成交量</text>
-                <text class="data-value">{{item.volume}}</text>
+              <view class="option-tags">
+                 <text class="tag-vanilla">香草</text>
               </view>
             </view>
           </view>
         </view>
       </view>
+
+      <!-- 知识 (Moved out) -->
+      <view class="section knowledge-section-outer">
+         <view class="section-header">
+            <text class="section-title">知识</text>
+            <text class="more-btn">></text>
+         </view>
+         <view class="knowledge-list enhanced-card">
+            <block wx:for="{{holdingsData.knowledge}}" wx:key="id">
+              <view class="knowledge-item" data-id="{{item.id}}" bindtap="onKnowledgeItemTap">
+                <view class="knowledge-info">
+                  <text class="knowledge-title">{{item.title}}</text>
+                  <text class="knowledge-meta">{{item.date}}</text>
+                </view>
+              </view>
+            </block>
+         </view>
+      </view>
+
     </view>
   </view>
 </view>

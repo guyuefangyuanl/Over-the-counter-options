@@ -57,7 +57,7 @@ Page({
     // 确保 tabBar 正确显示
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
       this.getTabBar().setData({
-        selected: 3
+        selected: 4
       });
     }
   },
@@ -146,6 +146,12 @@ Page({
 
     wx.navigateTo({
       url: '/pages/login/login?type=wechat',
+      success: () => {
+        wx.showToast({
+          title: '已打开登录页',
+          icon: 'none'
+        });
+      },
       fail: (err) => {
         console.error('跳转登录页失败:', err);
         wx.showModal({
@@ -306,7 +312,6 @@ Page({
       '/pages/index/index',
       '/pages/quotes/quotes',
       '/pages/calculator/calculator',
-      '/pages/inquiry/inquiry',
       '/pages/profile/profile'
     ];
     return existingPages.includes(path);

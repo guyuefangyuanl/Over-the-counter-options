@@ -446,16 +446,16 @@
 
 /* ====== 快捷功能 ====== */
 .quick-actions-section {
-  margin-bottom: 8rpx;
+  margin-bottom: 24rpx;
 }
 
 .quick-actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24rpx;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12rpx;
   background: #ffffff;
   border-radius: 20rpx;
-  padding: 32rpx 24rpx;
+  padding: 32rpx 12rpx;
   box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.1);
 }
 
@@ -471,24 +471,111 @@
   transform: scale(0.95);
 }
 
-.action-icon {
-  width: 96rpx;
-  height: 96rpx;
-  border-radius: 24rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 48rpx;
-  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+.action-icon-img {
+  width: 80rpx;
+  height: 80rpx;
 }
 
 .action-name {
   font-size: 24rpx;
-  color: #666666;
+  color: #333333;
   text-align: center;
+  font-weight: 500;
 }
 
-/* ====== 市场指数 ====== */
+/* ====== 持仓案例调整 ====== */
+.holding-row {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 4rpx;
+}
+
+.holding-fee, .holding-scale {
+  font-size: 22rpx;
+  color: #999;
+}
+
+/* ====== 热门产品 ====== */
+.option-info-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex: 1;
+}
+
+.market-badge {
+  font-size: 20rpx;
+  padding: 2rpx 6rpx;
+  border-radius: 4rpx;
+  color: #fff;
+}
+
+.market-badge.sh {
+  background: #E91E63; /* Pink/Red for SH */
+}
+
+.market-badge.sz {
+  background: #E91E63; /* Pink/Red for SZ too based on screenshot? Or differ. */
+}
+
+.option-name {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.option-code {
+  font-size: 24rpx;
+  color: #409EFF; /* Blue for code */
+}
+
+.option-structure {
+  font-size: 24rpx;
+  color: #333;
+}
+
+.option-tags {
+  display: flex;
+}
+
+.tag-vanilla {
+  font-size: 22rpx;
+  color: #E6A23C; /* Orange/Gold */
+  background: #FDF6EC;
+  padding: 4rpx 12rpx;
+  border-radius: 4rpx;
+}
+
+/* ====== 知识区域 ====== */
+.knowledge-section-outer {
+  margin-top: 24rpx;
+}
+
+.knowledge-list {
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 0 24rpx;
+}
+
+.knowledge-item {
+  padding: 24rpx 0;
+  border-bottom: 2rpx solid #f5f7fa;
+}
+
+.knowledge-item:last-child {
+  border-bottom: none;
+}
+
+.knowledge-title {
+  font-size: 28rpx;
+  color: #333;
+  margin-bottom: 8rpx;
+}
+
+.knowledge-meta {
+  font-size: 22rpx;
+  color: #999;
+}
 .index-cards {
   display: flex;
   flex-direction: column;

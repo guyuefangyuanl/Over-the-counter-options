@@ -157,7 +157,7 @@
 .hot-item {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: center; /* 垂直居中 */
   padding: 30rpx 0;
   border-bottom: 1rpx solid #f0f0f0;
 }
@@ -170,12 +170,67 @@
   background-color: #f5f5f5;
 }
 
-.hot-name {
-  font-size: 30rpx;
-  color: #333333;
+.stock-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* 左侧内容居中对齐 */
+  width: 200rpx; /* 固定宽度 */
 }
 
-.hot-code {
-  font-size: 26rpx;
-  color: #999999;
+.hot-name {
+  font-size: 36rpx; /* 放大名字 */
+  font-weight: 600;
+  color: #333333;
+  margin-bottom: 8rpx;
+}
+
+.hot-code-tag {
+  font-size: 24rpx;
+  color: #666;
+  background-color: #f0f2f5;
+  padding: 2rpx 12rpx;
+  border-radius: 8rpx;
+}
+
+.stock-right-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1; /* 占据剩余空间 */
+}
+
+.all-tag {
+  font-size: 20rpx;
+  color: #ccc;
+  margin-bottom: 4rpx;
+}
+
+.hot-percent {
+  font-size: 40rpx; /* 放大百分比 */
+  font-weight: bold;
+  margin-bottom: 4rpx;
+}
+
+.hot-change {
+  font-size: 24rpx;
+  font-weight: 500;
+  margin-bottom: 16rpx;
+}
+
+.hot-percent.up, .hot-change.up { color: #ff6b6b; } /* 红色 */
+.hot-percent.down, .hot-change.down { color: #30b767; } /* 绿色 */
+
+.add-btn {
+  width: 48rpx;
+  height: 48rpx;
+  background-color: #409eff; /* 蓝色圆圈 */
+  border-radius: 50%;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+  font-weight: 300;
+  line-height: 1;
+  padding-bottom: 4rpx; /* 微调加号位置 */
 }

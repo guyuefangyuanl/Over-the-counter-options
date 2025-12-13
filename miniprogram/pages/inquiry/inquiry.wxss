@@ -560,9 +560,9 @@
   background-color: var(--white);
   border-top:       1rpx solid var(--border-color);
   box-shadow:       0 -2rpx 8rpx rgba(0, 0, 0, 0.06);
-  z-index:          10000; /* 提高层级，覆盖自定义 TabBar (z-index: 9999) */
+  z-index:          100;
   gap:              12rpx;
-  padding-bottom:   calc(10rpx + env(safe-area-inset-bottom));
+  padding-bottom:   10rpx;
 }
 
 .bottom-actions van-button {
@@ -842,8 +842,7 @@
   position:         fixed;
   left:             0;
   right:            0;
-  bottom:           60px; /* 位于 TabBar 上方 */
-  padding-bottom:   calc(16rpx + env(safe-area-inset-bottom)); /* 适配安全区域 */
+  bottom:           0;
   display:          flex;
   align-items:      center;
   justify-content: space-between;
@@ -1115,7 +1114,7 @@
   margin:      -20rpx;
 }
 
-.popup-stock-item {
+.stock-item {
   display:          flex;
   align-items:      center;
   padding:          28rpx 24rpx;
@@ -1131,19 +1130,19 @@
   z-index:          1;
 }
 
-.popup-stock-item:hover {
+.stock-item:hover {
   z-index:          2;
   transform:        translateY(-4rpx);
   box-shadow:       0 8rpx 20rpx rgba(45, 140, 240, 0.16);
 }
 
-.popup-stock-info {
+.stock-info {
   flex:        1;
   margin-right: 28rpx;
   min-width:   0;
 }
 
-.popup-stock-name {
+.stock-name {
   font-size:   32rpx;
   font-weight: 600;
   color:       var(--text-primary);
@@ -1155,7 +1154,7 @@
   -webkit-box-orient: vertical;
 }
 
-.popup-stock-code {
+.stock-code {
   font-size: 24rpx;
   color:     #86909C;
   margin-bottom: 6rpx;
@@ -1171,7 +1170,7 @@
   white-space: nowrap;
 }
 
-.popup-stock-category {
+.stock-category {
   font-size: 24rpx;
   color:     #c0c4cc;
   line-height: 1.2;
@@ -1181,13 +1180,13 @@
   white-space: nowrap;
 }
 
-.popup-stock-price-info {
+.stock-price-info {
   text-align:   right;
   margin-right: 28rpx;
   min-width:    140rpx;
 }
 
-.popup-stock-price {
+.stock-price {
   font-size:   32rpx;
   font-weight: 600;
   color:       var(--text-primary);
@@ -1196,44 +1195,44 @@
   font-family: 'DIN Alternate', 'Helvetica Neue', sans-serif;
 }
 
-.popup-stock-price.is-rise {
+.stock-price.is-rise {
   color: var(--rise-color);
 }
 
-.popup-stock-price.is-fall {
+.stock-price.is-fall {
   color: var(--fall-color);
 }
 
-.popup-stock-change {
+.stock-change {
   font-size:   26rpx;
   font-weight: 600;
   line-height: 1.2;
   font-family: 'DIN Alternate', 'Helvetica Neue', sans-serif;
 }
 
-.popup-stock-change.is-rise {
+.stock-change.is-rise {
   color: var(--rise-color);
 }
 
-.popup-stock-change.is-fall {
+.stock-change.is-fall {
   color: var(--fall-color);
 }
 
-.popup-stock-action {
+.stock-action {
   width:      100rpx;
   text-align: center;
 }
 
 @media (min-width: 480px) {
-  .popup-stock-item { width: calc(50% - 40rpx); }
+  .stock-item { width: calc(50% - 40rpx); }
 }
 
 @media (min-width: 768px) {
-  .popup-stock-item { width: calc(33.333% - 40rpx); }
+  .stock-item { width: calc(33.333% - 40rpx); }
 }
 
 @media (max-width: 375px) {
-  .popup-stock-item { width: calc(100% - 40rpx); }
+  .stock-item { width: calc(100% - 40rpx); }
 }
 
 .added-status {
@@ -1254,7 +1253,7 @@
   color: var(--secondary-color);
 }
 
-.popup-add-btn {
+.add-btn {
   width:              64rpx;
   height:             64rpx;
   border-radius:      50%;
@@ -1268,7 +1267,7 @@
   transition:         all 0.2s ease;
 }
 
-.popup-add-btn:active {
+.add-btn:active {
   transform:        scale(0.9);
   background-color: #1a7fd8;
 }

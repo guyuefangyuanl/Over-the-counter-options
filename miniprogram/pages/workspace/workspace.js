@@ -61,7 +61,7 @@ Page({
     quickActions: [
       { id: 1, name: '期权报价', icon: '/images/quote.png', path: '/pages/index/index' },
       { id: 2, name: '期权计算器', icon: '/images/calculator.png', path: '/pages/calculator/calculator' },
-      { id: 3, name: '询价中心', icon: '/images/inquiry.png', path: '/pages/inquiry/inquiry' },
+      { id: 3, name: '询价中心', icon: '/images/inquiry.png', path: '/pages/quotes/quotes' },
       { id: 4, name: '持仓管理', icon: '/images/position.png', path: '/pages/account/account' },
       { id: 5, name: '市场分析', icon: '/images/analysis.png', path: '/pages/analysis/analysis' },
       { id: 6, name: '资讯中心', icon: '/images/news.png', path: '/pages/news/news' },
@@ -210,7 +210,7 @@ Page({
       const tabPages = [
         '/pages/index/index',
         '/pages/workspace/workspace',
-        '/pages/inquiry/inquiry',
+        '/pages/quotes/quotes',
         '/pages/account/account',
         '/pages/profile/profile'
       ];

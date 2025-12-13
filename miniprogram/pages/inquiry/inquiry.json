@@ -1,19 +1,13 @@
 {
-  "navigationBarTitleText":      "产品询价",
-  "navigationBarBackgroundColor": "#2D8CF0",
-  "navigationBarTextStyle":      "white",
-  "enablePullDownRefresh":      true,
-  "backgroundColor":            "#f5f5f5",
-  "backgroundTextStyle":        "dark",
-  
   "usingComponents": {
-    "market-bar": "/components/market-bar/market-bar",
-    "primary-tabs": "/components/primary-tabs/primary-tabs",
-    "filter-bar": "/components/filter-bar/filter-bar",
-    "cards-list": "/components/cards-list/cards-list",
     "van-popup": "@vant/weapp/popup/index",
-    "van-field": "@vant/weapp/field/index",
+    "van-icon": "@vant/weapp/icon/index",
     "van-button": "@vant/weapp/button/index",
-    "van-icon":   "@vant/weapp/icon/index"
-  }
+    "van-field": "@vant/weapp/field/index",
+    "market-bar": "../../components/market-bar/market-bar",
+    "primary-tabs": "../../components/primary-tabs/primary-tabs",
+    "filter-bar": "../../components/filter-bar/filter-bar",
+    "cards-list": "../../components/cards-list/cards-list"
+  },
+  "navigationBarTitleText": "询价"
 }

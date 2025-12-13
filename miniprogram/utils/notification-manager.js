@@ -57,7 +57,7 @@ class NotificationManager {
       content: `询价 ${inquiryId} ${statusMap[status]}`,
       type: status === 'confirmed' ? 'success' : 'info',
       priority: status === 'quoted' ? 'high' : 'normal',
-      actionUrl: '/pages/inquiry/inquiry'
+      actionUrl: '/pages/quotes/quotes'
     };
 
     return this.addNotification(notification);

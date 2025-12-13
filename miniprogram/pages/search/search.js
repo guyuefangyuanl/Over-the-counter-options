@@ -250,7 +250,7 @@ Page({
         },
         fail: (err) => {
           console.error('[跳转] 报价页失败，尝试备用详情页:', err);
-          const fallback = `/pages/inquiry/detail/detail?id=${item.id || 1}`;
+          const fallback = `/pages/quotes/detail/detail?id=${item.id || 1}`;
           wx.navigateTo({ url: fallback, fail: (e2) => console.error('[跳转] 备用详情页失败:', e2) });
         }
       });

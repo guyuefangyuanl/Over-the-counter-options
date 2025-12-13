@@ -157,12 +157,6 @@ Page({
     }, 60000);
   },
 
-  onShow() {
-    if (typeof this.getTabBar === 'function' && this.getTabBar()) {
-      this.getTabBar().setData({ selected: 1 });
-    }
-  },
-
   onUnload() {
     if (this.timer) {
       clearInterval(this.timer);

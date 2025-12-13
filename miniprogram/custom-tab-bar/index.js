@@ -7,7 +7,7 @@ Component({
       pagePath: "/pages/index/index",
       text: "首页"
     }, {
-      pagePath: "/pages/inquiry/inquiry",
+      pagePath: "/pages/quotes/quotes",
       text: "询价"
     }, {
       pagePath: "/pages/account/account",

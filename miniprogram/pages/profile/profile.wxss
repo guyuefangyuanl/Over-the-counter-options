@@ -1,48 +1,38 @@
 /* 我的页面样式 */
 .profile-container {
   padding: 0;
-  background-color: var(--background-color);
+  background-color: #f5f7fa;
   min-height: 100vh;
-  padding-bottom: 40rpx;
 }
 
-/* 用户信息卡片 - 头部设计 */
+/* 用户信息卡片 */
 .user-card {
-  background: var(--gradient-primary); /* 使用全局渐变色 */
-  color: #ffffff;
-  padding: 40rpx 40rpx 80rpx; /* 增加底部内边距，为重叠卡片留空间 */
-  border-radius: 0 0 48rpx 48rpx; /* 底部圆角 */
-  border-bottom: none;
-  position: relative;
-  z-index: 1;
-  box-shadow: 0 4rpx 20rpx rgba(64, 158, 255, 0.3);
+  background: #ffffff;
+  color: #1f2d3d;
+  padding: 32rpx 24rpx;
+  border-bottom: 1rpx solid #f0f0f0;
 }
 
 .user-info {
   display: flex;
   align-items: center;
-  margin-bottom: 30rpx;
+  margin-bottom: 40rpx;
 }
 
 .avatar-section {
-  margin-right: 32rpx;
-  position: relative;
+  margin-right: 25rpx;
 }
 
 .avatar {
-  width: 128rpx;
-  height: 128rpx;
-  border-radius: 50%;
-  border: 4rpx solid rgba(255, 255, 255, 0.6); /* 半透明白色边框 */
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 60rpx;
+  border: 2rpx solid #e5e6eb;
   background: #ffffff;
-  box-shadow: 0 8rpx 16rpx rgba(0, 0, 0, 0.1);
 }
 
 .default-avatar {
-  background: rgba(255, 255, 255, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: rgba(255,255,255,0.3);
 }
 
 .user-details {
@@ -50,10 +40,9 @@
 }
 
 .nickname {
-  font-size: 40rpx;
-  font-weight: 600;
-  margin-bottom: 12rpx;
-  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.1);
+  font-size: 36rpx;
+  font-weight: bold;
+  margin-bottom: 10rpx;
 }
 
 .vip-info {
@@ -63,19 +52,17 @@
 }
 
 .vip-level {
-  background: rgba(0, 0, 0, 0.2); /* 深色半透明背景 */
-  color: #ffd700; /* 金色字体 */
-  padding: 6rpx 16rpx;
-  border-radius: 24rpx;
+  background: #f2f3f5;
+  color: #409EFF;
+  padding: 6rpx 12rpx;
+  border-radius: 16rpx;
   font-size: 22rpx;
-  margin-right: 12rpx;
-  font-weight: 500;
-  border: 1rpx solid rgba(255, 215, 0, 0.3);
+  margin-right: 10rpx;
 }
 
 .vip-id {
   font-size: 24rpx;
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 .login-hint {
@@ -83,100 +70,69 @@
 }
 
 .hint-text {
-  font-size: 28rpx;
-  opacity: 0.9;
+  font-size: 26rpx;
+  opacity: 0.8;
 }
 
 /* 认证按钮 */
 .auth-section {
   display: flex;
-  justify-content: flex-start; /* 左对齐或根据布局调整 */
-  margin-top: 20rpx;
+  justify-content: center;
 }
 
 .auth-btn {
   border: none;
-  border-radius: 44rpx;
+  border-radius: 40rpx;
   font-size: 28rpx;
-  padding: 0 48rpx;
-  height: 72rpx;
-  line-height: 72rpx;
-  font-weight: 600;
-  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
-  transition: all 0.3s;
+  padding: 18rpx 48rpx;
+  font-weight: 500;
 }
 
 .login-btn {
-  background: #ffffff;
-  color: var(--primary-color);
+  background: #409EFF;
+  color: #ffffff;
 }
 
 .logout-btn {
-  background: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
-  border: 2rpx solid rgba(255, 255, 255, 0.6);
+  background: #ffffff;
+  color: #606266;
+  border: 2rpx solid #e5e6eb;
 }
 
 .auth-btn:active {
-  transform: scale(0.96);
-  opacity: 0.9;
+  transform: scale(0.95);
+  opacity: 0.8;
 }
 
-/* 通用卡片容器样式 */
-.menu-section, 
-.feature-intro, 
-.stats-section {
-  margin: 0 24rpx 24rpx;
-  background: #ffffff;
-  border-radius: 24rpx;
-  overflow: hidden;
-  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.05); /* 更柔和的阴影 */
-  border: none;
-}
-
-/* 让第一个卡片向上重叠头部 */
+/* 功能菜单 */
 .menu-section {
-  margin-top: -50rpx; /* 向上偏移 */
-  position: relative;
-  z-index: 2;
+  margin: 20rpx;
+  background: #ffffff;
+  border-radius: 16rpx;
+  overflow: hidden;
+  border: 1rpx solid #f0f0f0;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.06);
 }
 
-.menu-title,
-.intro-title,
-.stats-title {
-  padding: 32rpx 32rpx 20rpx;
+.menu-title {
+  padding: 30rpx;
   font-size: 32rpx;
-  font-weight: 700;
-  color: #303133;
-  border-bottom: none; /* 移除标题下划线，更简洁 */
-  display: flex;
-  align-items: center;
+  font-weight: bold;
+  color: #333;
+  border-bottom: 2rpx solid #f0f0f0;
 }
 
-.menu-title::before,
-.intro-title::before,
-.stats-title::before {
-  content: '';
-  width: 8rpx;
-  height: 32rpx;
-  background: var(--primary-color);
-  margin-right: 16rpx;
-  border-radius: 4rpx;
-}
-
-/* 功能菜单列表 */
 .menu-list {
-  padding: 0 16rpx 16rpx;
+  padding: 0;
 }
 
 .menu-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 28rpx 16rpx;
-  border-bottom: 1rpx solid #f5f7fa;
-  margin: 0 16rpx;
-  transition: all 0.2s;
+  padding: 25rpx 30rpx;
+  border-bottom: 2rpx solid #f8f8f8;
+  transition: background-color 0.2s ease;
 }
 
 .menu-item:last-child {
@@ -184,8 +140,7 @@
 }
 
 .menu-item:active {
-  background-color: #f9f9f9;
-  border-radius: 12rpx;
+  background-color: #f8f8f8;
 }
 
 .menu-content {
@@ -193,17 +148,13 @@
   align-items: center;
 }
 
-/* 菜单图标优化 */
 .menu-icon {
-  width: 64rpx;
-  height: 64rpx;
-  margin-right: 24rpx;
-  border-radius: 20rpx; /* 方圆形 */
+  width: 32rpx;
+  height: 32rpx;
+  margin-right: 16rpx;
+  border-radius: 6rpx;
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4rpx 8rpx rgba(0,0,0,0.05);
+  background: #eef2f7;
 }
 
 .menu-icon::before {
@@ -212,110 +163,121 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 32rpx;
-  height: 32rpx;
+  width: 24rpx;
+  height: 24rpx;
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
 }
 
-/* 为每个图标分配不同的背景色并设置图标SVG */
-.menu-icon.member { 
-  background: linear-gradient(135deg, #a0cfff 0%, #409EFF 100%); 
-}
+.menu-icon.member { background: #eef2f7; }
+
 .menu-icon.member::before {
   background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTMuMDkgOC4yNkwyMCA5TDEzLjA5IDE1Ljc0TDEyIDIyTDEwLjkxIDE1Ljc0TDQgOUwxMC45MSA4LjI2TDEyIDJaIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K');
 }
 
-.menu-icon.profile { 
-  background: linear-gradient(135deg, #95d475 0%, #67C23A 100%); 
-}
+.menu-icon.profile { background: #eef2f7; }
+
 .menu-icon.profile::before {
   background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIwIDIxVjE5QTQgNCAwIDAgMCAxNiAxNUg4QTQgNCAwIDAgMCA0IDE5VjIxIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8Y2lyY2xlIGN4PSIxMiIgY3k9IjciIHI9IjQiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIvPgo8L3N2Zz4K');
 }
 
-.menu-icon.service { 
-  background: linear-gradient(135deg, #fab6b6 0%, #F56C6C 100%); 
-}
+.menu-icon.service { background: #eef2f7; }
+
 .menu-icon.service::before {
   background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIxIDEyQzIxIDEzLjEgMjAuMSAxNCAyMCAxNEg4TDQgMTVWM0M0IDIuNCA0LjQgMiA1IDJIMjBDMjAuNiAyIDIxIDIuNCAyMSAzVjEyWiIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+Cg==');
 }
 
-.menu-icon.suggestion { 
-  background: linear-gradient(135deg, #b3e19d 0%, #E6A23C 100%); 
-}
+.menu-icon.suggestion { background: #eef2f7; }
+
 .menu-icon.suggestion::before {
   background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTUuMDkgOC4yNkwyMiA5TDE2IDEzTDE3LjE4IDIwTDEyIDE2LjM1TDYuODIgMjBMOCAxM0wyIDlMOC45MSA4LjI2TDEyIDJaIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K');
 }
 
 .menu-text {
-  font-size: 30rpx;
-  color: #303133;
+  font-size: 28rpx;
+  color: #333;
   font-weight: 500;
 }
 
-.menu-arrow icon {
-  opacity: 0.4;
+.menu-arrow {
+  color: #c0c0c0;
 }
 
 /* 功能介绍 */
 .feature-intro {
-  padding: 10rpx 0 30rpx;
+  margin: 20rpx;
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  border: 1rpx solid #f0f0f0;
+  box-shadow: none;
+}
+
+.intro-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 25rpx;
 }
 
 .intro-list {
-  display: grid;
-  grid-template-columns: 1fr 1fr; /* 双列布局 */
-  gap: 24rpx;
-  padding: 0 32rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
 }
 
 .intro-item {
   display: flex;
   align-items: center;
   font-size: 26rpx;
-  color: #606266;
-  background: #f8f9fa;
-  padding: 16rpx 24rpx;
-  border-radius: 12rpx;
+  color: #666;
 }
 
 .intro-item icon {
-  margin-right: 12rpx;
+  margin-right: 15rpx;
 }
 
 /* 统计信息 */
 .stats-section {
-  padding-bottom: 32rpx;
+  margin: 20rpx;
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  border: 1rpx solid #f0f0f0;
+  box-shadow: none;
+}
+
+.stats-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 25rpx;
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 24rpx;
-  padding: 0 32rpx;
+  grid-template-columns: 1fr 1fr;
+  gap: 25rpx;
 }
 
 .stat-item {
   text-align: center;
-  padding: 32rpx 20rpx;
-  background: linear-gradient(to bottom, #ffffff, #f9fafc);
-  border-radius: 20rpx;
-  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.03);
-  border: 1rpx solid #ebeef5;
+  padding: 25rpx;
+  background: #f8f9fa;
+  border-radius: 15rpx;
 }
 
 .stat-number {
-  font-size: 56rpx;
+  font-size: 48rpx;
   font-weight: bold;
-  color: var(--primary-color);
-  margin-bottom: 12rpx;
-  font-family: 'DIN Alternate', sans-serif; /* 尝试使用数字字体 */
+  color: #667eea;
+  margin-bottom: 8rpx;
 }
 
 .stat-label {
-  font-size: 26rpx;
-  color: #909399;
+  font-size: 24rpx;
+  color: #666;
 }
 
 /* 版本信息 */
@@ -325,13 +287,36 @@
 }
 
 .version-text {
-  font-size: 24rpx;
-  color: #c0c4cc;
+  font-size: 22rpx;
+  color: #999;
 }
 
 /* 响应式适配 */
 @media (max-width: 750rpx) {
   .profile-container {
-    font-size: 28rpx;
+    font-size: 26rpx;
+  }
+  
+  .user-card {
+    padding: 30rpx 20rpx 25rpx;
+  }
+  
+  .nickname {
+    font-size: 32rpx;
+  }
+  
+  .menu-section, 
+  .feature-intro, 
+  .stats-section {
+    margin: 15rpx;
+    padding: 25rpx;
+  }
+  
+  .stats-grid {
+    gap: 20rpx;
+  }
+  
+  .stat-item {
+    padding: 20rpx;
   }
 }

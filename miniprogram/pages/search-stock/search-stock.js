@@ -1,5 +1,5 @@
 // 搜索股票页面
-const stockService = require('../../utils/stock-service.js');
+// const stockService = require('../../utils/stock-service.js');
 
 Page({
   data: {
@@ -101,23 +101,32 @@ Page({
       price: stock.price,
       change: stock.change,
       changePercent: stock.changePercent,
-      market: stock.code.startsWith('6') ? 'SH' : 'SZ'
+      market: stock.code.startsWith('6') ? 'SH' : 'SZ',
+      addedTime: new Date().toISOString()
     };
 
-    // 返回上一页并传递数据
-    const pages = getCurrentPages();
-    const prevPage = pages[pages.length - 2];
+    // 添加到自选列表（本地存储）
+    let favorites = wx.getStorageSync('favorites') || [];
+    const exists = favorites.some(item => item.code === stockInfo.code);
     
-    if (prevPage && prevPage.route === 'pages/quotes/quotes') {
-      // 直接调用上一页的方法更新数据
-      prevPage.updateStockInfo(stockInfo);
-      wx.navigateBack();
+    if (!exists) {
+      favorites.push(stockInfo);
+      wx.setStorageSync('favorites', favorites);
+      wx.showToast({
+        title: '已添加到自选',
+        icon: 'success'
+      });
     } else {
-      // 如果没有上一页，直接跳转到报价页
-      wx.redirectTo({
-        url: `/pages/quotes/quotes?stock=${encodeURIComponent(JSON.stringify(stockInfo))}`
+      wx.showToast({
+        title: '已在自选列表中',
+        icon: 'none'
       });
     }
+
+    // 延迟返回，让用户看到提示
+    setTimeout(() => {
+      wx.navigateBack();
+    }, 1000);
   },
 
   // 返回上一页

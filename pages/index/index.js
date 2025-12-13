@@ -66,45 +66,38 @@ Page({
     quickActions: [
       { 
         id: 1, 
-        icon: '📊', 
+        icon: '/images/service.png', 
         name: '自选', 
         path: '/pages/quotes/quotes',
-        color: '#4caf50'
+        color: 'transparent'
       },
       { 
         id: 2, 
-        icon: '🧮', 
-        name: '期权计算器', 
-        path: '/pages/calculator/calculator',
-        color: '#2196f3'
+        icon: '/images/quote.png', 
+        name: '个股', 
+        path: '/pages/learning/learning',
+        color: 'transparent'
       },
       { 
         id: 3, 
-        icon: '📈', 
-        name: 'T型报价', 
-        path: '/pages/tquote/tquote',
-        color: '#ff9800'
+        icon: '/images/analysis.png', 
+        name: '指数', 
+        path: '/pages/market/market',
+        color: 'transparent'
       },
       { 
         id: 4, 
-        icon: '📚', 
-        name: '个股', 
-        path: '/pages/learning/learning',
-        color: '#9c27b0'
+        icon: '/images/inquiry.png', 
+        name: 'ETF', 
+        path: '/pages/etf/etf',
+        color: 'transparent'
       },
       { 
         id: 5, 
-        icon: '💼', 
-        name: '策略分析', 
-        path: '/pages/strategy/strategy',
-        color: '#f44336'
-      },
-      { 
-        id: 6, 
-        icon: '🔔', 
-        name: 'ETF', 
-        path: '/pages/alert/alert',
-        color: '#00bcd4'
+        icon: '/images/calculator.png', 
+        name: '计算器', 
+        path: '/pages/calculator/calculator',
+        color: 'transparent'
       }
     ],
 

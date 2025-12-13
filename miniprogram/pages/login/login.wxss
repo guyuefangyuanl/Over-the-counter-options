@@ -21,7 +21,8 @@
 .circle {
   position: absolute;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.05); /* 降低透明度，更柔和 */
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
 }
 
 .circle1 {
@@ -29,6 +30,7 @@
   height: 200rpx;
   top: 10%;
   right: 10%;
+  animation: float 6s ease-in-out infinite;
 }
 
 .circle2 {
@@ -36,6 +38,7 @@
   height: 150rpx;
   bottom: 20%;
   left: 5%;
+  animation: float 8s ease-in-out infinite reverse;
 }
 
 .circle3 {
@@ -43,6 +46,12 @@
   height: 100rpx;
   top: 30%;
   left: 20%;
+  animation: float 7s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-20px); }
 }
 
 /* 顶部Logo区域 */
@@ -79,10 +88,11 @@
 /* 登录方式切换 */
 .login-tabs {
   display: flex;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 50rpx;
   padding: 8rpx;
   margin-bottom: 60rpx;
+  backdrop-filter: blur(10px);
 }
 
 .tab-item {
@@ -90,7 +100,7 @@
   text-align: center;
   padding: 24rpx 0;
   border-radius: 42rpx;
-  transition: all 0.2s ease; /* 加快过渡速度 */
+  transition: all 0.3s ease;
 }
 
 .tab-item text {
@@ -100,8 +110,8 @@
 }
 
 .tab-item.active {
-  background: #ffffff;
-  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.15);
 }
 
 .tab-item.active text {
@@ -116,10 +126,11 @@
 }
 
 .login-panel {
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.95);
   border-radius: 32rpx;
   padding: 60rpx 50rpx;
   box-shadow: 0 16rpx 40rpx rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(20px);
   margin-bottom: 40rpx;
 }
 
@@ -164,12 +175,13 @@
   border-radius: 24rpx;
   padding: 0 30rpx;
   border: 2rpx solid transparent;
-  transition: border-color 0.2s ease;
+  transition: all 0.3s ease;
 }
 
 .input-group:focus-within {
   border-color: #667eea;
   background: #ffffff;
+  box-shadow: 0 0 0 6rpx rgba(102, 126, 234, 0.1);
 }
 
 .input-icon {
@@ -197,10 +209,12 @@
   border-radius: 20rpx;
   border: none;
   font-weight: 500;
+  transition: all 0.3s ease;
 }
 
-.send-code-btn:not(.disabled):active {
+.send-code-btn:not(.disabled):hover {
   background: #5a6fd8;
+  transform: translateY(-1rpx);
 }
 
 .send-code-btn.disabled {
@@ -221,17 +235,19 @@
   align-items: center;
   justify-content: center;
   margin-bottom: 30rpx;
+  transition: all 0.3s ease;
   box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.15);
 }
 
-.login-btn:active {
-  transform: scale(0.98);
+.login-btn:hover {
+  transform: translateY(-2rpx);
+  box-shadow: 0 12rpx 32rpx rgba(0, 0, 0, 0.2);
 }
 
 .login-btn:disabled {
   opacity: 0.6;
   transform: none !important;
-  box-shadow: none !important;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1) !important;
 }
 
 .wechat-btn {
@@ -296,7 +312,6 @@
 .agreement-checkbox {
   margin-right: 16rpx;
   margin-top: 4rpx;
-  transform: scale(0.8); /* 缩小复选框 */
 }
 
 .agreement-text {
@@ -334,7 +349,7 @@
 }
 
 .divider text {
-  background: transparent; /* 背景透明，避免遮挡渐变背景 */
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 0 30rpx;
   font-size: 24rpx;
   color: rgba(255, 255, 255, 0.8);
@@ -354,11 +369,14 @@
   align-items: center;
   padding: 20rpx;
   border-radius: 20rpx;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
 }
 
-.quick-item:active {
-  background: rgba(255, 255, 255, 0.25);
+.quick-item:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-4rpx);
 }
 
 .quick-icon {
@@ -385,11 +403,13 @@
   align-items: center;
   padding: 20rpx;
   border-radius: 16rpx;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
 }
 
-.help-item:active {
-  background: rgba(255, 255, 255, 0.25);
+.help-item:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .help-icon {
@@ -411,7 +431,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5); /* 降低透明度 */
+  background: rgba(0, 0, 0, 0.7);
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -424,7 +444,7 @@
   padding: 60rpx;
   text-align: center;
   min-width: 300rpx;
-  box-shadow: 0 16rpx 40rpx rgba(0, 0, 0, 0.2);
+  box-shadow: 0 16rpx 40rpx rgba(0, 0, 0, 0.3);
 }
 
 /* 旋转动画样式替代 loading.gif */

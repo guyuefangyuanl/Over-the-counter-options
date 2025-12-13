@@ -42,14 +42,14 @@
 
 /* ====== 主内容区 ====== */
 .main-content {
-  padding: 24rpx;
+  padding: 0 24rpx;
   width: 100%;
   box-sizing: border-box;
 }
 
 /* ====== 顶部用户信息 ====== */
 .header-section {
-  display: none;
+  padding: 48rpx 0 32rpx;
 }
 
 .user-info {
@@ -66,7 +66,17 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
-
+.avatar-placeholder {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  border: 4rpx solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48rpx;
+}
 
 .user-detail {
   flex: 1;
@@ -96,31 +106,20 @@
   border: none;
 }
 
-
+.welcome-text {
+  font-size: 24rpx;
+  color: #8593a3;
+}
 
 /* ====== 搜索区域 ====== */
 .search-container {
   margin-bottom: 24rpx;
 }
-.advanced-toggle{margin-top:12rpx;color:#1296db;font-size:26rpx}
+.advanced-toggle{margin-top:12rpx;color:#409EFF;font-size:26rpx}
 .advanced-panel{margin-top:12rpx;background:#fff;border-radius:16rpx;padding:12rpx 16rpx;box-shadow:0 4rpx 12rpx rgba(0,0,0,0.06);display:flex;flex-direction:column;gap:10rpx}
 .advanced-row{display:flex;align-items:center;gap:12rpx}
 .label{color:#666;font-size:26rpx;white-space:nowrap}
 .advanced-input{flex:1;height:64rpx;border:1rpx solid #E5E6EB;border-radius:12rpx;padding:0 12rpx;font-size:26rpx}
-.advanced-input-picker { flex: 1; }
-.picker-inner {
-  height: 64rpx;
-  line-height: 64rpx;
-  border: 1rpx solid #E5E6EB;
-  border-radius: 12rpx;
-  padding: 0 12rpx;
-  font-size: 26rpx;
-  color: #333;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.picker-inner.placeholder { color: #808080; }
 .radio-item{margin-right:16rpx;color:#666}
 
 .search-box {
@@ -145,7 +144,7 @@
 
 .search-btn {
   padding: 8rpx 24rpx;
-  background: #1296db;
+  background: #409EFF;
   color: #ffffff;
   font-size: 26rpx;
   font-weight: 600;
@@ -166,7 +165,6 @@
   height: 360rpx;
   border-radius: 20rpx;
   overflow: hidden;
-  transform: translateY(0);
 }
 
 .banner-item {
@@ -253,7 +251,7 @@
 
 .search-cancel {
   font-size: 28rpx;
-  color: #1296db;
+  color: #667eea;
 }
 
 .searching-state {
@@ -297,8 +295,8 @@
 
 .result-item.is-selected {
   background: #EEF6FF;
-  border-color: #1296db;
-  box-shadow: 0 4rpx 12rpx rgba(18, 150, 219, 0.16);
+  border-color: #409EFF;
+  box-shadow: 0 4rpx 12rpx rgba(64, 158, 255, 0.16);
   transform: scale(1.01);
   animation: select-spring 0.26s cubic-bezier(.22,.61,.36,1) both;
 }
@@ -309,7 +307,7 @@
   top: 50%;
   width: 24rpx;
   height: 24rpx;
-  background: rgba(18,150,219,0.22);
+  background: rgba(64,158,255,0.22);
   border-radius: 50%;
   transform: translate(-50%, -50%) scale(0);
   pointer-events: none;
@@ -446,8 +444,8 @@
 }
 
 .tag-item.hot {
-  background: #f0f8ff; /* 浅蓝背景 */
-  color: #1296db;
+  background: linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%);
+  color: #f44336;
 }
 
 /* ====== 首页内容 ====== */
@@ -478,7 +476,7 @@
 
 .more-btn {
   font-size: 26rpx;
-  color: #1296db;
+  color: #409EFF;
 }
 
 /* ====== 增强卡片样式 ====== */
@@ -496,16 +494,16 @@
 
 /* ====== 快捷功能 ====== */
 .quick-actions-section {
-  margin-bottom: 8rpx;
+  margin-bottom: 24rpx;
 }
 
 .quick-actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24rpx;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12rpx;
   background: #ffffff;
   border-radius: 20rpx;
-  padding: 32rpx 24rpx;
+  padding: 32rpx 12rpx;
   box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.1);
 }
 
@@ -521,25 +519,111 @@
   transform: scale(0.95);
 }
 
-.action-icon {
-  width: 96rpx;
-  height: 96rpx;
-  border-radius: 24rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 48rpx;
-  /* background color set inline */
-  color: #fff; 
+.action-icon-img {
+  width: 80rpx;
+  height: 80rpx;
 }
 
 .action-name {
   font-size: 24rpx;
-  color: #666666;
+  color: #333333;
   text-align: center;
+  font-weight: 500;
 }
 
-/* ====== 市场指数 ====== */
+/* ====== 持仓案例调整 ====== */
+.holding-row {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 4rpx;
+}
+
+.holding-fee, .holding-scale {
+  font-size: 22rpx;
+  color: #999;
+}
+
+/* ====== 热门产品 ====== */
+.option-info-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex: 1;
+}
+
+.market-badge {
+  font-size: 20rpx;
+  padding: 2rpx 6rpx;
+  border-radius: 4rpx;
+  color: #fff;
+}
+
+.market-badge.sh {
+  background: #E91E63; /* Pink/Red for SH */
+}
+
+.market-badge.sz {
+  background: #E91E63; /* Pink/Red for SZ too based on screenshot? Or differ. */
+}
+
+.option-name {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.option-code {
+  font-size: 24rpx;
+  color: #409EFF; /* Blue for code */
+}
+
+.option-structure {
+  font-size: 24rpx;
+  color: #333;
+}
+
+.option-tags {
+  display: flex;
+}
+
+.tag-vanilla {
+  font-size: 22rpx;
+  color: #E6A23C; /* Orange/Gold */
+  background: #FDF6EC;
+  padding: 4rpx 12rpx;
+  border-radius: 4rpx;
+}
+
+/* ====== 知识区域 ====== */
+.knowledge-section-outer {
+  margin-top: 24rpx;
+}
+
+.knowledge-list {
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 0 24rpx;
+}
+
+.knowledge-item {
+  padding: 24rpx 0;
+  border-bottom: 2rpx solid #f5f7fa;
+}
+
+.knowledge-item:last-child {
+  border-bottom: none;
+}
+
+.knowledge-title {
+  font-size: 28rpx;
+  color: #333;
+  margin-bottom: 8rpx;
+}
+
+.knowledge-meta {
+  font-size: 22rpx;
+  color: #999;
+}
 .index-cards {
   display: flex;
   flex-direction: column;
@@ -576,8 +660,8 @@
 }
 
 .holding-tab-item.active {
-  color: #1296db;
-  border-bottom-color: #1296db;
+  color: #409EFF;
+  border-bottom-color: #409EFF;
 }
 
 .holding-list {
@@ -646,19 +730,19 @@
 }
 
 .profit.up {
-  color: #1296db;
+  color: #67C23A;
 }
 
 .profit.down {
-  color: #1296db;
+  color: #F56C6C;
 }
 
 .profit-rate.up {
-  color: #1296db;
+  color: #67C23A;
 }
 
 .profit-rate.down {
-  color: #1296db;
+  color: #F56C6C;
 }
 
 .knowledge-section {
@@ -752,11 +836,13 @@
 }
 
 .index-change.up {
-  color: #1296db;
+  background: #ffebee;
+  color: #f44336;
 }
 
 .index-change.down {
-  color: #1296db;
+  background: #e8f5e9;
+  color: #4caf50;
 }
 
 /* ====== 热门期权 ====== */
@@ -804,13 +890,13 @@
 }
 
 .option-type.call {
-  color: #1296db;
-  border: 1rpx solid #1296db;
+  background: #ffebee;
+  color: #f44336;
 }
 
 .option-type.put {
-  color: #1296db;
-  border: 1rpx solid #1296db;
+  background: #e8f5e9;
+  color: #4caf50;
 }
 
 .option-data {
@@ -844,11 +930,11 @@
 }
 
 .data-value.up {
-  color: #1296db;
+  color: #f44336;
 }
 
 .data-value.down {
-  color: #1296db;
+  color: #4caf50;
 }
 
 /* ====== 响应式适配 ====== */
@@ -909,4 +995,4 @@
 .option-card:nth-child(4) { animation-delay: 0.2s; }
 .option-card:nth-child(5) { animation-delay: 0.25s; }
 .pager{display:flex;justify-content:center;margin-top:12rpx}
-.load-more{padding:12rpx 24rpx;border:1rpx solid #1296db;color:#1296db;border-radius:12rpx}
+.load-more{padding:12rpx 24rpx;border:1rpx solid #409EFF;color:#409EFF;border-radius:12rpx}

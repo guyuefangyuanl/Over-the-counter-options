@@ -2,7 +2,8 @@
   "pages": [
     "pages/index/index",
     "pages/quotes/quotes",
-    "pages/inquiry/inquiry",
+    "pages/quotes/detail/detail",
+    "pages/quotes/inquiry-complete",
     "pages/calculator/calculator",
     "pages/profile/profile",
     "pages/login/login",
@@ -16,6 +17,7 @@
     "pages/data-explanation/data-explanation",
     "pages/position/position",
     "pages/search/search",
+    "pages/search-stock/search-stock",
     "pages/test/test"
   ],
   "window": {
@@ -26,12 +28,10 @@
     "backgroundColor": "#f5f7fa"
   },
   "tabBar": {
-    "custom": true,
     "color": "#999999",
     "selectedColor": "#409EFF",
     "backgroundColor": "#ffffff",
     "borderStyle": "black",
-    "fontSize": 16,
     "list": [
       {
         "pagePath": "pages/index/index",
@@ -40,8 +40,8 @@
         "selectedIconPath": "images/home.png"
       },
       {
-        "pagePath": "pages/inquiry/inquiry",
-        "text": "询价",
+        "pagePath": "pages/quotes/quotes",
+        "text": "报价",
         "iconPath": "images/inquiry.png",
         "selectedIconPath": "images/inquiry.png"
       },
@@ -54,8 +54,8 @@
       {
         "pagePath": "pages/profile/profile",
         "text": "我的",
-        "iconPath": "images/icons/user.png",
-        "selectedIconPath": "images/icons/user.png"
+        "iconPath": "images/profile.png",
+        "selectedIconPath": "images/profile.png"
       }
     ]
   },
@@ -76,11 +76,17 @@
   "preloadRule": {
     "pages/index/index": {
       "network": "all",
-      "packages": []
+      "packages": [
+        "pages/quotes/quotes",
+        "pages/profile/profile",
+        "pages/login/login"
+      ]
     },
     "pages/profile/profile": {
       "network": "all",
-      "packages": []
+      "packages": [
+        "pages/login/login"
+      ]
     }
   }
 }
