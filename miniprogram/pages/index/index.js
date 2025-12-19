@@ -33,37 +33,28 @@ Page({
       duration: 500,
       circular: true
     },
-    bannerList: [
+    swiperImgurls: [
       {
         id: 1,
-        image: '/images/首页/u258.png',
-        title: '期权交易新手指南',
-        desc: '从零开始学习期权交易',
-        link: '/pages/quotes/quotes'
+        url: 'https://foruda.gitee.com/images/1753933592927170033/941a7b09_15547261.png',
+        loaded: false,
+        error: false
       },
       {
         id: 2,
-        image: '/images/首页/u119.png',
-        title: '市场行情实时更新',
-        desc: '把握每一个投资机会',
-        link: '/pages/quotes/quotes'
+        url: 'https://foruda.gitee.com/images/1753933678767460248/b6cdc705_15547261.png',
+        loaded: false,
+        error: false
       },
       {
         id: 3,
-        image: '/images/首页/u120.png',
-        title: '智能计算器',
-        desc: '精准计算期权价值',
-        link: '/pages/calculator/calculator'
-      },
-      {
-        id: 4,
-        image: '/images/首页/u121.png',
-        title: 'ETF期权专区',
-        desc: '探索ETF期权投资策略',
-        link: '/pages/account/account'
+        url: 'https://foruda.gitee.com/images/1753933748782644798/7113f0b4_15547261.png',
+        loaded: false,
+        error: false
       }
     ],
-
+    // bannerList removed as replaced by swiperImgurls
+    
     // 市场指数
     marketIndices: [],
 
@@ -624,8 +615,21 @@ Page({
   // 轮播图点击事件
   onBannerTap(e) {
     const { index } = e.currentTarget.dataset;
-    const banner = this.data.bannerList[index];
-    if (banner.link) this.safeNavigate(banner.link);
+    const item = this.data.swiperImgurls[index];
+    if (item && item.link) this.safeNavigate(item.link);
+  },
+
+  onBannerImageLoad(e) {
+    const { index } = e.currentTarget.dataset;
+    const key = `swiperImgurls[${index}].loaded`;
+    this.setData({ [key]: true });
+  },
+
+  onBannerImageError(e) {
+    const { index } = e.currentTarget.dataset;
+    const key = `swiperImgurls[${index}].error`;
+    this.setData({ [key]: true });
+    console.error(`Banner image ${index} failed to load`);
   },
 
   // 快捷功能点击

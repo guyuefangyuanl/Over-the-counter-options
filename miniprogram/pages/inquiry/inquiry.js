@@ -1,5 +1,6 @@
 // miniprogram/pages/inquiry/inquiry.js
 const FAVORITES_STORAGE_KEY = 'INQUIRY_FAVORITES_V1';
+const CUSTOM_GROUPS_STORAGE_KEY = 'INQUIRY_CUSTOM_GROUPS_V1';
 const api = require('../../utils/api.js');
 
 const logic = require('../../utils/inquiry-logic.js');
@@ -50,10 +51,7 @@ Page({
       { id: 'all', name: '全部' },
       { id: 'holding', name: '我的持仓' },
     ],
-    customGroups: [
-      { id: 'group1', name: '核心资产' },
-      { id: 'group2', name: '科技龙头' },
-    ],
+    customGroups: [], // 从云数据库加载
 
     // 交易商数据
     selectedDealers: ['CICC', 'CITIC'], // 默认选中的交易商
@@ -125,6 +123,7 @@ Page({
   onLoad() {
     this.loadFavorites();
     this.fetchQuoteList(); // 从后端获取数据
+    this.loadCustomGroups(); // 从本地存储加载自定义分组
     this.updateCurrentTime();
     this.computeGroupCounts();
     this.setData({ canEditFavorites: (this.data.groupCountsById.all || 0) > 0 });
@@ -206,6 +205,27 @@ Page({
       wx.setStorageSync(FAVORITES_STORAGE_KEY, this.data.favoritesById);
     } catch (e) {
       console.error('保存收藏失败', e);
+    }
+  },
+
+  // 加载自定义分组
+  loadCustomGroups() {
+    try {
+      const groups = wx.getStorageSync(CUSTOM_GROUPS_STORAGE_KEY);
+      if (groups) {
+        this.setData({ customGroups: groups });
+      }
+    } catch (e) {
+      console.error('加载自定义分组失败', e);
+    }
+  },
+
+  // 保存自定义分组
+  saveCustomGroups() {
+    try {
+      wx.setStorageSync(CUSTOM_GROUPS_STORAGE_KEY, this.data.customGroups);
+    } catch (e) {
+      console.error('保存自定义分组失败', e);
     }
   },
 
@@ -601,6 +621,8 @@ Page({
         newGroupLoading: false
       });
       
+      this.saveCustomGroups(); // 保存到本地存储
+      
       wx.showToast({ title: '新建分组成功', icon: 'none' });
     }, 500);
   },
@@ -667,6 +689,8 @@ Page({
       showRenameGroupDialog: false
     });
     
+    this.saveCustomGroups(); // 保存到本地存储
+
     wx.showToast({ title: '重命名成功', icon: 'none' });
   },
 
@@ -690,8 +714,7 @@ Page({
       editingGroupId: id,
       deleteMigrationCount: migrationCount,
       availableTargetGroups,
-      selectedTargetGroupIndex: availableTargetGroups.length > 0 ? 0 : -1,
-      targetGroupDisplayText: availableTargetGroups.length > 0 ? availableTargetGroups[0].name : ''
+      selectedTargetGroupId: availableTargetGroups.length > 0 ? availableTargetGroups[0].id : null
     });
   },
 
@@ -702,23 +725,21 @@ Page({
 
   // 选择迁移目标分组
   onTargetGroupChange(e) {
-    const index = e.detail.value;
-    const targetGroup = this.data.availableTargetGroups[index];
+    const { value } = e.detail;
     this.setData({
-      selectedTargetGroupIndex: index,
-      targetGroupDisplayText: targetGroup.name
+      selectedTargetGroupId: value
     });
   },
 
   // 确认删除分组
   confirmDeleteGroup() {
-    const { editingGroupId, deleteMigrationCount, availableTargetGroups, selectedTargetGroupIndex, favoritesById } = this.data;
+    const { editingGroupId, deleteMigrationCount, availableTargetGroups, selectedTargetGroupId, favoritesById } = this.data;
     
     let updatedFavorites = { ...favoritesById };
     
     // 如果需要迁移
     if (deleteMigrationCount > 0 && availableTargetGroups.length > 0) {
-      const targetGroupId = availableTargetGroups[selectedTargetGroupIndex].id;
+      const targetGroupId = selectedTargetGroupId;
       Object.keys(updatedFavorites).forEach(id => {
         if ((updatedFavorites[id].groupId || 'all') === editingGroupId) {
           updatedFavorites[id].groupId = targetGroupId;
@@ -743,6 +764,7 @@ Page({
     });
     
     this.saveFavorites();
+    this.saveCustomGroups(); // 保存到本地存储
     this.filterQuoteList();
     this.computeGroupCounts();
     wx.showToast({ title: '删除成功', icon: 'none' });
@@ -863,14 +885,14 @@ Page({
   // 跳转到计算器
   goToCalculator() {
     wx.navigateTo({
-      url: '/pages/calculator/index'
+      url: '/pages/calculator/calculator'
     });
   },
 
   // 跳转到工作台
   goToWorkspace() {
     wx.navigateTo({
-      url: '/pages/workspace/index'
+      url: '/pages/workspace/workspace'
     });
   },
 
@@ -1138,14 +1160,5 @@ Page({
     } else if (type === 'workspace') {
       this.goToWorkspace();
     }
-  },
-
-  // 原有的跳转方法
-  goToCalculator() {
-    wx.navigateTo({ url: '/pages/calculator/calculator' });
-  },
-
-  goToWorkspace() {
-    wx.navigateTo({ url: '/pages/workbench/workbench' });
   }
 });

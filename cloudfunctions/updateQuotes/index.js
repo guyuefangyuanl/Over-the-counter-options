@@ -1,126 +1,178 @@
 // 云函数入口文件
 const cloud = require('wx-server-sdk')
 const http = require('http')
+const iconv = require('iconv-lite')
 
-cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV }) // 使用当前云环境
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
+const _ = db.command
 
-// 简单的股票代码前缀判断
+/* ---------------- 工具函数 ---------------- */
+
+// 股票代码转新浪格式
 function getFullCode(code) {
   code = String(code)
   if (code.startsWith('6')) return 'sh' + code
   if (code.startsWith('0') || code.startsWith('3')) return 'sz' + code
-  return 'sh' + code // 默认兜底
+  return 'sh' + code
 }
 
-// 请求新浪财经接口
+// 简单并发池（避免 Promise.all 写库爆掉）
+async function withConcurrency(items, limit, fn) {
+  let index = 0
+  const workers = Array.from({ length: Math.max(1, limit) }, async () => {
+    while (index < items.length) {
+      const current = index++
+      await fn(items[current], current)
+    }
+  })
+  await Promise.all(workers)
+}
+
+// 请求新浪行情
 function fetchStockData(codes) {
   return new Promise((resolve, reject) => {
-    // 拼接代码，例如: sh600519,sz000001
     const queryCodes = codes.map(getFullCode).join(',')
     const url = `http://hq.sinajs.cn/list=${queryCodes}`
 
-    http.get(url, (res) => {
-      let rawData = ''
-      res.setEncoding('utf8') // 新浪接口通常是GBK，这里可能需要注意乱码问题
-      // 云函数环境通常支持 Buffer，这里为了简单先尝试 utf8，如果不行动再换 hex
-      // 注意：新浪接口返回的是 GBK 编码，Node.js 原生处理 GBK 比较麻烦
-      // 为了稳定性，我们这里只提取数字部分（价格、涨跌幅），名称暂时不更新以避免乱码
-      
-      res.on('data', (chunk) => { rawData += chunk })
+    const req = http.get(url, (res) => {
+      const chunks = []
+      res.on('data', chunk => chunks.push(chunk))
       res.on('end', () => {
+        const buffer = Buffer.concat(chunks)
+        const rawData = iconv.decode(buffer, 'gbk')
         resolve(rawData)
       })
-    }).on('error', (e) => {
-      reject(e)
+    })
+
+    req.on('error', reject)
+    
+    // P0-2: 设置超时，防止请求挂起阻塞云函数
+    req.setTimeout(8000, () => {
+      req.destroy()
+      reject(new Error('Request timeout (8s)'))
     })
   })
 }
 
-// 解析新浪返回的数据
+// 解析新浪返回
 function parseSinaData(rawData) {
-  // 格式: var hq_str_sh600519="贵州茅台,1750.00,..."
   const lines = rawData.split('\n')
   const updates = {}
-  
+
   lines.forEach(line => {
     if (!line.includes('="')) return
-    
-    const parts = line.split('="')
-    const codePart = parts[0] // var hq_str_sh600519
-    const dataPart = parts[1] // 贵州茅台,1750.00,...
-    
-    const code = codePart.split('_').pop().slice(2) // 600519
-    const values = dataPart.split(',')
-    
-    if (values.length > 3) {
-      // 0: name, 1: open, 2: prev_close, 3: current_price
-      const currentPrice = parseFloat(values[3])
-      const prevClose = parseFloat(values[2])
-      
-      let changePercent = 0
-      if (prevClose > 0) {
-        changePercent = ((currentPrice - prevClose) / prevClose) * 100
-      }
 
-      updates[code] = {
-        price: currentPrice,
-        changePercent: parseFloat(changePercent.toFixed(2)),
-        // volume: parseInt(values[8]), // 成交量
-        // amount: parseInt(values[9]), // 成交额
-        updateTime: values[30] + ' ' + values[31] // 日期 + 时间
-      }
+    const parts = line.split('="')
+    const codePart = parts[0]
+    const dataPart = parts[1]
+
+    const code = codePart.split('_').pop().slice(2)
+    const values = dataPart.split(',')
+
+    if (values.length < 4) return
+
+    const currentPrice = parseFloat(values[3])
+    const prevClose = parseFloat(values[2])
+    if (!Number.isFinite(currentPrice) || !Number.isFinite(prevClose)) return
+
+    const changePercent = prevClose > 0
+      ? ((currentPrice - prevClose) / prevClose) * 100
+      : 0
+
+    updates[code] = {
+      price: currentPrice,
+      preClose: prevClose,
+      changePercent: parseFloat(changePercent.toFixed(2))
     }
   })
+
   return updates
 }
 
-// 云函数入口函数
+/* ---------------- 云函数入口 ---------------- */
+
 exports.main = async (event, context) => {
   try {
-    // 1. 获取数据库中所有股票代码
-    // 注意：如果有分页限制，这里只演示获取前 100 个
-    const res = await db.collection('quotes').limit(100).get()
-    const stocks = res.data
-    if (stocks.length === 0) return { msg: 'No stocks found' }
+    const triggerName = event?.TriggerName || ''
+    const updatePreClose =
+      event?.updatePreClose === true || /daily/i.test(triggerName)
 
-    const codes = stocks.map(s => s.code)
-    
-    // 2. 抓取数据
-    console.log('Fetching data for:', codes)
-    const rawData = await fetchStockData(codes)
-    const updates = parseSinaData(rawData)
-    
-    // 3. 批量更新数据库 (云数据库不支持直接批量更新所有记录，需要循环)
-    const tasks = []
-    for (const stock of stocks) {
-      const newData = updates[stock.code]
-      if (newData) {
-        // 更新这一条记录
-        const promise = db.collection('quotes').doc(stock._id).update({
-          data: {
-            price: newData.price,
-            changePercent: newData.changePercent,
-            updateTime: newData.updateTime
+    /* 1️⃣ P0-1: 流式 Pipeline 处理（避免 OOM） */
+    const countRes = await db.collection('quotes').count()
+    const total = countRes.total
+    if (total === 0) return { success: true, msg: 'No stocks found' }
+
+    const PAGE_SIZE = 200
+    const pages = Math.ceil(total / PAGE_SIZE)
+    const now = db.serverDate()
+    let updatedCount = 0
+
+    // 按页处理，处理完即释放内存
+    for (let i = 0; i < pages; i++) {
+      // 1. 读取当前页
+      const res = await db.collection('quotes')
+        .skip(i * PAGE_SIZE)
+        .limit(PAGE_SIZE)
+        .field({ _id: true, code: true })
+        .get()
+      
+      const pageStocks = res.data
+      if (!pageStocks || pageStocks.length === 0) continue
+
+      const codes = pageStocks.map(s => s.code).filter(Boolean)
+      const pageUpdatesMap = {}
+
+      // 2. 分批请求新浪行情（当前页内部分批）
+      const FETCH_BATCH = 50
+      for (let j = 0; j < codes.length; j += FETCH_BATCH) {
+        const batchCodes = codes.slice(j, j + FETCH_BATCH)
+        try {
+          const raw = await fetchStockData(batchCodes)
+          Object.assign(pageUpdatesMap, parseSinaData(raw))
+        } catch (e) {
+          console.error('Fetch batch failed:', batchCodes, e.message)
+        }
+      }
+
+      // 3. 并发写库（仅处理当前页）
+      const writeTasks = pageStocks
+        .map(stock => {
+          const data = pageUpdatesMap[stock.code]
+          if (!data) return null
+
+          const updateData = {
+            price: data.price,
+            changePercent: data.changePercent,
+            updateTime: now
+          }
+          if (updatePreClose) updateData.preClose = data.preClose
+
+          return async () => {
+            await db.collection('quotes').doc(stock._id).update({
+              data: updateData
+            })
           }
         })
-        tasks.push(promise)
+        .filter(Boolean)
+
+      if (writeTasks.length > 0) {
+        await withConcurrency(writeTasks, 10, task => task())
+        updatedCount += writeTasks.length
       }
     }
 
-    await Promise.all(tasks)
-    
     return {
       success: true,
-      updatedCount: tasks.length,
-      msg: 'Updated successfully'
+      updatedCount,
+      updatePreClose
     }
 
   } catch (err) {
     console.error(err)
     return {
       success: false,
-      error: err
+      error: err.message || String(err)
     }
   }
 }

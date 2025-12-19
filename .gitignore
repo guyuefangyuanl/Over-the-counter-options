@@ -99,55 +99,18 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
 
-# Spyder project settings
-.spyderproject
-.spyproject
+# WeChat Miniprogram
+miniprogram/node_modules/
+miniprogram/package-lock.json
+project.private.config.json
 
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# IDEs
+# Editors
 .vscode/
 .idea/
 *.swp
-*.swo
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Log files
-*.log
-
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-
-# Local configuration files
-config.local.py

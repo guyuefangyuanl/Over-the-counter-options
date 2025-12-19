@@ -138,16 +138,13 @@
         <text wx:if="{{deleteMigrationCount > 0}}">该分组下有{{deleteMigrationCount}}个自选，请选择迁移目标：</text>
         <text wx:else>确认删除该分组？</text>
       </view>
-      <picker wx:if="{{deleteMigrationCount > 0 && availableTargetGroups.length > 0}}" 
-              value="{{selectedTargetGroupIndex}}" 
-              range="{{availableTargetGroups}}" 
-              range-key="name"
-              bindchange="onTargetGroupChange">
-        <view class="picker-view">
-          <text>{{targetGroupDisplayText}}</text>
-          <van-icon name="arrow-down" size="14px" />
-        </view>
-      </picker>
+      <dropdown-select wx:if="{{deleteMigrationCount > 0 && availableTargetGroups.length > 0}}" 
+              value="{{selectedTargetGroupId}}" 
+              options="{{availableTargetGroups}}" 
+              label-key="name"
+              value-key="id"
+              placeholder="请选择目标分组"
+              bind:change="onTargetGroupChange" />
       <view class="dialog-actions">
         <van-button size="small" type="default" bind:click="closeDeleteGroupDialog">取消</van-button>
         <van-button size="small" type="danger" bind:click="confirmDeleteGroup">删除</van-button>

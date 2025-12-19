@@ -4,6 +4,7 @@
     "van-icon": "@vant/weapp/icon/index",
     "van-button": "@vant/weapp/button/index",
     "van-field": "@vant/weapp/field/index",
+    "dropdown-select": "../../components/dropdown-select/dropdown-select",
     "market-bar": "../../components/market-bar/market-bar",
     "primary-tabs": "../../components/primary-tabs/primary-tabs",
     "filter-bar": "../../components/filter-bar/filter-bar",

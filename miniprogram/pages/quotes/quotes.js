@@ -50,6 +50,7 @@ Page({
       { code: 'GJZQ', name: '国金证券', isActive: false }
     ],
     selectedTrader: '全部交易商',
+    selectedTraderCode: 'ALL',
     
     // 期权报价数据
     optionQuotes: [],
@@ -313,12 +314,6 @@ Page({
     });
   },
 
-  // 跳转到添加自选（简单实现，跳转到搜索页）
-  goToSearchStock: function() {
-    // 复用现有的搜索逻辑，或者跳转到专门的搜索页
-    this.setData({ showSearch: true });
-  },
-
   // ==================== 自选编辑逻辑结束 ====================
 
   // 初始化期权报价系统
@@ -525,7 +520,32 @@ Page({
     });
   },
   
-  // 切换交易商
+  // 切换交易商 (组件回调)
+  onTraderChangeFromComponent: function(e) {
+    const { value, label } = e.detail;
+    
+    // 更新选中状态
+    const traders = this.data.traders.map(trader => ({
+      ...trader,
+      isActive: trader.code === value
+    }));
+    
+    this.setData({
+      traders: traders,
+      selectedTrader: label,
+      selectedTraderCode: value
+    });
+    
+    this.filterQuotesByTrader(value);
+    
+    wx.showToast({
+      title: `已筛选${label}`,
+      icon: 'success',
+      duration: 1500
+    });
+  },
+
+  // 切换交易商 (旧)
   onTraderChange: function(e) {
     const selectedTrader = e.currentTarget.dataset.trader;
     const traders = this.data.traders.map(trader => ({
@@ -582,9 +602,7 @@ Page({
   
   // 搜索股票
   onSearchStock: function() {
-    this.setData({
-      showSearch: true
-    });
+    this.goToSearchStock();
   },
   
   // 搜索输入
@@ -1263,8 +1281,17 @@ Page({
 
   // 跳转到搜索股票页面（添加自选）
   goToSearchStock: function() {
+    const url = '/pages/search-stock/search-stock';
     wx.navigateTo({
-      url: '/pages/search-stock/search-stock'
+      url,
+      fail: () => {
+        wx.redirectTo({
+          url,
+          fail: () => {
+            wx.showToast({ title: '打开搜索页失败', icon: 'none' });
+          }
+        });
+      }
     });
   },
 

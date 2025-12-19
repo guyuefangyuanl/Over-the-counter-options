@@ -1,4 +1,7 @@
 {
+  "usingComponents": {
+    "dropdown-select": "../../components/dropdown-select/dropdown-select"
+  },
   "navigationStyle": "custom",
   "navigationBarTitleText": "期权报价",
   "enablePullDownRefresh": true,

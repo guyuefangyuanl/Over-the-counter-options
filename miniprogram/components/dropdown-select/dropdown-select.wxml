@@ -1,0 +1,24 @@
+<view class="dropdown-container">
+  <view class="dropdown-trigger" bindtap="toggleDropdown">
+    <text class="selected-text {{!selectedLabel ? 'placeholder' : ''}}">{{selectedLabel || placeholder}}</text>
+    <van-icon name="arrow-down" class="arrow-icon {{isOpen ? 'is-open' : ''}}" />
+  </view>
+  
+  <view class="dropdown-mask" wx:if="{{isOpen}}" bindtap="closeDropdown" catchtouchmove="preventScroll"></view>
+
+  <view class="dropdown-list-wrapper" wx:if="{{isOpen}}">
+    <scroll-view scroll-y class="dropdown-list">
+      <view 
+        class="dropdown-item {{selectedValue === item[valueKey] ? 'is-selected' : ''}}" 
+        wx:for="{{options}}" 
+        wx:key="index"
+        data-value="{{item[valueKey]}}"
+        data-label="{{item[labelKey]}}"
+        catchtap="onSelect"
+      >
+        <text>{{item[labelKey]}}</text>
+        <van-icon name="success" wx:if="{{selectedValue === item[valueKey]}}" />
+      </view>
+    </scroll-view>
+  </view>
+</view>

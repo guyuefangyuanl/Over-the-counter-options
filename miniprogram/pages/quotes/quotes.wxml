@@ -55,9 +55,14 @@
         <view class="term-item {{selectedTerm === '3M' ? 'active' : ''}}" bindtap="onTermChange" data-term="3M">3M</view>
         <view class="term-item {{selectedTerm === '6M' ? 'active' : ''}}" bindtap="onTermChange" data-term="6M">6M</view>
       </view>
-      <view class="trader-selector" bindtap="toggleTraderPicker">
-        <text>报价商</text>
-        <text class="arrow-down">⌄</text>
+      <view class="trader-selector-wrapper">
+        <dropdown-select 
+          options="{{traders}}" 
+          value="{{selectedTraderCode}}" 
+          label-key="name" 
+          value-key="code"
+          placeholder="报价商"
+          bind:change="onTraderChangeFromComponent" />
       </view>
     </view>
 

@@ -36,7 +36,8 @@
           data-path="{{item.path}}"
           bindtap="onQuickActionTap"
         >
-          <image class="action-icon-img" src="{{item.icon}}" mode="aspectFit" />
+          <view wx:if="{{item.id == 1}}" class="action-icon-svg action-icon-fav-selected"></view>
+          <image wx:else class="action-icon-img" src="{{item.icon}}" mode="aspectFit" />
           <text class="action-name">{{item.name}}</text>
         </view>
       </view>
@@ -55,23 +56,26 @@
         indicator-active-color="#4caf50"
       >
         <swiper-item 
-          wx:for="{{bannerList}}" 
+          wx:for="{{swiperImgurls}}" 
           wx:key="id"
           data-index="{{index}}"
           bindtap="onBannerTap"
         >
           <view class="banner-item">
-            <image 
-              class="banner-image" 
-              src="{{item.image}}" 
-              mode="aspectFill"
-            />
-            <view class="banner-overlay">
-              <view class="banner-content">
-                <text class="banner-title">{{item.title}}</text>
-                <text class="banner-desc">{{item.desc}}</text>
-              </view>
+            <view class="banner-placeholder" wx:if="{{!item.loaded && !item.error}}">
+              <view class="loading-spinner small" style="border-color: #ddd; border-top-color: #409EFF;"></view>
             </view>
+            <view class="banner-error" wx:if="{{item.error}}">
+              <text>加载失败</text>
+            </view>
+            <image 
+              class="banner-image {{item.loaded ? 'loaded' : ''}}" 
+              src="{{item.url}}" 
+              mode="aspectFill"
+              bindload="onBannerImageLoad"
+              binderror="onBannerImageError"
+              data-index="{{index}}"
+            />
           </view>
         </swiper-item>
       </swiper>
@@ -119,7 +123,10 @@
       <!-- 持仓案例卡片 -->
       <view class="section holding-section">
         <view class="section-header">
-          <text class="section-title">持仓案例</text>
+          <view class="section-title-wrapper" style="display:flex;align-items:center;gap:8rpx;">
+            <view class="section-title-icon case-icon"></view>
+            <text class="section-title">持仓案例</text>
+          </view>
           <text class="more-btn">></text>
         </view>
 
@@ -175,8 +182,7 @@
       <view class="section">
         <view class="section-header">
           <view class="section-title-wrapper" style="display:flex;align-items:center;gap:8rpx;">
-             <!-- 使用 news.png 作为临时火苗图标，直到用户提供正确的 -->
-             <image src="/images/news.png" style="width:32rpx;height:32rpx;" mode="aspectFit" />
+             <view class="section-title-icon hot-icon"></view>
              <text class="section-title">热门产品</text>
           </view>
           <text class="more-btn" data-type="options" bindtap="onViewMore">
@@ -210,8 +216,7 @@
       <view class="section knowledge-section-outer">
          <view class="section-header">
             <view class="section-title-wrapper" style="display:flex;align-items:center;gap:8rpx;">
-               <!-- 使用 help.png 作为临时学士帽图标 -->
-               <image src="/images/help.png" style="width:32rpx;height:32rpx;" mode="aspectFit" />
+               <view class="section-title-icon knowledge-icon"></view>
                <text class="section-title">知识</text>
             </view>
             <text class="more-btn">></text>
