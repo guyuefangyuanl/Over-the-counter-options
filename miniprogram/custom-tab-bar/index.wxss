@@ -3,12 +3,11 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 60px; /* 增加高度 */
+  height: 54px;
   background: white;
   display: flex;
   padding-bottom: env(safe-area-inset-bottom);
-  box-shadow: 0 -1px 6px rgba(0, 0, 0, 0.06);
-  z-index: 9999;
+  box-shadow: 0 -1px 6px rgba(0, 0, 0, 0.05);
 }
 
 .tab-bar-border {
@@ -30,14 +29,24 @@
   flex-direction: column;
 }
 
-.tab-bar-text {
-  font-size: 18px; /* 放大字体 */
-  font-weight: 600; /* 加粗 */
-  line-height: 1;
-  transition: all 0.2s ease;
+.tab-bar-icon {
+  width: 24px;
+  height: 24px;
+  /* Smooth transition for color change */
+  transition: background-color 0.3s ease-in-out;
+  /* Mask properties for SVG coloring */
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 }
 
-/* 选中态添加一点动效 */
-.tab-bar-text.selected {
-  transform: scale(1.05);
+.tab-bar-text {
+  font-size: 10px;
+  /* 8-12px vertical spacing */
+  margin-top: 8px;
+  /* Smooth transition for text color */
+  transition: color 0.3s ease-in-out;
 }

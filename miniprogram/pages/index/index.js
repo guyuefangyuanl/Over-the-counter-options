@@ -72,28 +72,28 @@ Page({
       },
       { 
         id: 2, 
-        icon: '/images/quote.png', 
+        icon: '/images/个股.svg', 
         name: '个股', 
         path: '/pages/quotes/quotes',
         color: 'transparent'
       },
       { 
         id: 3, 
-        icon: '/images/analysis.png', 
+        icon: '/images/指数.svg', 
         name: '指数', 
         path: '/pages/quotes/quotes',
         color: 'transparent'
       },
       { 
         id: 4, 
-        icon: '/images/news.png', 
+        icon: '/images/ETF基金.svg', 
         name: 'ETF', 
         path: '/pages/quotes/quotes',
         color: 'transparent'
       },
       { 
         id: 5, 
-        icon: '/images/calculator.png', 
+        icon: '/images/计算器.svg', 
         name: '计算器', 
         path: '/pages/calculator/calculator',
         color: 'transparent'
@@ -239,6 +239,11 @@ Page({
   },
 
   onShow() {
+    if (typeof this.getTabBar === 'function' && this.getTabBar()) {
+      this.getTabBar().setData({
+        selected: 0
+      })
+    }
     if (this.data.hasUserInfo) {
       this.refreshData();
     }

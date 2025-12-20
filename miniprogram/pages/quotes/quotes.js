@@ -167,6 +167,11 @@ Page({
   },
 
   onShow: function () {
+    if (typeof this.getTabBar === 'function' && this.getTabBar()) {
+      this.getTabBar().setData({
+        selected: 1
+      })
+    }
     // 页面显示时刷新数据
     if (this.pricingSystem) {
       this.refreshPricing();

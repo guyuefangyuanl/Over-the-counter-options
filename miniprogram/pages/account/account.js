@@ -18,6 +18,14 @@ Page({
     this.loadPageData()
   },
 
+  onShow() {
+    if (typeof this.getTabBar === 'function' && this.getTabBar()) {
+      this.getTabBar().setData({
+        selected: 2
+      })
+    }
+  },
+
   onPullDownRefresh() {
     this.loadPageData().finally(() => wx.stopPullDownRefresh())
   },
