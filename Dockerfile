@@ -12,18 +12,20 @@ ENV FLASK_ENV production
 
 # 安装额外的系统依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     libxml2-dev \
     libxslt1-dev \
     zlib1g-dev \
+    libgcc-s1 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# 升级 pip
-RUN pip install --no-cache-dir --upgrade pip
+# 升级 pip 并配置国内镜像源
+RUN pip install --no-cache-dir --upgrade pip -i https://mirrors.aliyun.com/pypi/simple/
 
 # 复制依赖文件并安装
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --default-timeout=1000 -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 
 # 复制项目文件
 COPY . .
