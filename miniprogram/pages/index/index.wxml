@@ -1,4 +1,4 @@
-<view class="container" style="position: relative; left: 0rpx; top: -181rpx">
+<view class="container">
   <!-- 加载状态 -->
   <view class="loading-container" wx:if="{{loading}}">
     <view class="loading-spinner"></view>
@@ -34,14 +34,13 @@
           wx:for="{{quickActions}}" 
           wx:key="id"
           data-path="{{item.path}}"
-          bindtap="onQuickActionTap"
-         style="position: relative; left: -12rpx; top: 3rpx">
-          <view wx:if="{{item.id == 1}}" class="action-icon-svg action-icon-fav-selected" style="position: relative; left: -3rpx; top: 1rpx"></view>
+          bindtap="onQuickActionTap">
+          <view wx:if="{{item.id == 1}}" class="action-icon-svg action-icon-fav-selected"></view>
           <image wx:elif="{{item.id == 3}}" class="action-icon-img action-icon-index" src="{{item.icon}}" mode="aspectFit" />
           <image wx:elif="{{item.id == 4}}" class="action-icon-img action-icon-etf" src="{{item.icon}}" mode="aspectFit" />
           <image wx:elif="{{item.id == 5}}" class="action-icon-img action-icon-calculator" src="{{item.icon}}" mode="aspectFit" />
           <image wx:else class="action-icon-img" src="{{item.icon}}" mode="aspectFit" />
-          <text class="action-name" style="position: relative; left: 0rpx; top: 1rpx; height: 42rpx; display: block; box-sizing: border-box">{{item.name}}</text>
+          <text class="action-name">{{item.name}}</text>
         </view>
       </view>
     </view>
@@ -126,7 +125,7 @@
       <!-- 持仓案例卡片 -->
       <view class="section holding-section">
         <view class="section-header">
-          <view class="section-title-wrapper" style="display:flex;align-items:center;gap:8rpx;">
+          <view class="section-title-wrapper">
             <view class="section-title-icon case-icon"></view>
             <text class="section-title">持仓案例</text>
           </view>
@@ -184,7 +183,7 @@
       <!-- 热门产品 -->
       <view class="section">
         <view class="section-header">
-          <view class="section-title-wrapper" style="display:flex;align-items:center;gap:8rpx;">
+          <view class="section-title-wrapper">
              <view class="section-title-icon hot-icon"></view>
              <text class="section-title">热门产品</text>
           </view>
@@ -218,7 +217,7 @@
       <!-- 知识 -->
       <view class="section knowledge-section-outer">
          <view class="section-header">
-            <view class="section-title-wrapper" style="display:flex;align-items:center;gap:8rpx;">
+            <view class="section-title-wrapper">
                <view class="section-title-icon knowledge-icon"></view>
                <text class="section-title">知识</text>
             </view>
