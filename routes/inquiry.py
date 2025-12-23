@@ -1,10 +1,13 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 import datetime
+import logging
+from models.inquiry import InquiryModel
+from utils.response import flask_success_response, flask_error_response
 
+logger = logging.getLogger(__name__)
 inquiry_bp = Blueprint('inquiry', __name__)
 
-# 模拟数据库 - 报价列表
-# 真实场景中，这应该从数据库读取，或者通过 akshare 实时获取
+# 模拟数据库 - 报价列表 (保留以向后兼容小程序端)
 MOCK_QUOTES = [
     { "id": 1, "group": "group1", "type": "stock", "name": "贵州茅台", "code": "600519", "changePercent": 1.23, "term": "1M", "structure": "vanilla", "dealers": ["CICC", "CITIC"], "rates": { "100": 10.50, "105": 8.30, "110": 6.50 } },
     { "id": 2, "group": "group1", "type": "stock", "name": "宁德时代", "code": "300750", "changePercent": -2.45, "term": "1M", "structure": "vanilla", "dealers": ["CICC", "GJS"], "rates": { "100": 12.80, "105": 10.20, "110": 8.90 } },
@@ -13,13 +16,9 @@ MOCK_QUOTES = [
     { "id": 5, "group": "all", "type": "index", "name": "沪深300指数", "code": "000300", "changePercent": -0.55, "term": "1M", "structure": "vanilla", "dealers": ["GJS"], "rates": { "100": 5.50, "105": 4.30, "110": 3.50 } },
 ]
 
-# 模拟数据库 - 询价记录表
-MOCK_INQUIRIES = []
-
 @inquiry_bp.route('/quotes', methods=['GET'])
 def get_quotes():
     """获取报价列表"""
-    # 这里可以添加筛选逻辑，比如 request.args.get('type')
     return jsonify({
         "success": True,
         "message": "获取成功",
@@ -29,30 +28,71 @@ def get_quotes():
 @inquiry_bp.route('/inquiry', methods=['POST'])
 def create_inquiry():
     """提交询价"""
-    data = request.json
-    
-    # 简单的后端校验
-    if not data.get('selectedProduct'):
-        return jsonify({"success": False, "message": "未选择产品"}), 400
-    
-    # 构造存储对象
-    new_inquiry = {
-        "id": len(MOCK_INQUIRIES) + 1,
-        "product": data.get('selectedProduct'),
-        "quantity": data.get('quantity'),
-        "contactName": data.get('contactName'),
-        "phone": data.get('contactPhone'),
-        "status": "pending", # 待处理
-        "createdAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
-    
-    # 存入"数据库"
-    MOCK_INQUIRIES.append(new_inquiry)
-    
-    print(f"收到新询价: {new_inquiry}") # 打印日志方便调试
-    
-    return jsonify({
-        "success": True,
-        "message": "询价提交成功",
-        "data": new_inquiry
-    })
+    try:
+        data = request.json
+        if not data.get('selectedProduct'):
+            return flask_error_response("未选择产品", 400)
+        
+        db = getattr(current_app, 'db', None)
+        if not db:
+            return flask_error_response("数据库未连接", 500)
+            
+        inquiry_model = InquiryModel(db)
+        inquiry_id = inquiry_model.create_inquiry(data)
+        
+        if inquiry_id:
+            return flask_success_response(data={"id": inquiry_id}, message="询价提交成功")
+        else:
+            return flask_error_response("提交失败", 500)
+    except Exception as e:
+        logger.error(f"提交询价失败: {e}")
+        return flask_error_response(str(e), 500)
+
+@inquiry_bp.route('/admin/inquiries', methods=['GET'])
+def admin_get_inquiries():
+    """管理后台：获取询价列表"""
+    try:
+        db = getattr(current_app, 'db', None)
+        if not db:
+            return flask_error_response("数据库未连接", 500)
+            
+        inquiry_model = InquiryModel(db)
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('pageSize', 20))
+        status = request.args.get('status')
+        
+        inquiries = inquiry_model.get_inquiries(
+            limit=page_size, 
+            skip=(page - 1) * page_size,
+            status=status
+        )
+        return flask_success_response(data=inquiries)
+    except Exception as e:
+        logger.error(f"获取询价列表失败: {e}")
+        return flask_error_response(str(e), 500)
+
+@inquiry_bp.route('/admin/inquiries/<id>/status', methods=['PUT'])
+def admin_update_inquiry_status(id):
+    """管理后台：更新询价状态"""
+    try:
+        data = request.json
+        status = data.get('status')
+        remark = data.get('remark')
+        
+        if not status:
+            return flask_error_response("状态不能为空", 400)
+            
+        db = getattr(current_app, 'db', None)
+        if not db:
+            return flask_error_response("数据库未连接", 500)
+            
+        inquiry_model = InquiryModel(db)
+        success = inquiry_model.update_status(id, status, remark)
+        
+        if success:
+            return flask_success_response(message="状态更新成功")
+        else:
+            return flask_error_response("状态更新失败", 500)
+    except Exception as e:
+        logger.error(f"更新询价状态失败: {e}")
+        return flask_error_response(str(e), 500)

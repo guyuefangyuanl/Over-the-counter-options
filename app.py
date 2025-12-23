@@ -26,18 +26,24 @@ MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/option_data')
 DATABASE_NAME = os.getenv('DATABASE_NAME', 'option_trading')
 
 # 初始化MongoDB数据库连接
-try:
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-    # 尝试连接数据库以验证连接
-    client.admin.command('ping')
-    db = client[DATABASE_NAME]
-    logger.info("✅ MongoDB数据库连接成功")
-except (ConnectionFailure, ServerSelectionTimeoutError) as e:
-    logger.error(f"❌ MongoDB数据库连接失败: {e}")
-    db = None
-except Exception as e:
-    logger.error(f"❌ MongoDB数据库连接发生未知错误: {e}")
-    db = None
+def init_db():
+    mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/option_data')
+    db_name = os.getenv('DATABASE_NAME', 'option_trading')
+    
+    logger.info(f"正在尝试连接 MongoDB: {mongo_uri.split('@')[-1]}") # 隐藏敏感信息
+    try:
+        # 设置较短的连接超时，避免阻塞启动
+        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=3000, connectTimeoutMS=3000)
+        # 验证连接
+        client.admin.command('ping')
+        logger.info("✅ MongoDB数据库连接成功")
+        return client[db_name]
+    except Exception as e:
+        logger.error(f"❌ MongoDB数据库连接失败: {e}")
+        logger.warning("⚠️ 服务将以无数据库模式运行，部分功能将受限")
+        return None
+
+db = init_db()
 
 # 导入路由蓝图和工具
 from utils.response import flask_success_response, flask_error_response
@@ -69,9 +75,11 @@ api_v1 = Blueprint('api_v1', __name__, url_prefix='/api/v1')
 @api_v1.route('/health', methods=['GET'])
 def health_check_v1():
     """健康检查 - V1"""
+    db_status = "connected" if app.db is not None else "disconnected"
     return flask_success_response(
         data={
             "status": "healthy",
+            "db": db_status,
             "version": "v1",
             "service": "期权数据服务",
             "environment": NODE_ENV
@@ -85,15 +93,36 @@ app.register_blueprint(inquiry_bp, url_prefix='/api/v1')
 app.register_blueprint(stock_bp, url_prefix='/api/v1/stock')
 app.register_blueprint(admin_bp, url_prefix='/api/v1/admin')
 
+# ==================== 静态文件和管理后台 ====================
+
+@app.route('/admin/')
+@app.route('/admin/<path:path>')
+def serve_admin(path='index.html'):
+    """提供 React 管理后台静态文件"""
+    if not path or path == '':
+        path = 'index.html'
+    
+    # 尝试从 dist 目录提供文件
+    dist_dir = os.path.join(app.root_path, 'admin-ui/dist')
+    
+    # 如果请求的是 assets 或其他静态资源
+    target_file = os.path.join(dist_dir, path)
+    if os.path.exists(target_file) and os.path.isfile(target_file):
+        return send_from_directory(dist_dir, path)
+    
+    # 否则返回 index.html (SPA 路由支持)
+    return send_from_directory(dist_dir, 'index.html')
+
 # ==================== 根路径和向后兼容 ====================
-@app.route('/admin')
-def admin_page():
-    """管理后台入口"""
+
+@app.route('/old-admin')
+def old_admin_page():
+    """旧版管理后台入口"""
     return send_from_directory('admin-web', 'index.html')
 
-@app.route('/admin/<path:path>')
-def send_admin_assets(path):
-    """发送管理后台静态资源"""
+@app.route('/old-admin/<path:path>')
+def send_old_admin_assets(path):
+    """发送旧版管理后台静态资源"""
     return send_from_directory('admin-web', path)
 
 @app.route('/')
