@@ -1,0 +1,24 @@
+.git
+.gitignore
+.dockerignore
+*.rar
+*.zip
+*.7z
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv
+env/
+venv/
+node_modules/
+admin-web/node_modules/
+*.log
+docs/
+tests/
+mock_db.json
+quotes_data.json
+test_quotes.xlsx
+SZ股票行情.xlsx
+SH GPLIST.xls

@@ -1,5 +1,5 @@
-# 使用官方 Python 基础镜像
-FROM python:3.9-slim
+# 使用官方 Python 基础镜像 (全量版更稳定)
+FROM python:3.9
 
 # 设置工作目录
 WORKDIR /app
@@ -10,12 +10,16 @@ ENV PYTHONUNBUFFERED 1
 ENV FLASK_APP app.py
 ENV FLASK_ENV production
 
-# 安装系统依赖
+# 安装额外的系统依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    python3-dev \
+    libxml2-dev \
+    libxslt1-dev \
+    zlib1g-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# 升级 pip
+RUN pip install --no-cache-dir --upgrade pip
 
 # 复制依赖文件并安装
 COPY requirements.txt .
