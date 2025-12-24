@@ -113,35 +113,27 @@ def serve_admin(path='index.html'):
     # 否则返回 index.html (SPA 路由支持)
     return send_from_directory(dist_dir, 'index.html')
 
-# ==================== 根路径和向后兼容 ====================
-
-@app.route('/old-admin')
-def old_admin_page():
-    """旧版管理后台入口"""
-    return send_from_directory('admin-web', 'index.html')
-
-@app.route('/old-admin/<path:path>')
-def send_old_admin_assets(path):
-    """发送旧版管理后台静态资源"""
-    return send_from_directory('admin-web', path)
+# ==================== 根路径和管理后台原型 ====================
 
 @app.route('/')
 def index():
-    """根路径"""
-    return flask_success_response(
-        data={
-            "name": "Option Trading Backend (Flask)",
-            "version": "1.0.0",
-            "environment": NODE_ENV,
-            "apiVersion": "v1",
-            "endpoints": {
-                "health": "/api/v1/health",
-                "admin_upload": "/api/v1/admin/upload-quotes",
-                "stock_realtime": "/api/v1/stock/realtime"
-            }
-        },
-        message="服务运行正常"
-    )
+    """根路径 - 默认显示管理后台原型 (admin-web)"""
+    return send_from_directory('admin-web', 'index.html')
+
+@app.route('/<path:path>')
+def serve_static_assets(path):
+    """支持根路径下的静态文件访问 (用于支持 admin-web 原型资源)"""
+    # 排除 API 和 React admin 路径，避免干扰
+    if path.startswith('api/') or path.startswith('admin/'):
+        # 这里不需要返回 404，因为 Flask 会继续匹配其他路由或蓝图
+        return flask_error_response("资源不存在", code=404)
+    
+    # 检查 admin-web 目录下是否存在该文件
+    full_path = os.path.join(app.root_path, 'admin-web', path)
+    if os.path.exists(full_path) and os.path.isfile(full_path):
+        return send_from_directory('admin-web', path)
+    
+    return flask_error_response("资源不存在", code=404)
 
 # ==================== 错误处理 ====================
 @app.errorhandler(404)
