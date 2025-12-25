@@ -3,10 +3,11 @@ from flask import Blueprint, request, current_app
 import pandas as pd
 import io
 import logging
-from utils.response import flask_success_response, flask_error_response
+from utils.response import flask_success_response, flask_error_response, flask_paginated_response
 from models.stock import StockModel
 from models.inquiry import InquiryModel
 from models.order import OrderModel
+from routes.auth import require_auth
 
 logger = logging.getLogger(__name__)
 admin_bp = Blueprint('admin', __name__)
@@ -33,6 +34,7 @@ def _parse_pagination():
 
 
 @admin_bp.route('/stats', methods=['GET'])
+@require_auth
 def get_stats():
     """管理后台：获取统计数据"""
     try:
@@ -70,6 +72,7 @@ def get_stats():
         return flask_error_response(str(e), 500)
 
 @admin_bp.route('/orders', methods=['GET'])
+@require_auth
 def get_orders():
     """管理后台：获取订单列表"""
     try:
@@ -86,12 +89,19 @@ def get_orders():
         page_size = pagination["page_size"]
 
         orders = order_model.get_orders(limit=page_size, skip=(page - 1) * page_size)
-        return flask_success_response(data=orders)
+        total = order_model.collection.count_documents({})
+        return flask_paginated_response(
+            data=orders,
+            page=page,
+            per_page=page_size,
+            total=total,
+        )
     except Exception as e:
         logger.error(f"获取订单列表失败: {e}")
         return flask_error_response(str(e), 500)
 
 @admin_bp.route('/quotes', methods=['GET'])
+@require_auth
 def get_quotes():
     """管理后台：获取报价列表"""
     try:
@@ -106,12 +116,19 @@ def get_quotes():
         page_size = pagination["page_size"]
 
         stocks = stock_model.get_all_stocks(limit=page_size, skip=(page - 1) * page_size)
-        return flask_success_response(data=stocks)
+        total = stock_model.count_stocks()
+        return flask_paginated_response(
+            data=stocks,
+            page=page,
+            per_page=page_size,
+            total=total,
+        )
     except Exception as e:
         logger.error(f"获取报价列表失败: {e}")
         return flask_error_response(f"获取失败: {str(e)}", 500)
 
 @admin_bp.route('/upload-quotes', methods=['POST'])
+@require_auth
 def upload_quotes():
     """管理后台：上传 Excel/CSV 更新报价数据"""
     if 'file' not in request.files:
@@ -226,6 +243,7 @@ def upload_quotes():
         return flask_error_response(f"解析失败: {str(e)}", 500)
 
 @admin_bp.route('/crawl-quotes', methods=['POST'])
+@require_auth
 def crawl_quotes():
     """管理后台：触发爬虫抓取最新行情"""
     try:

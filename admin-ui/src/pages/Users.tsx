@@ -7,7 +7,7 @@ const Users: React.FC = () => {
   return (
     <Card>
       <Title level={4}>用户管理</Title>
-      <Empty description="功能开发中..." />
+      <Empty description="Coming Soon" />
     </Card>
   );
 };

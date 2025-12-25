@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, repoRoot, '')
 
   const nodeEnv = env.NODE_ENV || 'development'
-  const rawFlaskPort = env.PORT || env.FLASK_PORT || '5000'
+  const rawFlaskPort = env.FLASK_PORT || '5000'
   const parsedPort = Number.parseInt(rawFlaskPort, 10)
   const flaskPort =
     nodeEnv === 'development' && Number.isFinite(parsedPort) && parsedPort > 0 && parsedPort < 1024
@@ -62,6 +62,9 @@ export default defineConfig(({ mode }) => {
     base: '/admin/',
     resolve: {
       dedupe: ['react', 'react-dom'],
+    },
+    test: {
+      environment: 'jsdom',
     },
     server: {
       proxy: {

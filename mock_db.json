@@ -12,22 +12,32 @@
     {
       "stock_code": "600519",
       "name": "贵州茅台",
-      "price": 1850.0,
-      "changePercent": -0.5,
-      "updateSource": "admin_system",
-      "updated_at": "2025-12-23 11:21:57.595203",
-      "created_at": "2025-12-23 11:21:57.595203"
+      "price": 1414.17,
+      "changePercent": 0.9472,
+      "updateSource": "crawler_sina",
+      "updated_at": "2025-12-25T14:41:15+00:00",
+      "created_at": "2025-12-23 11:21:57.595203",
+      "open": 1405,
+      "high": 1419.48,
+      "low": 1401.38,
+      "pre_close": 1400.9,
+      "volume": 2338621,
+      "amount": 3299572096
     },
     {
       "stock_code": "000001",
-      "name": "PAB",
-      "price": 12.3,
-      "changePercent": 1.1,
-      "updateSource": "file_upload",
-      "updated_at": "2025-12-25T05:38:32.833694",
+      "name": "平安银行",
+      "price": 11.56,
+      "changePercent": 0.1733,
+      "updateSource": "crawler_sina",
+      "updated_at": "2025-12-25T14:41:15+00:00",
       "created_at": "2025-12-23 11:21:57.593668",
-      "volume": 100.0,
-      "amount": 1000.0
+      "volume": 54745523,
+      "amount": 633772624.98,
+      "open": 11.54,
+      "high": 11.62,
+      "low": 11.52,
+      "pre_close": 11.54
     }
   ]
 }

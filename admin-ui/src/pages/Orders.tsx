@@ -3,6 +3,7 @@ import { App, Table, Button, Card, Typography, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import api, { getApiErrorMessage, type ApiResponse } from '../utils/api';
 import type { ColumnsType } from 'antd/es/table';
+import PageState from '../components/PageState';
 
 const { Title } = Typography;
 
@@ -17,20 +18,42 @@ interface Order {
   createdAt: string;
 }
 
+type PaginatedPayload<T> = {
+  items: T[];
+  pagination: {
+    page: number;
+    per_page: number;
+    total: number;
+    pages: number;
+  };
+};
+
 const Orders: React.FC = () => {
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Order[]>([]);
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchOrders = useCallback(async () => {
+  const fetchOrders = useCallback(async (page = 1, pageSize = 10) => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await api.get<ApiResponse<Order[]>>('/admin/orders');
-      if (res.success && Array.isArray(res.data)) {
-        setData(res.data);
+      const res = await api.get<ApiResponse<PaginatedPayload<Order>>>('/admin/orders', {
+        params: { page, pageSize },
+      });
+      if (res.success && res.data?.pagination && Array.isArray(res.data.items)) {
+        setData(res.data.items);
+        setPagination({
+          current: res.data.pagination.page,
+          pageSize: res.data.pagination.per_page,
+          total: res.data.pagination.total,
+        });
       }
     } catch (err) {
-      message.error(getApiErrorMessage(err, '获取订单列表失败'));
+      const msg = getApiErrorMessage(err, '获取订单列表失败');
+      setError(msg);
+      message.error(msg);
     } finally {
       setLoading(false);
     }
@@ -80,16 +103,34 @@ const Orders: React.FC = () => {
     <Card>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <Title level={4}>订单管理</Title>
-        <Button icon={<ReloadOutlined />} onClick={fetchOrders}>
+        <Button icon={<ReloadOutlined />} onClick={() => fetchOrders(pagination.current, pagination.pageSize)}>
           刷新
         </Button>
       </div>
-      <Table
-        columns={columns}
-        dataSource={data}
-        rowKey="_id"
+      <PageState
         loading={loading}
-      />
+        error={error}
+        empty={!loading && !error && data.length === 0}
+        onRetry={() => fetchOrders(pagination.current, pagination.pageSize)}
+      >
+        <Table
+          columns={columns}
+          dataSource={data}
+          rowKey="_id"
+          pagination={{
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+            total: pagination.total,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total) => `共 ${total} 条`,
+            onChange: (page, pageSize) => {
+              setPagination((prev) => ({ ...prev, current: page, pageSize }));
+              void fetchOrders(page, pageSize);
+            },
+          }}
+        />
+      </PageState>
     </Card>
   );
 };

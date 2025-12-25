@@ -55,6 +55,11 @@ const AdminLayout: React.FC = () => {
     },
   ];
 
+  const handleLogout = () => {
+    localStorage.removeItem('admin_token');
+    navigate('/login', { replace: true });
+  };
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Sider trigger={null} collapsible collapsed={collapsed}>
@@ -83,7 +88,7 @@ const AdminLayout: React.FC = () => {
           />
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <span style={{ marginRight: 16 }}>管理员 (Admin)</span>
-            <Button type="link">退出登录</Button>
+            <Button type="link" onClick={handleLogout}>退出登录</Button>
           </div>
         </Header>
         <Content

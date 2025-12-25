@@ -71,6 +71,13 @@ client.interceptors.response.use(
   (error) => {
     const status: number | undefined = error?.response?.status;
     const responseData = error?.response?.data as unknown;
+    if (status === 401) {
+      localStorage.removeItem('admin_token');
+      const path = window.location.pathname;
+      if (!path.startsWith('/admin/login')) {
+        window.location.assign('/admin/login');
+      }
+    }
 
     const method = (error?.config?.method as string | undefined)?.toUpperCase();
     const baseURL = error?.config?.baseURL as string | undefined;

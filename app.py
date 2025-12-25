@@ -64,6 +64,7 @@ def create_app() -> Flask:
     from routes.inquiry import inquiry_bp
     from routes.stock import stock_bp
     from routes.admin import admin_bp
+    from routes.auth import auth_bp
 
     flask_app = Flask(__name__)
     flask_app.config["NODE_ENV"] = NODE_ENV
@@ -101,6 +102,7 @@ def create_app() -> Flask:
         )
 
     flask_app.register_blueprint(api_v1)
+    flask_app.register_blueprint(auth_bp, url_prefix="/api/v1/auth")
     flask_app.register_blueprint(inquiry_bp, url_prefix='/api/v1')
     flask_app.register_blueprint(stock_bp, url_prefix='/api/v1/stock')
     flask_app.register_blueprint(admin_bp, url_prefix='/api/v1/admin')

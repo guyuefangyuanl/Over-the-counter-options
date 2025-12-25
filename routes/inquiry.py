@@ -2,7 +2,8 @@ from flask import Blueprint, jsonify, request, current_app
 import datetime
 import logging
 from models.inquiry import InquiryModel
-from utils.response import flask_success_response, flask_error_response
+from utils.response import flask_success_response, flask_error_response, flask_paginated_response
+from routes.auth import require_auth
 
 logger = logging.getLogger(__name__)
 inquiry_bp = Blueprint('inquiry', __name__)
@@ -49,29 +50,95 @@ def create_inquiry():
         return flask_error_response(str(e), 500)
 
 @inquiry_bp.route('/admin/inquiries', methods=['GET'])
+@require_auth
 def admin_get_inquiries():
     """管理后台：获取询价列表"""
     try:
         db = getattr(current_app, 'db', None)
         if not db:
-            return flask_success_response(data=[], message="数据库未连接，返回空询价列表")
+            return flask_paginated_response(data=[], page=1, per_page=20, total=0, message="数据库未连接，返回空询价列表")
             
         inquiry_model = InquiryModel(db)
-        page = int(request.args.get('page', 1))
-        page_size = int(request.args.get('pageSize', 20))
+        page = request.args.get('page', 1)
+        page_size = request.args.get('pageSize', 20)
+        try:
+            page = int(page)
+        except Exception:
+            page = 1
+        try:
+            page_size = int(page_size)
+        except Exception:
+            page_size = 20
+
+        if page < 1:
+            return flask_error_response("page 必须为正整数", 400)
+        if page_size < 1 or page_size > 200:
+            return flask_error_response("pageSize 必须为 1-200", 400)
+
         status = request.args.get('status')
+        keyword = request.args.get('keyword')
+        start_date_raw = request.args.get('startDate')
+        end_date_raw = request.args.get('endDate')
+
+        def parse_dt(raw: str, is_end: bool) -> datetime.datetime:
+            raw = raw.strip()
+            if len(raw) == 10:
+                d = datetime.date.fromisoformat(raw)
+                if is_end:
+                    return datetime.datetime(d.year, d.month, d.day, 23, 59, 59, 999999)
+                return datetime.datetime(d.year, d.month, d.day, 0, 0, 0, 0)
+
+            iso = raw.replace("Z", "+00:00")
+            dt = datetime.datetime.fromisoformat(iso)
+            if dt.tzinfo is not None:
+                dt = dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+            return dt
+
+        query = {}
+        if status:
+            query["status"] = status
+        if isinstance(keyword, str) and keyword.strip() != "":
+            kw = keyword.strip()
+            query["$or"] = [
+                {"contactName": {"$regex": kw, "$options": "i"}},
+                {"phone": {"$regex": kw, "$options": "i"}},
+                {"selectedProduct.name": {"$regex": kw, "$options": "i"}},
+                {"selectedProduct.code": {"$regex": kw, "$options": "i"}},
+            ]
+
+        created_at = {}
+        if isinstance(start_date_raw, str) and start_date_raw.strip() != "":
+            try:
+                created_at["$gte"] = parse_dt(start_date_raw, False)
+            except Exception:
+                return flask_error_response("startDate 格式不正确", 400)
+        if isinstance(end_date_raw, str) and end_date_raw.strip() != "":
+            try:
+                created_at["$lte"] = parse_dt(end_date_raw, True)
+            except Exception:
+                return flask_error_response("endDate 格式不正确", 400)
+        if created_at:
+            query["createdAt"] = created_at
         
-        inquiries = inquiry_model.get_inquiries(
-            limit=page_size, 
-            skip=(page - 1) * page_size,
-            status=status
+        cursor = inquiry_model.collection.find(query).sort("createdAt", -1).skip((page - 1) * page_size).limit(page_size)
+        inquiries = []
+        for item in cursor:
+            item["_id"] = str(item["_id"])
+            inquiries.append(item)
+
+        total = inquiry_model.collection.count_documents(query)
+        return flask_paginated_response(
+            data=inquiries,
+            page=page,
+            per_page=page_size,
+            total=total,
         )
-        return flask_success_response(data=inquiries)
     except Exception as e:
         logger.error(f"获取询价列表失败: {e}")
         return flask_error_response(str(e), 500)
 
 @inquiry_bp.route('/admin/inquiries/<id>/status', methods=['PUT'])
+@require_auth
 def admin_update_inquiry_status(id):
     """管理后台：更新询价状态"""
     try:

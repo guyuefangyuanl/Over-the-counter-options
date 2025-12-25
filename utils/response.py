@@ -120,6 +120,7 @@ def paginated_response(
         "message": message,
         "data": {
             "items": data,
+            "total": total,
             "pagination": {
                 "page": page,
                 "per_page": per_page,

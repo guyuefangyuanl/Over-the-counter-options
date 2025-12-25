@@ -8,8 +8,8 @@ const Settings: React.FC = () => {
   const [form] = Form.useForm();
 
   const onFinish = (values: Record<string, unknown>) => {
-    console.log('Success:', values);
-    message.success('设置已保存');
+    void values;
+    message.warning('当前为演示模式：设置不会保存到服务器');
   };
 
   return (
