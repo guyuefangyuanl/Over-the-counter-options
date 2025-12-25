@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Table, Button, Upload, message, Card, Space, Typography } from 'antd';
+import React, { useCallback, useEffect, useState } from 'react';
+import { App, Table, Button, Upload, Card, Space, Typography, type UploadProps } from 'antd';
 import { UploadOutlined, ReloadOutlined } from '@ant-design/icons';
-import api from '../utils/api';
+import api, { getApiErrorMessage, type ApiResponse } from '../utils/api';
 import type { ColumnsType } from 'antd/es/table';
 
 const { Title } = Typography;
@@ -15,29 +15,30 @@ interface Quote {
 }
 
 const Quotes: React.FC = () => {
+  const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Quote[]>([]);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
 
-  const fetchQuotes = async (page = 1, pageSize = 10) => {
+  const fetchQuotes = useCallback(async (page = 1, pageSize = 10) => {
     setLoading(true);
     try {
-      const res: any = await api.get('/admin/quotes', {
+      const res = await api.get<ApiResponse<Quote[]>>('/admin/quotes', {
         params: { page, pageSize },
       });
-      if (res.success) {
+      if (res.success && Array.isArray(res.data)) {
         setData(res.data);
       }
-    } catch (error) {
-      message.error('获取报价列表失败');
+    } catch (err) {
+      message.error(getApiErrorMessage(err, '获取报价列表失败'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [message]);
 
   useEffect(() => {
-    fetchQuotes();
-  }, []);
+    void fetchQuotes();
+  }, [fetchQuotes]);
 
   const columns: ColumnsType<Quote> = [
     {
@@ -77,31 +78,31 @@ const Quotes: React.FC = () => {
   const handleCrawl = async () => {
     setLoading(true);
     try {
-      const res: any = await api.post('/admin/crawl-quotes');
+      const res = await api.post<ApiResponse<unknown>>('/admin/crawl-quotes');
       if (res.success) {
-        message.success(res.message);
-        fetchQuotes();
+        message.success(res.message || '同步成功');
+        void fetchQuotes();
       }
-    } catch (error) {
-      message.error('同步数据失败');
+    } catch (err) {
+      message.error(getApiErrorMessage(err, '同步数据失败'));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpload = (info: any) => {
+  const handleUpload: UploadProps['onChange'] = (info) => {
     if (info.file.status === 'uploading') {
       setLoading(true);
       return;
     }
     if (info.file.status === 'done') {
       setLoading(false);
-      const res = info.file.response;
-      if (res.success) {
+      const res = info.file.response as ApiResponse<unknown> | undefined;
+      if (res?.success) {
         message.success(res.message || '上传成功');
-        fetchQuotes();
+        void fetchQuotes();
       } else {
-        message.error(res.message || '上传失败');
+        message.error(res?.message || '上传失败');
       }
     } else if (info.file.status === 'error') {
       message.error(`${info.file.name} 上传失败`);
@@ -145,7 +146,7 @@ const Quotes: React.FC = () => {
           ...pagination,
           onChange: (page, pageSize) => {
             setPagination({ current: page, pageSize });
-            fetchQuotes(page, pageSize);
+            void fetchQuotes(page, pageSize);
           },
         }}
       />

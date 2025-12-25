@@ -54,7 +54,7 @@ def admin_get_inquiries():
     try:
         db = getattr(current_app, 'db', None)
         if not db:
-            return flask_error_response("数据库未连接", 500)
+            return flask_success_response(data=[], message="数据库未连接，返回空询价列表")
             
         inquiry_model = InquiryModel(db)
         page = int(request.args.get('page', 1))
@@ -84,7 +84,7 @@ def admin_update_inquiry_status(id):
             
         db = getattr(current_app, 'db', None)
         if not db:
-            return flask_error_response("数据库未连接", 500)
+            return flask_error_response("数据库未连接", 503)
             
         inquiry_model = InquiryModel(db)
         success = inquiry_model.update_status(id, status, remark)

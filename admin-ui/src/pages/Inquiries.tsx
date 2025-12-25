@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Table, Button, Tag, Modal, Form, Input, Select, message, Card, Typography } from 'antd';
+import React, { useCallback, useEffect, useState } from 'react';
+import { App, Table, Button, Tag, Modal, Form, Input, Select, Card, Typography } from 'antd';
 import { ReloadOutlined, EditOutlined } from '@ant-design/icons';
-import api from '../utils/api';
+import api, { getApiErrorMessage, type ApiResponse } from '../utils/api';
 import type { ColumnsType } from 'antd/es/table';
 
 const { Title } = Typography;
@@ -9,7 +9,7 @@ const { Option } = Select;
 
 interface Inquiry {
   _id: string;
-  selectedProduct: any;
+  selectedProduct?: Product;
   quantity: number;
   contactName: string;
   phone: string;
@@ -18,30 +18,38 @@ interface Inquiry {
   remark?: string;
 }
 
+interface Product {
+  name?: string;
+  code?: string;
+  structure?: string;
+  term?: string;
+}
+
 const Inquiries: React.FC = () => {
+  const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Inquiry[]>([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [currentInquiry, setCurrentInquiry] = useState<Inquiry | null>(null);
   const [form] = Form.useForm();
 
-  const fetchInquiries = async () => {
+  const fetchInquiries = useCallback(async () => {
     setLoading(true);
     try {
-      const res: any = await api.get('/inquiry/admin/inquiries');
-      if (res.success) {
+      const res = await api.get<ApiResponse<Inquiry[]>>('/admin/inquiries');
+      if (res.success && Array.isArray(res.data)) {
         setData(res.data);
       }
-    } catch (error) {
-      message.error('获取询价列表失败');
+    } catch (err) {
+      message.error(getApiErrorMessage(err, '获取询价列表失败'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [message]);
 
   useEffect(() => {
-    fetchInquiries();
-  }, []);
+    void fetchInquiries();
+  }, [fetchInquiries]);
 
   const handleUpdateStatus = (inquiry: Inquiry) => {
     setCurrentInquiry(inquiry);
@@ -53,23 +61,30 @@ const Inquiries: React.FC = () => {
   };
 
   const handleModalOk = async () => {
+    if (!currentInquiry) {
+      message.error('请选择要处理的询价');
+      return;
+    }
+
     try {
       const values = await form.validateFields();
-      if (!currentInquiry) return;
 
-      const res: any = await api.put(`/inquiry/admin/inquiries/${currentInquiry._id}/status`, values);
+      const res = await api.put<ApiResponse<unknown>>(
+        `/admin/inquiries/${currentInquiry._id}/status`,
+        values
+      );
       if (res.success) {
         message.success('更新成功');
         setIsModalVisible(false);
-        fetchInquiries();
+        void fetchInquiries();
       }
-    } catch (error) {
-      message.error('更新失败');
+    } catch (err) {
+      message.error(getApiErrorMessage(err, '更新失败'));
     }
   };
 
   const getStatusTag = (status: string) => {
-    const statusMap: any = {
+    const statusMap: Record<string, { color: string; text: string }> = {
       pending: { color: 'gold', text: '待处理' },
       processing: { color: 'blue', text: '处理中' },
       completed: { color: 'green', text: '已完成' },

@@ -11,13 +11,43 @@ from models.order import OrderModel
 logger = logging.getLogger(__name__)
 admin_bp = Blueprint('admin', __name__)
 
+def _parse_int(value, default: int) -> int:
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
+def _parse_pagination():
+    page = _parse_int(request.args.get('page'), 1)
+    page_size = _parse_int(request.args.get('pageSize'), 20)
+
+    if page < 1:
+        return None, flask_error_response("page 必须为正整数", 400)
+    if page_size < 1 or page_size > 200:
+        return None, flask_error_response("pageSize 必须为 1-200", 400)
+
+    return {"page": page, "page_size": page_size}, None
+
+
 @admin_bp.route('/stats', methods=['GET'])
 def get_stats():
     """管理后台：获取统计数据"""
     try:
         db = getattr(current_app, 'db', None)
         if not db:
-            return flask_error_response("数据库未连接", 500)
+            stock_model = StockModel(None)
+            return flask_success_response(
+                data={
+                    "stockCount": stock_model.count_stocks(),
+                    "inquiryCount": 0,
+                    "pendingInquiryCount": 0,
+                    "orderCount": 0
+                },
+                message="数据库未连接，返回默认统计数据"
+            )
             
         stock_model = StockModel(db)
         inquiry_model = InquiryModel(db)
@@ -43,14 +73,18 @@ def get_stats():
 def get_orders():
     """管理后台：获取订单列表"""
     try:
+        pagination, err = _parse_pagination()
+        if err:
+            return err
+
         db = getattr(current_app, 'db', None)
         if not db:
-            return flask_error_response("数据库未连接", 500)
+            return flask_success_response(data=[], message="数据库未连接，返回空订单列表")
             
         order_model = OrderModel(db)
-        page = int(request.args.get('page', 1))
-        page_size = int(request.args.get('pageSize', 20))
-        
+        page = pagination["page"]
+        page_size = pagination["page_size"]
+
         orders = order_model.get_orders(limit=page_size, skip=(page - 1) * page_size)
         return flask_success_response(data=orders)
     except Exception as e:
@@ -61,14 +95,16 @@ def get_orders():
 def get_quotes():
     """管理后台：获取报价列表"""
     try:
+        pagination, err = _parse_pagination()
+        if err:
+            return err
+
         db = getattr(current_app, 'db', None)
-        if not db:
-            return flask_error_response("数据库未连接", 500)
-            
         stock_model = StockModel(db)
-        page = int(request.args.get('page', 1))
-        page_size = int(request.args.get('pageSize', 20))
-        
+
+        page = pagination["page"]
+        page_size = pagination["page_size"]
+
         stocks = stock_model.get_all_stocks(limit=page_size, skip=(page - 1) * page_size)
         return flask_success_response(data=stocks)
     except Exception as e:
@@ -98,9 +134,6 @@ def upload_quotes():
             return flask_error_response("仅支持 Excel (.xlsx, .xls) 或 CSV 文件", 400)
         
         db = getattr(current_app, 'db', None)
-        if not db:
-            return flask_error_response("数据库未连接", 500)
-            
         stock_model = StockModel(db)
         
         # 批量处理数据
@@ -126,13 +159,37 @@ def upload_quotes():
         if 'code' not in found_cols:
             return flask_error_response("无法识别 '代码' 列", 400)
 
+        def normalize_stock_code(value):
+            if value is None or pd.isna(value):
+                return None
+            try:
+                if isinstance(value, (int, float)):
+                    code_int = int(value)
+                    if code_int <= 0:
+                        return None
+                    return str(code_int).zfill(6)
+            except Exception:
+                pass
+
+            raw = str(value).strip()
+            if raw.endswith(".0"):
+                raw = raw[:-2]
+
+            import re
+
+            digits = re.findall(r"\d+", raw)
+            if not digits:
+                return None
+            merged = "".join(digits)
+            if len(merged) < 6:
+                return merged.zfill(6)
+            return merged[:6]
+
         for _, row in df.iterrows():
             # 提取代码
-            import re
-            raw_code = str(row[found_cols['code']])
-            code_match = re.search(r'\d{6}', raw_code)
-            if not code_match: continue
-            code = code_match.group(0)
+            code = normalize_stock_code(row[found_cols['code']])
+            if not code:
+                continue
             
             # 提取名称
             name = str(row[found_cols.get('name')]) if 'name' in found_cols else ""
@@ -159,9 +216,10 @@ def upload_quotes():
             
         success_count = stock_model.bulk_save_stock_data(stock_list)
             
+        message_suffix = "（已写入本地存储）" if not db else ""
         return flask_success_response(
-            data={"processed": success_count}, 
-            message=f"成功处理 {success_count} 条数据"
+            data={"processed": success_count},
+            message=f"成功处理 {success_count} 条数据{message_suffix}",
         )
     except Exception as e:
         logger.error(f"文件解析失败: {e}")
@@ -178,9 +236,6 @@ def crawl_quotes():
             return flask_error_response("抓取数据为空", 500)
             
         db = getattr(current_app, 'db', None)
-        if not db:
-            return flask_error_response("数据库未连接", 500)
-            
         stock_model = StockModel(db)
         stock_list = []
         
@@ -203,9 +258,10 @@ def crawl_quotes():
             
         success_count = stock_model.bulk_save_stock_data(stock_list)
         
+        message_suffix = "（已写入本地存储）" if not db else ""
         return flask_success_response(
             data={"processed": success_count},
-            message=f"成功从新浪财经/东财抓取并更新 {success_count} 条数据"
+            message=f"成功从新浪财经/东财抓取并更新 {success_count} 条数据{message_suffix}",
         )
     except Exception as e:
         logger.error(f"爬虫抓取失败: {e}")

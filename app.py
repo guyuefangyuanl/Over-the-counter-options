@@ -24,9 +24,13 @@ load_dotenv()
 # 数据库配置
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/option_data')
 DATABASE_NAME = os.getenv('DATABASE_NAME', 'option_trading')
+NODE_ENV = os.getenv('NODE_ENV', 'development')
 
 # 初始化MongoDB数据库连接
 def init_db():
+    if os.getenv("SKIP_DB_INIT") == "1" or NODE_ENV == "testing":
+        return None
+
     mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/option_data')
     db_name = os.getenv('DATABASE_NAME', 'option_trading')
     
@@ -43,123 +47,128 @@ def init_db():
         logger.warning("⚠️ 服务将以无数据库模式运行，部分功能将受限")
         return None
 
-db = init_db()
+def resolve_port() -> int:
+    raw = os.getenv('PORT') or os.getenv('FLASK_PORT') or '5000'
+    try:
+        port = int(raw)
+    except Exception:
+        port = 5000
 
-# 导入路由蓝图和工具
-from utils.response import flask_success_response, flask_error_response
-from routes.inquiry import inquiry_bp
-from routes.stock import stock_bp
-from routes.admin import admin_bp
+    if NODE_ENV == 'development' and 0 < port < 1024 and os.getenv("ALLOW_PRIVILEGED_PORT") != "1":
+        return 5000
+    return port
 
-app = Flask(__name__)
-app.db = db  # 将数据库实例挂载到app对象上
 
-# 环境配置
-PORT = int(os.getenv('PORT', os.getenv('FLASK_PORT', 80)))
-NODE_ENV = os.getenv('NODE_ENV', 'development')
-ALLOWED_ORIGINS = os.getenv('ALLOWED_ORIGINS', 'http://localhost,http://127.0.0.1').split(',')
+def create_app() -> Flask:
+    from utils.response import flask_success_response, flask_error_response
+    from routes.inquiry import inquiry_bp
+    from routes.stock import stock_bp
+    from routes.admin import admin_bp
 
-# 统一CORS配置
-CORS(app, 
-     resources={r"/api/*": {
-         "origins": ALLOWED_ORIGINS,
-         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-         "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
-         "supports_credentials": True,
-         "max_age": 86400
-     }})
+    flask_app = Flask(__name__)
+    flask_app.config["NODE_ENV"] = NODE_ENV
+    flask_app.db = init_db()
 
-# ==================== API版本1 ====================
-api_v1 = Blueprint('api_v1', __name__, url_prefix='/api/v1')
+    allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost,http://127.0.0.1').split(',')
 
-@api_v1.route('/health', methods=['GET'])
-def health_check_v1():
-    """健康检查 - V1"""
-    db_status = "connected" if app.db is not None else "disconnected"
-    return flask_success_response(
-        data={
-            "status": "healthy",
-            "db": db_status,
-            "version": "v1",
-            "service": "期权数据服务",
-            "environment": NODE_ENV
+    CORS(
+        flask_app,
+        resources={
+            r"/api/*": {
+                "origins": allowed_origins,
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+                "supports_credentials": True,
+                "max_age": 86400,
+            }
         },
-        message="Flask API v1 运行正常"
     )
 
-# 注册蓝图
-app.register_blueprint(api_v1)
-app.register_blueprint(inquiry_bp, url_prefix='/api/v1')
-app.register_blueprint(stock_bp, url_prefix='/api/v1/stock')
-app.register_blueprint(admin_bp, url_prefix='/api/v1/admin')
+    api_v1 = Blueprint('api_v1', __name__, url_prefix='/api/v1')
 
-# ==================== 静态文件和管理后台 ====================
+    @api_v1.route('/health', methods=['GET'])
+    def health_check_v1():
+        db_status = "connected" if flask_app.db is not None else "disconnected"
+        return flask_success_response(
+            data={
+                "status": "healthy",
+                "db": db_status,
+                "version": "v1",
+                "service": "期权数据服务",
+                "environment": flask_app.config.get("NODE_ENV", "development"),
+            },
+            message="Flask API v1 运行正常",
+        )
 
-@app.route('/admin/')
-@app.route('/admin/<path:path>')
-def serve_admin(path='index.html'):
-    """提供 React 管理后台静态文件"""
-    if not path or path == '':
-        path = 'index.html'
-    
-    # 尝试从 dist 目录提供文件
-    dist_dir = os.path.join(app.root_path, 'admin-ui/dist')
-    
-    # 如果请求的是 assets 或其他静态资源
-    target_file = os.path.join(dist_dir, path)
-    if os.path.exists(target_file) and os.path.isfile(target_file):
-        return send_from_directory(dist_dir, path)
-    
-    # 否则返回 index.html (SPA 路由支持)
-    return send_from_directory(dist_dir, 'index.html')
+    flask_app.register_blueprint(api_v1)
+    flask_app.register_blueprint(inquiry_bp, url_prefix='/api/v1')
+    flask_app.register_blueprint(stock_bp, url_prefix='/api/v1/stock')
+    flask_app.register_blueprint(admin_bp, url_prefix='/api/v1/admin')
 
-# ==================== 根路径和管理后台原型 ====================
+    @flask_app.route('/admin/')
+    @flask_app.route('/admin/<path:path>')
+    def serve_admin(path='index.html'):
+        if not path or path == '':
+            path = 'index.html'
 
-@app.route('/')
-def index():
-    """根路径 - 默认显示管理后台原型 (admin-web)"""
-    return send_from_directory('admin-web', 'index.html')
+        dist_dir = os.path.join(flask_app.root_path, 'admin-ui/dist')
 
-@app.route('/<path:path>')
-def serve_static_assets(path):
-    """支持根路径下的静态文件访问 (用于支持 admin-web 原型资源)"""
-    # 排除 API 和 React admin 路径，避免干扰
-    if path.startswith('api/') or path.startswith('admin/'):
-        # 这里不需要返回 404，因为 Flask 会继续匹配其他路由或蓝图
+        target_file = os.path.join(dist_dir, path)
+        if os.path.exists(target_file) and os.path.isfile(target_file):
+            return send_from_directory(dist_dir, path)
+
+        return send_from_directory(dist_dir, 'index.html')
+
+    @flask_app.route('/')
+    def index():
+        return send_from_directory('admin-web', 'index.html')
+
+    @flask_app.route('/<path:path>')
+    def serve_static_assets(path):
+        if path.startswith('api/') or path.startswith('admin/'):
+            return flask_error_response("资源不存在", code=404)
+
+        full_path = os.path.join(flask_app.root_path, 'admin-web', path)
+        if os.path.exists(full_path) and os.path.isfile(full_path):
+            return send_from_directory('admin-web', path)
+
         return flask_error_response("资源不存在", code=404)
-    
-    # 检查 admin-web 目录下是否存在该文件
-    full_path = os.path.join(app.root_path, 'admin-web', path)
-    if os.path.exists(full_path) and os.path.isfile(full_path):
-        return send_from_directory('admin-web', path)
-    
-    return flask_error_response("资源不存在", code=404)
 
-# ==================== 错误处理 ====================
-@app.errorhandler(404)
-def not_found(error):
-    return flask_error_response("请求的资源不存在", code=404)
+    @flask_app.errorhandler(404)
+    def not_found(error):
+        return flask_error_response("请求的资源不存在", code=404)
 
-@app.errorhandler(500)
-def internal_error(error):
-    logger.error(f"服务器错误: {str(error)}")
-    return flask_error_response(
-        "服务器内部错误" if NODE_ENV == 'production' else str(error),
-        code=500
-    )
+    @flask_app.errorhandler(500)
+    def internal_error(error):
+        logger.error(f"服务器错误: {str(error)}")
+        return flask_error_response(
+            "服务器内部错误" if NODE_ENV == 'production' else str(error),
+            code=500,
+        )
 
-@app.errorhandler(Exception)
-def handle_exception(error):
-    logger.error(f"未处理的异常: {str(error)}")
-    return flask_error_response(
-        "服务器错误" if NODE_ENV == 'production' else str(error),
-        code=500
-    )
+    @flask_app.errorhandler(Exception)
+    def handle_exception(error):
+        logger.error(f"未处理的异常: {str(error)}")
+        return flask_error_response(
+            "服务器错误" if NODE_ENV == 'production' else str(error),
+            code=500,
+        )
+
+    return flask_app
+
+
+app = create_app()
 
 if __name__ == '__main__':
-    logger.info(f"Starting service on port {PORT} in {NODE_ENV} mode...")
-    app.run(
-        host='0.0.0.0',
-        port=PORT,
-        debug=(NODE_ENV == 'development')
-    )
+    port = resolve_port()
+    logger.info(f"Starting service on port {port} in {NODE_ENV} mode...")
+    try:
+        app.run(host='0.0.0.0', port=port, debug=(NODE_ENV == 'development'))
+    except OSError as e:
+        fallback_port = 5000 if NODE_ENV == "development" else port
+        if fallback_port != port:
+            logger.error(f"服务端口绑定失败: {e}")
+            logger.info(f"尝试使用回退端口启动: {fallback_port}")
+            app.run(host='0.0.0.0', port=fallback_port, debug=(NODE_ENV == 'development'))
+        else:
+            raise

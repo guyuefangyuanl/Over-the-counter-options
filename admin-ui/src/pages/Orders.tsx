@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Table, Button, Card, Typography, message, Tag } from 'antd';
+import React, { useCallback, useEffect, useState } from 'react';
+import { App, Table, Button, Card, Typography, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import api from '../utils/api';
+import api, { getApiErrorMessage, type ApiResponse } from '../utils/api';
 import type { ColumnsType } from 'antd/es/table';
 
 const { Title } = Typography;
@@ -18,26 +18,27 @@ interface Order {
 }
 
 const Orders: React.FC = () => {
+  const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Order[]>([]);
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const res: any = await api.get('/admin/orders');
-      if (res.success) {
+      const res = await api.get<ApiResponse<Order[]>>('/admin/orders');
+      if (res.success && Array.isArray(res.data)) {
         setData(res.data);
       }
-    } catch (error) {
-      message.error('获取订单列表失败');
+    } catch (err) {
+      message.error(getApiErrorMessage(err, '获取订单列表失败'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [message]);
 
   useEffect(() => {
-    fetchOrders();
-  }, []);
+    void fetchOrders();
+  }, [fetchOrders]);
 
   const columns: ColumnsType<Order> = [
     {

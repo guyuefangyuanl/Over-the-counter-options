@@ -1,12 +1,13 @@
 import React from 'react';
-import { Card, Typography, Form, Input, Button, Switch, Divider, message } from 'antd';
+import { App, Card, Typography, Form, Input, Button, Switch, Divider } from 'antd';
 
 const { Title } = Typography;
 
 const Settings: React.FC = () => {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
 
-  const onFinish = (values: any) => {
+  const onFinish = (values: Record<string, unknown>) => {
     console.log('Success:', values);
     message.success('设置已保存');
   };

@@ -17,6 +17,23 @@
 - 示例：`fix(login): 离线回退避免刷屏日志 #TAPD-102938`
 - 建议在 PR 描述中列出变更摘要、影响范围与验证步骤
 
+## 代码规范
+- 避免在业务代码中写死环境差异（端口、域名、密钥），统一走环境变量
+- 对外部输入（query/body/path）做格式校验并限制边界（分页上限、必填字段）
+- 统一错误响应结构：`success`/`message`/`code`/`data`，不要在前端依赖未约定字段
+- 日志不打印敏感信息（token、密码、完整连接串），仅输出必要上下文（方法、路径、状态码）
+- 变更要保持向后兼容：新增配置提供默认值，旧配置仍可用
+
+## Code Review 清单
+- 接口不可用时是否有明确可行动的错误提示（例如后端未启动、端口错误）
+- 后端 4xx/5xx 是否区分清晰，避免把参数错误变成 500
+- 是否补充了单元测试并覆盖关键分支（成功、参数非法、后端不可达）
+- 是否更新了相关配置默认值并确保本地启动路径可复现
+
+## 自动化测试建议
+- 前端：`admin-ui` 运行 `npm run lint`、`npm test`、`npm run build`
+- 后端：运行 `python -m unittest`（包含 `tests/test_*.py`）
+
 ## 合并策略
 - `feature → develop`：Squash 合并；由模块负责人 Review
 - `release → main`：Merge 并创建 Tag；更新 `CHANGELOG.md` 与 Gitee Releases
