@@ -193,18 +193,40 @@ def delete_quotes(*, codes: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         return {"success": False, "message": str(e)}
 
     try:
+        import json
+
         if codes:
             target_codes = _parse_codes(codes)
             if not target_codes:
                 return {"success": True, "deleted": 0}
-            import json
             where_js = "{" + f'stock_code: db.command.in({json.dumps(target_codes)})' + "}"
             deleted = cloud.delete_where(collection="quotes", where_js=where_js)
-        else:
-            # 清空所有
-            deleted = cloud.delete_where(collection="quotes", where_js="{}")
+            return {"success": True, "deleted": deleted}
 
-        return {"success": True, "deleted": deleted}
+        total_deleted = 0
+        for _ in range(2000):
+            batch = cloud.query('db.collection("quotes").limit(100).get()')
+            if not batch:
+                return {"success": True, "deleted": total_deleted}
+
+            ids: List[str] = []
+            for doc in batch:
+                if not isinstance(doc, dict):
+                    continue
+                _id = doc.get("_id")
+                if _id is None:
+                    continue
+                s = str(_id).strip()
+                if s:
+                    ids.append(s)
+
+            if not ids:
+                return {"success": True, "deleted": total_deleted}
+
+            where_js = "{" + f'_id: db.command.in({json.dumps(ids, ensure_ascii=False)})' + "}"
+            deleted = cloud.delete_where(collection="quotes", where_js=where_js)
+            total_deleted += int(deleted or 0)
+
+        return {"success": False, "message": "清空失败：删除迭代次数超限"}
     except Exception as e:
         return {"success": False, "message": str(e)}
-

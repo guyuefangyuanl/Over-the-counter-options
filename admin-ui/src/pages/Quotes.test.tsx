@@ -22,6 +22,7 @@ vi.mock('@ant-design/icons', () => {
   return {
     UploadOutlined: () => null,
     ReloadOutlined: () => null,
+    DeleteOutlined: () => null,
   }
 })
 
