@@ -19,7 +19,24 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 加载环境变量
-load_dotenv()
+env_dir = os.path.dirname(__file__)
+local_env_path = os.path.join(env_dir, ".env.local")
+default_env_path = os.path.join(env_dir, ".env")
+
+if os.path.exists(local_env_path):
+    load_dotenv(local_env_path, override=True)
+    logger.info(f"已从 {local_env_path} 加载环境变量")
+elif os.path.exists(default_env_path):
+    load_dotenv(default_env_path, override=True)
+    logger.info(f"已从 {default_env_path} 加载环境变量")
+else:
+    load_dotenv(override=True)
+    logger.warning(f"未找到 {default_env_path}，尝试使用默认路径加载")
+
+logger.info(f"当前环境变量中包含 WX_CLOUD_ENV: {'WX_CLOUD_ENV' in os.environ}")
+if 'WX_CLOUD_ENV' in os.environ:
+    val = os.environ['WX_CLOUD_ENV']
+    logger.info(f"WX_CLOUD_ENV 长度: {len(val)}")
 
 # 数据库配置
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/option_data')

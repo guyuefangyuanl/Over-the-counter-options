@@ -114,3 +114,7 @@ project.private.config.json
 .vscode/
 .idea/
 *.swp
+
+.env
+.env.*.local
+.env.local

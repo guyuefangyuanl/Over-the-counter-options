@@ -5,7 +5,7 @@ import { act } from 'react'
 
 import Quotes from './Quotes'
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
+;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const hoisted = vi.hoisted(() => {
   return {
@@ -51,6 +51,8 @@ vi.mock('antd', async () => {
     Upload: (props: { children?: React.ReactNode }) => <div>{props.children}</div>,
     Card: (props: { children?: React.ReactNode }) => <div>{props.children}</div>,
     Space: (props: { children?: React.ReactNode }) => <div>{props.children}</div>,
+    Modal: (props: { open?: boolean; children?: React.ReactNode }) =>
+      props.open ? <div data-testid="modal">{props.children}</div> : null,
     Typography: {
       Title: (props: { children?: React.ReactNode }) => <h1>{props.children}</h1>,
     },
@@ -114,7 +116,7 @@ describe('Quotes page crawl button', () => {
 
     expect(parentClick).not.toHaveBeenCalled()
     expect(hoisted.apiPost).toHaveBeenCalledTimes(1)
-    expect(hoisted.apiPost.mock.calls[0]?.[0]).toBe('/admin/crawl-quotes')
+    expect(hoisted.apiPost.mock.calls[0]?.[0]).toBe('/admin/sync-quotes')
   })
 
   it('refresh button still works after crawl completes', async () => {

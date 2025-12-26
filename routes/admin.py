@@ -1,13 +1,19 @@
 # -*- coding: utf-8 -*-
 from flask import Blueprint, request, current_app
-import pandas as pd
-import io
 import logging
 from utils.response import flask_success_response, flask_error_response, flask_paginated_response
 from models.stock import StockModel
 from models.inquiry import InquiryModel
 from models.order import OrderModel
 from routes.auth import require_auth
+from services.cloud_db import CloudDbClient, CloudDbConfigError, CloudDbRequestError
+from services.file_parser import (
+    create_upload_session,
+    delete_upload_session,
+    load_upload_session,
+    parse_quotes_file,
+)
+from services.sync_service import sync_quotes, upsert_quotes_from_file, delete_quotes
 
 logger = logging.getLogger(__name__)
 admin_bp = Blueprint('admin', __name__)
@@ -108,15 +114,25 @@ def get_quotes():
         pagination, err = _parse_pagination()
         if err:
             return err
-
-        db = getattr(current_app, 'db', None)
-        stock_model = StockModel(db)
-
         page = pagination["page"]
         page_size = pagination["page_size"]
+        skip = (page - 1) * page_size
 
-        stocks = stock_model.get_all_stocks(limit=page_size, skip=(page - 1) * page_size)
-        total = stock_model.count_stocks()
+        try:
+            cloud = CloudDbClient.from_env()
+        except CloudDbConfigError as e:
+            return flask_paginated_response(
+                data=[],
+                page=page,
+                per_page=page_size,
+                total=0,
+                message=str(e),
+            )
+
+        stocks = cloud.query(
+            f'db.collection("quotes").orderBy("updated_at","desc").skip({skip}).limit({page_size}).get()'
+        )
+        total = cloud.count('db.collection("quotes").count()')
         return flask_paginated_response(
             data=stocks,
             page=page,
@@ -127,160 +143,223 @@ def get_quotes():
         logger.error(f"获取报价列表失败: {e}")
         return flask_error_response(f"获取失败: {str(e)}", 500)
 
-@admin_bp.route('/upload-quotes', methods=['POST'])
+@admin_bp.route('/quotes', methods=['DELETE'])
 @require_auth
-def upload_quotes():
-    """管理后台：上传 Excel/CSV 更新报价数据"""
+def delete_quotes_api():
+    """管理后台：删除报价"""
+    try:
+        payload = request.get_json(silent=True) or {}
+        codes = payload.get("codes")
+        # 如果 codes 为空数组或未提供，则视为清空所有（慎用，或根据需求调整为必须提供 codes）
+        result = delete_quotes(codes=codes)
+        if result.get("success"):
+            return flask_success_response(
+                data={"deleted": result.get("deleted", 0)},
+                message=f"已成功删除 {result.get('deleted', 0)} 条记录",
+            )
+        return flask_error_response(result.get("message") or "删除失败", 500)
+    except Exception as e:
+        logger.error(f"删除报价失败: {e}")
+        return flask_error_response(f"删除失败: {str(e)}", 500)
+
+@admin_bp.route('/sync-quotes', methods=['POST'])
+@require_auth
+def sync_quotes_api():
+    """管理后台：触发同步行情（Sina）"""
+    try:
+        payload = request.get_json(silent=True) or {}
+        codes = payload.get("codes")
+        result = sync_quotes(codes=codes, requested_by="admin")
+        if result.get("success"):
+            return flask_success_response(
+                data={
+                    "processed": result.get("processed", 0),
+                    "fetched": result.get("fetched", 0),
+                    "durationMs": result.get("durationMs", 0),
+                    "errors": result.get("errors", []),
+                },
+                message="同步完成",
+            )
+        return flask_error_response(result.get("message") or "同步失败", 500, data=result)
+    except Exception as e:
+        logger.error(f"同步行情失败: {e}")
+        return flask_error_response(f"同步失败: {str(e)}", 500)
+
+@admin_bp.route('/sync-logs', methods=['GET'])
+@require_auth
+def get_sync_logs():
+    """管理后台：获取同步历史"""
+    try:
+        pagination, err = _parse_pagination()
+        if err:
+            return err
+        page = pagination["page"]
+        page_size = pagination["page_size"]
+        skip = (page - 1) * page_size
+
+        try:
+            cloud = CloudDbClient.from_env()
+        except CloudDbConfigError as e:
+            return flask_paginated_response(
+                data=[],
+                page=page,
+                per_page=page_size,
+                total=0,
+                message=str(e),
+            )
+
+        try:
+            items = cloud.query(
+                f'db.collection("sync_logs").orderBy("created_at","desc").skip({skip}).limit({page_size}).get()'
+            )
+            total = cloud.count('db.collection("sync_logs").count()')
+        except CloudDbRequestError as e:
+            if "[ResourceNotFound]" in str(e) or "Db or Table not exist" in str(e):
+                return flask_paginated_response(
+                    data=[],
+                    page=page,
+                    per_page=page_size,
+                    total=0,
+                    message="同步历史未初始化（sync_logs 集合不存在）",
+                )
+            raise
+        return flask_paginated_response(data=items, page=page, per_page=page_size, total=total)
+    except Exception as e:
+        logger.error(f"获取同步历史失败: {e}")
+        return flask_error_response(f"获取失败: {str(e)}", 500)
+
+
+@admin_bp.route('/upload-quotes/preview', methods=['POST'])
+@require_auth
+def upload_quotes_preview():
     if 'file' not in request.files:
         return flask_error_response("未找到上传文件", 400)
-    
+
     file = request.files['file']
     if file.filename == '':
         return flask_error_response("文件名不能为空", 400)
 
     try:
-        # 获取文件扩展名
-        ext = file.filename.rsplit('.', 1)[-1].lower()
-        
-        # 根据文件类型读取数据
-        if ext == 'xlsx' or ext == 'xls':
-            df = pd.read_excel(io.BytesIO(file.read()))
-        elif ext == 'csv':
-            df = pd.read_csv(io.BytesIO(file.read()))
-        else:
-            return flask_error_response("仅支持 Excel (.xlsx, .xls) 或 CSV 文件", 400)
-        
-        db = getattr(current_app, 'db', None)
-        stock_model = StockModel(db)
-        
-        # 批量处理数据
-        stock_list = []
-        
-        # 模仿 convert_excel_to_json.py 的列映射逻辑
-        column_mapping = {
-            'code': ['代码', '股票代码', 'Code', '证券代码', 'A股代码'],
-            'name': ['名称', '股票名称', 'Name', '证券简称', 'A股简称'],
-            'price': ['现价', '最新价', '价格', 'Price', '收盘价'],
-            'changePercent': ['涨跌幅', '涨跌', 'Change', '涨跌幅(%)'],
-            'volume': ['成交量', 'Volume', '总手'],
-            'amount': ['成交额', 'Amount', '金额']
-        }
+        content = file.read()
+        items = parse_quotes_file(filename=file.filename, content=content)
+        session = create_upload_session(items=items)
+        return flask_success_response(
+            data={
+                "uploadId": session["upload_id"],
+                "total": session["total"],
+                "preview": session["preview"],
+            },
+            message="解析成功，请确认入库",
+        )
+    except Exception as e:
+        logger.error(f"文件预览解析失败: {e}")
+        return flask_error_response(f"解析失败: {str(e)}", 500)
 
-        found_cols = {}
-        for key, candidates in column_mapping.items():
-            for col in df.columns:
-                if any(cand in str(col) for cand in candidates):
-                    found_cols[key] = col
-                    break
-        
-        if 'code' not in found_cols:
-            return flask_error_response("无法识别 '代码' 列", 400)
 
-        def normalize_stock_code(value):
-            if value is None or pd.isna(value):
-                return None
+@admin_bp.route('/upload-quotes/confirm', methods=['POST'])
+@require_auth
+def upload_quotes_confirm():
+    from services.file_parser import load_upload_session_payload, save_upload_session_payload
+    import time
+    import threading
+
+    payload = request.get_json(silent=True) or {}
+    upload_id = payload.get("uploadId") or payload.get("upload_id")
+    if not upload_id:
+        return flask_error_response("缺少 uploadId", 400)
+
+    try:
+        session_payload = load_upload_session_payload(upload_id=str(upload_id))
+    except Exception as e:
+        return flask_error_response(f"读取预览数据失败: {str(e)}", 400)
+
+    try:
+        status = session_payload.get("status")
+        existing_result = session_payload.get("result")
+
+        if status == "processed" and isinstance(existing_result, dict):
+            if existing_result.get("success"):
+                return flask_success_response(
+                    data={
+                        "status": "processed",
+                        "processed": existing_result.get("processed", 0),
+                        "durationMs": existing_result.get("durationMs", 0),
+                    },
+                    message="入库完成",
+                )
+            return flask_error_response("入库失败", 500, data=existing_result)
+
+        if status == "failed" and isinstance(existing_result, dict):
+            return flask_error_response("入库失败", 500, data=existing_result)
+
+        if status == "processing":
+            return flask_success_response(
+                data={"status": "processing"},
+                message="入库进行中，请稍后刷新",
+                code=202,
+            )
+
+        items = session_payload.get("items")
+        if not isinstance(items, list):
+            items = []
+
+        session_payload["status"] = "processing"
+        session_payload["processing_started_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        save_upload_session_payload(upload_id=str(upload_id), payload=session_payload)
+
+        def _run_job(upload_id_value: str, items_value):
             try:
-                if isinstance(value, (int, float)):
-                    code_int = int(value)
-                    if code_int <= 0:
-                        return None
-                    return str(code_int).zfill(6)
+                result = upsert_quotes_from_file(items=items_value, requested_by="admin", source="file_upload")
+            except Exception as err:
+                result = {"success": False, "processed": 0, "errors": [{"message": str(err)}], "durationMs": 0}
+
+            try:
+                latest = load_upload_session_payload(upload_id=upload_id_value)
+                latest["status"] = "processed" if result.get("success") else "failed"
+                latest["processed_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                latest["result"] = result
+                save_upload_session_payload(upload_id=upload_id_value, payload=latest)
             except Exception:
                 pass
 
-            raw = str(value).strip()
-            if raw.endswith(".0"):
-                raw = raw[:-2]
+        threading.Thread(target=_run_job, args=(str(upload_id), items), daemon=True).start()
 
-            import re
-
-            digits = re.findall(r"\d+", raw)
-            if not digits:
-                return None
-            merged = "".join(digits)
-            if len(merged) < 6:
-                return merged.zfill(6)
-            return merged[:6]
-
-        for _, row in df.iterrows():
-            # 提取代码
-            code = normalize_stock_code(row[found_cols['code']])
-            if not code:
-                continue
-            
-            # 提取名称
-            name = str(row[found_cols.get('name')]) if 'name' in found_cols else ""
-            
-            # 辅助函数：安全获取浮点数
-            def get_float(col_key, default=0.0):
-                if col_key in found_cols:
-                    try:
-                        val = row[found_cols[col_key]]
-                        return float(val) if not pd.isna(val) else default
-                    except:
-                        return default
-                return default
-
-            stock_list.append({
-                "stock_code": code,
-                "name": name,
-                "price": get_float('price'),
-                "changePercent": get_float('changePercent'),
-                "volume": get_float('volume'),
-                "amount": get_float('amount'),
-                "updateSource": "file_upload"
-            })
-            
-        success_count = stock_model.bulk_save_stock_data(stock_list)
-            
-        message_suffix = "（已写入本地存储）" if not db else ""
         return flask_success_response(
-            data={"processed": success_count},
-            message=f"成功处理 {success_count} 条数据{message_suffix}",
+            data={"status": "processing"},
+            message="已开始入库，请稍后刷新",
+            code=202,
         )
     except Exception as e:
-        logger.error(f"文件解析失败: {e}")
-        return flask_error_response(f"解析失败: {str(e)}", 500)
+        logger.error(f"文件确认入库失败: {e}")
+        return flask_error_response(f"入库失败: {str(e)}", 500)
+
+
+@admin_bp.route('/upload-quotes', methods=['POST'])
+@require_auth
+def upload_quotes():
+    if 'file' not in request.files:
+        return flask_error_response("未找到上传文件", 400)
+
+    file = request.files['file']
+    if file.filename == '':
+        return flask_error_response("文件名不能为空", 400)
+
+    try:
+        content = file.read()
+        items = parse_quotes_file(filename=file.filename, content=content)
+        result = upsert_quotes_from_file(items=items, requested_by="admin", source="file_upload")
+        if result.get("success"):
+            return flask_success_response(
+                data={"processed": result.get("processed", 0), "durationMs": result.get("durationMs", 0)},
+                message="上传并入库完成",
+            )
+        return flask_error_response("入库失败", 500, data=result)
+    except Exception as e:
+        logger.error(f"文件解析入库失败: {e}")
+        return flask_error_response(f"入库失败: {str(e)}", 500)
+
 
 @admin_bp.route('/crawl-quotes', methods=['POST'])
 @require_auth
 def crawl_quotes():
-    """管理后台：触发爬虫抓取最新行情"""
-    try:
-        import akshare as ak
-        # 获取 A 股实时行情 (东财源)
-        df = ak.stock_zh_a_spot_em()
-        if df.empty:
-            return flask_error_response("抓取数据为空", 500)
-            
-        db = getattr(current_app, 'db', None)
-        stock_model = StockModel(db)
-        stock_list = []
-        
-        # 只取前 200 条作为示例，或者根据需求取全部
-        df_sample = df.head(200) 
-        
-        for _, row in df_sample.iterrows():
-            stock_list.append({
-                "stock_code": str(row['代码']),
-                "name": str(row['名称']),
-                "price": float(row['最新价']),
-                "changePercent": float(row['涨跌幅']),
-                "open": float(row.get('开盘', 0)),
-                "high": float(row.get('最高', 0)),
-                "low": float(row.get('最低', 0)),
-                "volume": float(row['成交量']),
-                "amount": float(row['成交额']),
-                "updateSource": "crawler_sina"
-            })
-            
-        success_count = stock_model.bulk_save_stock_data(stock_list)
-        
-        message_suffix = "（已写入本地存储）" if not db else ""
-        return flask_success_response(
-            data={"processed": success_count},
-            message=f"成功从新浪财经/东财抓取并更新 {success_count} 条数据{message_suffix}",
-        )
-    except Exception as e:
-        logger.error(f"爬虫抓取失败: {e}")
-        return flask_error_response(f"抓取失败: {str(e)}", 500)
+    return sync_quotes_api()

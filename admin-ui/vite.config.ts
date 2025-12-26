@@ -22,6 +22,8 @@ export default defineConfig(({ mode }) => {
   const apiProxy: ProxyOptions = {
     target: proxyTarget,
     changeOrigin: true,
+    proxyTimeout: 300000,
+    timeout: 300000,
     configure: (proxy) => {
       proxy.on('error', (err, req, res) => {
         void req

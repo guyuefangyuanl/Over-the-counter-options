@@ -5,7 +5,10 @@
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
-    "dev": "nodemon app.js",
+    "dev:node": "nodemon app.js",
+    "dev:flask": "python -m flask run --port 5000",
+    "dev:ui": "npm run dev --prefix admin-ui",
+    "dev": "concurrently \"npm run dev:node\" \"npm run dev:flask\" \"npm run dev:ui\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -31,6 +34,7 @@
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "jest": "^30.2.0",
     "miniprogram-automator": "^0.12.1",
     "nodemon": "^3.1.9"
