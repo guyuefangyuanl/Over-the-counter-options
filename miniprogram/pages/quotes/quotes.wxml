@@ -22,19 +22,28 @@
     
     <!-- 2. 次级筛选栏 -->
     <view class="sub-filter-bar">
-      <view class="sub-filters">
+      <view class="sub-filters" style="position: relative; left: 11rpx; top: -77rpx; width: 350rpx; display: flex; box-sizing: border-box">
         <view class="sub-filter-item {{subFilter === '全部' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="全部">全部</view>
         <view class="sub-filter-item {{subFilter === '持仓' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="持仓">持仓</view>
         <view class="sub-filter-item {{subFilter === '沪深' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="沪深">沪深</view>
         <view class="sub-filter-item {{subFilter === '指数' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="指数">指数</view>
       </view>
-      <view class="filter-right">
-         <view class="vanilla-tag">
-            <text>香草看涨</text>
+      <view class="filter-right-area">
+         <view class="group-func-btn" bindtap="onGroupClick" aria-label="分组功能" role="button">
+            <view class="group-icon-svg">
+               <view class="svg-line"></view>
+               <view class="svg-line"></view>
+               <view class="svg-line"></view>
+            </view>
          </view>
-         <view class="data-info">
-            <text class="info-label">数据说明</text>
-            <view class="info-icon">?</view>
+         <view class="filter-right-row">
+            <view class="vanilla-tag" style="position: relative; left: -425rpx; top: -6rpx; width: 119rpx; display: block; box-sizing: border-box; height: 51rpx">
+               <text>香草看涨</text>
+            </view>
+            <view class="data-info" bindtap="showDataInfo">
+               <text class="info-label" style="position: relative; left: -29rpx; top: 9rpx; height: 44rpx; display: block; box-sizing: border-box">数据说明</text>
+               <view class="info-icon">?</view>
+            </view>
          </view>
       </view>
     </view>
@@ -119,4 +128,23 @@
     <!-- 底部垫高，防止被TabBar遮挡 -->
     <view style="height: 120rpx;"></view>
   </scroll-view>
+
+  <!-- 数据说明弹窗 -->
+  <view class="modal-mask {{modalAnimationClass}}" wx:if="{{showDataModal}}" bindtap="hideDataInfo" catchtouchmove="preventTouchMove">
+    <view class="modal-container" catchtap="stopBubble">
+      <view class="modal-header">
+        <text class="modal-title">数据说明</text>
+        <view class="modal-close" bindtap="hideDataInfo">×</view>
+      </view>
+      <scroll-view scroll-y class="modal-content">
+        <view class="data-info-text">
+          <view class="info-item">1. 香草看涨期权费率百分比费率，即期权费除以名义本金的比值。例如：费率为5%，则买入香草看涨期权100万的名义本金，付出期权费为5万元。</view>
+          <view class="info-item">2. 费率为参考费率，与交易台报价或成交价可能有区别。</view>
+        </view>
+      </scroll-view>
+      <view class="modal-footer">
+        <button class="confirm-btn" bindtap="hideDataInfo">我知道了</button>
+      </view>
+    </view>
+  </view>
 </view>

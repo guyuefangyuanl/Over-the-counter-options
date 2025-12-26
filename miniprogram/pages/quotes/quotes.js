@@ -73,6 +73,8 @@ Page({
       moneyness: 'ALL' // ALL, ITM, ATM, OTM
     },
     showOrderModal: false,
+    showDataModal: false,
+    modalAnimationClass: '',
     orderForm: {
       direction: '买入',
       traderCode: '',
@@ -320,6 +322,51 @@ Page({
   },
 
   // ==================== 自选编辑逻辑结束 ====================
+
+  // ==================== 数据说明弹窗逻辑 ====================
+  showDataInfo: function() {
+    this.setData({
+      showDataModal: true,
+      modalAnimationClass: 'fade-in'
+    });
+  },
+
+  hideDataInfo: function() {
+    this.setData({
+      modalAnimationClass: 'fade-out'
+    });
+    // 动画结束后移除 DOM
+    setTimeout(() => {
+      this.setData({
+        showDataModal: false,
+        modalAnimationClass: ''
+      });
+    }, 300); // 300ms 与 CSS 动画时间一致
+  },
+
+  preventTouchMove: function() {
+    // 阻止背景滚动
+    return;
+  },
+
+  stopBubble: function() {
+    // 阻止点击弹窗内容时关闭弹窗
+    return;
+  },
+  // ==================== 数据说明弹窗逻辑结束 ====================
+
+  // ==================== 分组功能逻辑 ====================
+  onGroupClick: function() {
+    console.log('用户点击了分组功能按钮');
+    wx.showToast({
+      title: '分组功能暂未开放',
+      icon: 'none',
+      duration: 2000
+    });
+    // 这里未来可以扩展为打开分组管理弹窗
+    // this.setData({ showGroupManage: true });
+  },
+  // ==================== 分组功能逻辑结束 ====================
 
   // 初始化期权报价系统
   initPricingSystem: function() {
