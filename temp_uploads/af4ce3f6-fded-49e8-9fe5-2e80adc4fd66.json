@@ -1,0 +1,25 @@
+{
+  "upload_id": "af4ce3f6-fded-49e8-9fe5-2e80adc4fd66",
+  "created_at": "2025-12-27T14:10:06.406Z",
+  "status": "processing",
+  "items": [
+    {
+      "stock_code": "000001",
+      "code": "000001",
+      "name": "平安银行",
+      "updateSource": "file_upload",
+      "updated_at": "2025-12-27T14:10:06.406Z",
+      "price": 12.5,
+      "changePercent": 1.2
+    },
+    {
+      "stock_code": "600519",
+      "code": "600519",
+      "name": "贵州茅台",
+      "updateSource": "file_upload",
+      "updated_at": "2025-12-27T14:10:06.406Z",
+      "price": 1850,
+      "changePercent": -0.5
+    }
+  ]
+}

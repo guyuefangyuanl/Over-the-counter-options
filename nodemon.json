@@ -1,0 +1,12 @@
+{
+  "watch": ["."],
+  "ext": "js,json",
+  "ignore": [
+    "mock_db.json",
+    "temp_uploads/**",
+    "admin-ui/**",
+    "admin-web/**",
+    "miniprogram/**",
+    "node_modules/**"
+  ]
+}

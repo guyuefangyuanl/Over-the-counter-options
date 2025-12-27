@@ -44,8 +44,13 @@ def _safe_float(value: Any) -> Optional[float]:
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return None
     try:
-        v = float(value)
-        if v != v:
+        if isinstance(value, str):
+            # Remove commas and other common non-numeric characters except decimal point
+            clean_val = value.replace(",", "").strip()
+            v = float(clean_val)
+        else:
+            v = float(value)
+        if v != v:  # NaN check
             return None
         return v
     except Exception:
@@ -62,9 +67,9 @@ def parse_quotes_file(*, filename: str, content: bytes) -> List[Dict[str, Any]]:
         raise ValueError("仅支持 Excel (.xlsx, .xls) 或 CSV 文件")
 
     column_mapping = {
-        "stock_code": ["代码", "股票代码", "Code", "证券代码", "A股代码", "code", "stock_code"],
-        "name": ["名称", "股票名称", "Name", "证券简称", "A股简称", "name"],
-        "price": ["现价", "最新价", "价格", "Price", "收盘价", "price"],
+        "stock_code": ["代码", "股票代码", "Code", "证券代码", "A股代码", "code", "stock_code", "指数代码", "合约编码"],
+        "name": ["名称", "股票名称", "Name", "证券简称", "A股简称", "name", "指数简称", "合约简称"],
+        "price": ["现价", "最新价", "价格", "Price", "收盘价", "price", "今收", "今收盘价"],
         "changePercent": ["涨跌幅", "涨跌", "Change", "涨跌幅(%)", "changePercent"],
         "open": ["开盘", "open"],
         "high": ["最高", "high"],

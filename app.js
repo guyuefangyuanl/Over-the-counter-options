@@ -8,11 +8,27 @@ const express = require('express')
 const helmet = require('helmet')
 const jwt = require('jsonwebtoken')
 const { spawn } = require('child_process')
+const multer = require('multer')
+const XLSX = require('xlsx')
+const { parse: csvParse } = require('csv-parse/sync')
+const { v4: uuidv4 } = require('uuid')
+
+const CloudDbClient = require('./services/cloud_db')
 
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler')
 const { customLogger, requestLogger } = require('./middleware/logger')
 
-dotenv.config()
+// 加载环境变量
+const localEnvPath = path.resolve(__dirname, '.env.local')
+const defaultEnvPath = path.resolve(__dirname, '.env')
+
+if (fs.existsSync(localEnvPath)) {
+  dotenv.config({ path: localEnvPath })
+  console.log('✅ 已从 .env.local 加载环境变量')
+} else {
+  dotenv.config({ path: defaultEnvPath })
+  console.log('✅ 已从 .env 加载环境变量')
+}
 
 const app = express()
 
@@ -25,6 +41,34 @@ app.use(express.json({ limit: '2mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(requestLogger)
 app.use(customLogger)
+
+// 清理旧的上传会话文件
+try {
+  const cacheDir = path.resolve(__dirname, 'temp_uploads')
+  if (fs.existsSync(cacheDir)) {
+    const files = fs.readdirSync(cacheDir)
+    const now = Date.now()
+    files.forEach((file) => {
+      const filePath = path.join(cacheDir, file)
+      const stats = fs.statSync(filePath)
+      // 删除超过 24 小时的文件
+      if (now - stats.mtimeMs > 24 * 3600 * 1000) {
+        fs.unlinkSync(filePath)
+      }
+    })
+  }
+} catch (e) {
+  console.warn('⚠️ 清理临时上传文件失败:', e.message)
+}
+
+// 初始化云数据库客户端
+let cloudDb = null
+try {
+  cloudDb = CloudDbClient.fromEnv()
+  console.log('✅ 微信云数据库客户端初始化成功')
+} catch (e) {
+  console.warn('⚠️ 微信云数据库配置未就绪，将回退到本地 Mock 存储:', e.message)
+}
 
 function isIntegerString(value) {
   return typeof value === 'string' && /^-?\d+$/.test(value)
@@ -69,6 +113,305 @@ function writeMockDb(nextDb) {
   const filePath = getMockDbPath()
   fs.writeFileSync(filePath, JSON.stringify(nextDb, null, 2), 'utf8')
 }
+
+app.get('/api/v1/groups', async (req, res) => {
+  void req
+
+  let cloudGroups = []
+  if (cloudDb) {
+    try {
+      const results = await cloudDb.query('db.collection("groups").get()')
+      cloudGroups = results.map((g) => ({
+        ...g,
+        id: g._id || g.id,
+        _source: 'cloud',
+      }))
+    } catch (e) {
+      console.error('❌ 获取云端分组失败:', e.message)
+    }
+  }
+
+  const db = loadMockDb()
+  const localGroups = (Array.isArray(db.groups) ? db.groups : []).map((g) => ({
+    ...g,
+    _source: 'local',
+  }))
+
+  // 合并分组，如果 ID 相同则以云端为准
+  const mergedGroups = [...cloudGroups]
+  localGroups.forEach((local) => {
+    if (!mergedGroups.some((cloud) => cloud.id === local.id)) {
+      mergedGroups.push(local)
+    }
+  })
+
+  return res.json({
+    success: true,
+    data: mergedGroups,
+    message: cloudDb ? '获取成功 (云端+本地)' : '获取成功 (本地)',
+  })
+})
+
+app.post('/api/v1/groups', async (req, res) => {
+  const name = req.body && typeof req.body.name === 'string' ? req.body.name.trim() : ''
+  if (!name) {
+    return res.status(400).json({ success: false, data: null, message: '分组名称不能为空' })
+  }
+
+  if (cloudDb) {
+    try {
+      const newGroup = {
+        name,
+        members: [],
+        created_at: new Date().toISOString(),
+      }
+      const ids = await cloudDb.add('groups', newGroup)
+      return res.json({
+        success: true,
+        data: { id: ids[0], ...newGroup },
+        message: '创建成功 (云端)',
+      })
+    } catch (e) {
+      console.error('❌ 创建云端分组失败:', e.message)
+    }
+  }
+
+  const db = loadMockDb()
+  if (!Array.isArray(db.groups)) {
+    db.groups = []
+  }
+
+  const newGroup = {
+    id: `g_${Date.now()}`,
+    name,
+    members: [],
+    created_at: new Date().toISOString(),
+  }
+
+  db.groups.push(newGroup)
+  writeMockDb(db)
+
+  return res.json({
+    success: true,
+    data: newGroup,
+    message: '创建成功 (本地)',
+  })
+})
+
+app.put('/api/v1/groups/:id', async (req, res) => {
+  const id = req.params.id
+  const name = req.body && typeof req.body.name === 'string' ? req.body.name.trim() : ''
+
+  if (cloudDb) {
+    try {
+      const updateData = {}
+      if (name) updateData.name = name
+      updateData.updated_at = new Date().toISOString()
+
+      const updatedCount = await cloudDb.updateWhere('groups', JSON.stringify({ _id: id }), updateData)
+      if (updatedCount > 0) {
+        return res.json({
+          success: true,
+          data: { id, ...updateData },
+          message: '更新成功 (云端)',
+        })
+      }
+    } catch (e) {
+      console.error('❌ 更新云端分组失败:', e.message)
+    }
+  }
+
+  const db = loadMockDb()
+  const groups = Array.isArray(db.groups) ? db.groups : []
+  const groupIndex = groups.findIndex((g) => g.id === id)
+
+  if (groupIndex === -1) {
+    return res.status(404).json({ success: false, data: null, message: '分组不存在' })
+  }
+
+  if (name) {
+    groups[groupIndex].name = name
+  }
+  groups[groupIndex].updated_at = new Date().toISOString()
+
+  writeMockDb(db)
+  return res.json({
+    success: true,
+    data: groups[groupIndex],
+    message: '更新成功 (本地)',
+  })
+})
+
+app.delete('/api/v1/groups/:id', async (req, res) => {
+  const id = req.params.id
+  console.log(`🗑️ 尝试删除分组: ${id}`)
+
+  if (cloudDb) {
+    try {
+      const deletedCount = await cloudDb.deleteWhere('groups', JSON.stringify({ _id: id }))
+      console.log(`☁️ 云端删除结果: ${deletedCount}`)
+      if (deletedCount > 0) {
+        return res.json({
+          success: true,
+          data: null,
+          message: '删除成功 (云端)',
+        })
+      }
+    } catch (e) {
+      console.error('❌ 删除云端分组失败:', e.message)
+    }
+  }
+
+  const db = loadMockDb()
+  const groups = Array.isArray(db.groups) ? db.groups : []
+  const groupIndex = groups.findIndex((g) => g.id === id)
+
+  if (groupIndex === -1) {
+    console.warn(`⚠️ 分组不存在，无法删除: ${id}`)
+    return res.status(404).json({ success: false, data: null, message: '分组不存在' })
+  }
+
+  db.groups.splice(groupIndex, 1)
+  writeMockDb(db)
+  console.log(`✅ 本地删除成功: ${id}`)
+
+  return res.json({
+    success: true,
+    data: null,
+    message: '删除成功 (本地)',
+  })
+})
+
+app.post('/api/v1/groups/:id/members', async (req, res) => {
+  const id = req.params.id
+  const { stock_code, market, name } = req.body || {}
+
+  if (!stock_code) {
+    return res.status(400).json({ success: false, data: null, message: '股票代码不能为空' })
+  }
+
+  if (cloudDb) {
+    try {
+      // 在云端，成员管理需要先查询再更新，或者使用 db.command.push
+      const groups = await cloudDb.query(`db.collection("groups").where({_id: "${id}"}).get()`)
+      if (groups && groups.length > 0) {
+        const group = groups[0]
+        const members = group.members || []
+        if (members.some((m) => m.stock_code === stock_code)) {
+          return res.status(400).json({ success: false, data: null, message: '成员已存在' })
+        }
+
+        const newMember = {
+          stock_code,
+          market: market || '',
+          name: name || '',
+          added_at: new Date().toISOString(),
+        }
+
+        // 使用简单覆盖方式更新数组 (云 API 限制)
+        await cloudDb.updateWhere('groups', JSON.stringify({ _id: id }), {
+          members: [...members, newMember],
+          updated_at: new Date().toISOString(),
+        })
+
+        return res.json({
+          success: true,
+          data: { id: group._id, ...group, members: [...members, newMember] },
+          message: '添加成功 (云端)',
+        })
+      }
+    } catch (e) {
+      console.error('❌ 添加云端成员失败:', e.message)
+    }
+  }
+
+  const db = loadMockDb()
+  const groups = Array.isArray(db.groups) ? db.groups : []
+  const groupIndex = groups.findIndex((g) => g.id === id)
+
+  if (groupIndex === -1) {
+    return res.status(404).json({ success: false, data: null, message: '分组不存在' })
+  }
+
+  if (!Array.isArray(groups[groupIndex].members)) {
+    groups[groupIndex].members = []
+  }
+
+  const memberExists = groups[groupIndex].members.some((m) => m.stock_code === stock_code)
+  if (memberExists) {
+    return res.status(400).json({ success: false, data: null, message: '成员已存在' })
+  }
+
+  groups[groupIndex].members.push({
+    stock_code,
+    market: market || '',
+    name: name || '',
+    added_at: new Date().toISOString(),
+  })
+
+  writeMockDb(db)
+  return res.json({
+    success: true,
+    data: groups[groupIndex],
+    message: '添加成功 (本地)',
+  })
+})
+
+app.delete('/api/v1/groups/:id/members/:stock_code', async (req, res) => {
+  const { id, stock_code } = req.params
+
+  if (cloudDb) {
+    try {
+      const groups = await cloudDb.query(`db.collection("groups").where({_id: "${id}"}).get()`)
+      if (groups && groups.length > 0) {
+        const group = groups[0]
+        const members = group.members || []
+        const memberIndex = members.findIndex((m) => m.stock_code === stock_code)
+
+        if (memberIndex !== -1) {
+          members.splice(memberIndex, 1)
+          await cloudDb.updateWhere('groups', JSON.stringify({ _id: id }), {
+            members,
+            updated_at: new Date().toISOString(),
+          })
+          return res.json({
+            success: true,
+            data: null,
+            message: '移除成功 (云端)',
+          })
+        }
+      }
+    } catch (e) {
+      console.error('❌ 移除云端成员失败:', e.message)
+    }
+  }
+
+  const db = loadMockDb()
+  const groups = Array.isArray(db.groups) ? db.groups : []
+  const groupIndex = groups.findIndex((g) => g.id === id)
+
+  if (groupIndex === -1) {
+    return res.status(404).json({ success: false, data: null, message: '分组不存在' })
+  }
+
+  if (!Array.isArray(groups[groupIndex].members)) {
+    return res.status(400).json({ success: false, data: null, message: '该分组无成员' })
+  }
+
+  const memberIndex = groups[groupIndex].members.findIndex((m) => m.stock_code === stock_code)
+  if (memberIndex === -1) {
+    return res.status(404).json({ success: false, data: null, message: '成员不在该分组中' })
+  }
+
+  groups[groupIndex].members.splice(memberIndex, 1)
+  writeMockDb(db)
+
+  return res.json({
+    success: true,
+    data: null,
+    message: '移除成功 (本地)',
+  })
+})
 
 app.get('/api/v1/health', (req, res) => {
   void req
@@ -234,6 +577,93 @@ app.get('/api/v1/admin/inquiries', (req, res) => {
   })
 })
 
+app.post('/api/v1/admin/sync-quotes', (req, res) => {
+  void req
+
+  const db = loadMockDb()
+  const stocks = Array.isArray(db.stocks) ? db.stocks : []
+  const codes = stocks
+    .map((s) => (s && typeof s === 'object' ? String(s.stock_code || '').trim() : ''))
+    .filter((c) => /^\d{6}$/.test(c))
+    .slice(0, 50)
+
+  const fallbackCodes = String(process.env.SINA_DEFAULT_CODES || '600519,000001')
+    .split(',')
+    .map((c) => c.trim())
+    .filter((c) => /^\d{6}$/.test(c))
+    .slice(0, 50)
+
+  const targetCodes = codes.length > 0 ? codes : fallbackCodes
+  if (targetCodes.length === 0) {
+    return res.status(400).json({
+      success: false,
+      data: null,
+      message: '未找到可同步的股票代码：请先导入行情或配置 SINA_DEFAULT_CODES',
+    })
+  }
+
+  const fileDbPath = getMockDbPath()
+
+  const args = ['-3.12', 'sina_quotes.py', '--codes', ...targetCodes, '--update-mock-db', '--mock-db-path', fileDbPath]
+  const child = spawn('py', args, {
+    cwd: __dirname,
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+
+  let stdout = ''
+  let stderr = ''
+
+  const killTimer = setTimeout(() => {
+    child.kill()
+  }, 30_000)
+
+  child.stdout.on('data', (buf) => {
+    stdout += buf.toString('utf8')
+  })
+
+  child.stderr.on('data', (buf) => {
+    stderr += buf.toString('utf8')
+  })
+
+  child.on('error', (e) => {
+    clearTimeout(killTimer)
+    return res.status(500).json({
+      success: false,
+      data: null,
+      message: e instanceof Error ? e.message : String(e),
+    })
+  })
+
+  child.on('close', (code) => {
+    clearTimeout(killTimer)
+    if (code !== 0 && code !== 2) {
+      return res.status(500).json({
+        success: false,
+        data: null,
+        message: stderr.trim() || '行情同步失败',
+      })
+    }
+
+    try {
+      const parsed = JSON.parse(stdout)
+      const data = parsed && typeof parsed === 'object' ? parsed.data : null
+      const processed = Array.isArray(data) ? data.length : 0
+      return res.json({
+        success: true,
+        data: { processed, codes: targetCodes },
+        message: processed > 0 ? `已同步 ${processed} 条行情` : '同步完成',
+      })
+    } catch (e) {
+      return res.status(500).json({
+        success: false,
+        data: null,
+        message: '行情同步返回解析失败',
+      })
+    }
+  })
+})
+
 app.post('/api/v1/admin/crawl-quotes', (req, res) => {
   void req
 
@@ -318,6 +748,287 @@ app.post('/api/v1/admin/crawl-quotes', (req, res) => {
         message: '行情同步返回解析失败',
       })
     }
+  })
+})
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+})
+
+function getUploadCacheDir() {
+  const dir = path.resolve(__dirname, 'temp_uploads')
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true })
+  }
+  return dir
+}
+
+function getUploadSessionPath(uploadId) {
+  const safeId = String(uploadId).replace(/[^a-zA-Z0-9-]/g, '')
+  return path.join(getUploadCacheDir(), `${safeId}.json`)
+}
+
+function saveUploadSession(uploadId, data) {
+  const filePath = getUploadSessionPath(uploadId)
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8')
+}
+
+function loadUploadSession(uploadId) {
+  const filePath = getUploadSessionPath(uploadId)
+  if (!fs.existsSync(filePath)) return null
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8')
+    return JSON.parse(raw)
+  } catch (e) {
+    console.error(`❌ 读取上传会话 ${uploadId} 失败:`, e.message)
+    return null
+  }
+}
+
+function deleteUploadSession(uploadId) {
+  const filePath = getUploadSessionPath(uploadId)
+  if (fs.existsSync(filePath)) {
+    try {
+      fs.unlinkSync(filePath)
+    } catch (e) {
+      // ignore
+    }
+  }
+}
+
+function normalizeStockCode(value) {
+  if (value === null || value === undefined) return null
+  let raw = String(value).trim()
+  if (!raw || raw.toLowerCase() === 'nan' || raw.toLowerCase() === 'none') return null
+  if (raw.endsWith('.0')) raw = raw.slice(0, -2)
+  const digits = raw.match(/\d+/g)
+  if (!digits) return null
+  const merged = digits.join('')
+  return merged.padStart(6, '0').slice(-6)
+}
+
+function parseQuotesBuffer(filename, buffer) {
+  const ext = filename.split('.').pop().toLowerCase()
+  let rows = []
+
+  if (ext === 'xlsx' || ext === 'xls') {
+    const workbook = XLSX.read(buffer, { type: 'buffer' })
+    const sheetName = workbook.SheetNames[0]
+    const worksheet = workbook.Sheets[sheetName]
+    rows = XLSX.utils.sheet_to_json(worksheet)
+  } else if (ext === 'csv') {
+    rows = csvParse(buffer, { columns: true, skip_empty_lines: true })
+  } else {
+    throw new Error('仅支持 Excel (.xlsx, .xls) 或 CSV 文件')
+  }
+
+  const columnMapping = {
+    stock_code: ['代码', '股票代码', 'Code', '证券代码', 'A股代码', 'code', 'stock_code'],
+    name: ['名称', '股票名称', 'Name', '证券简称', 'A股简称', 'name'],
+    price: ['现价', '最新价', '价格', 'Price', '收盘价', 'price'],
+    changePercent: ['涨跌幅', '涨跌', 'Change', '涨跌幅(%)', 'changePercent'],
+    open: ['开盘', 'open'],
+    high: ['最高', 'high'],
+    low: ['最低', 'low'],
+    pre_close: ['昨收', '昨收盘', 'pre_close', 'preClose'],
+    volume: ['成交量', 'Volume', '总手', 'volume'],
+    amount: ['成交额', 'Amount', '金额', 'amount'],
+  }
+
+  const items = []
+  const seen = new Set()
+
+  rows.forEach((row) => {
+    let foundCodeKey = null
+    for (const key of columnMapping.stock_code) {
+      if (row[key] !== undefined) {
+        foundCodeKey = key
+        break
+      }
+    }
+
+    if (!foundCodeKey) return
+
+    const code = normalizeStockCode(row[foundCodeKey])
+    if (!code || seen.has(code)) return
+    seen.add(code)
+
+    const item = {
+      stock_code: code,
+      code: code,
+      name: '',
+      updateSource: 'file_upload',
+      updated_at: new Date().toISOString(),
+    }
+
+    // 映射其他列
+    Object.keys(columnMapping).forEach((field) => {
+      if (field === 'stock_code') return
+      for (const cand of columnMapping[field]) {
+        if (row[cand] !== undefined) {
+          if (field === 'name') {
+            item.name = String(row[cand])
+          } else {
+            const v = parseFloat(row[cand])
+            if (!isNaN(v)) item[field] = v
+          }
+          break
+        }
+      }
+    })
+
+    items.push(item)
+  })
+
+  return items
+}
+
+function adminAuth(req, res, next) {
+  const token = getBearerToken(req)
+  if (!token) {
+    return res.status(401).json({ success: false, data: null, message: '未登录或登录已过期' })
+  }
+
+  const secret =
+    process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || process.env.SECRET_KEY || 'dev-secret-key-change-in-production'
+
+  try {
+    const payload = jwt.verify(token, secret, { algorithms: ['HS256'] })
+    req.admin = payload
+    next()
+  } catch (e) {
+    return res.status(401).json({ success: false, data: null, message: '无效的登录凭证' })
+  }
+}
+
+app.post('/api/v1/admin/upload-quotes/preview', adminAuth, upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, data: null, message: '未找到上传文件' })
+  }
+
+  try {
+    const items = parseQuotesBuffer(req.file.originalname, req.file.buffer)
+    const uploadId = uuidv4()
+    const session = {
+      upload_id: uploadId,
+      created_at: new Date().toISOString(),
+      status: 'pending',
+      items: items,
+    }
+
+    saveUploadSession(uploadId, session)
+
+    return res.json({
+      success: true,
+      data: {
+        uploadId: uploadId,
+        total: items.length,
+        preview: items.slice(0, 20),
+      },
+      message: '解析成功，请确认入库',
+    })
+  } catch (e) {
+    console.error('❌ 文件预览解析失败:', e.message)
+    return res.status(500).json({ success: false, data: null, message: `解析失败: ${e.message}` })
+  }
+})
+
+app.post('/api/v1/admin/upload-quotes/confirm', adminAuth, async (req, res) => {
+  const { uploadId } = req.body || {}
+  if (!uploadId) {
+    return res.status(400).json({ success: false, data: null, message: '缺少 uploadId' })
+  }
+
+  const session = loadUploadSession(uploadId)
+  if (!session) {
+    return res.status(400).json({ success: false, data: null, message: '预览数据已过期或不存在' })
+  }
+
+  if (session.status === 'processing') {
+    return res.json({
+      success: true,
+      data: { status: 'processing' },
+      message: '入库正在处理中',
+    })
+  }
+
+  if (session.status === 'processed') {
+    return res.json({
+      success: true,
+      data: {
+        status: 'processed',
+        processed: session.result?.processed || 0,
+      },
+      message: '入库已完成',
+    })
+  }
+
+  // 开始处理
+  session.status = 'processing'
+  saveUploadSession(uploadId, session)
+
+  // 异步处理入库
+  const processUpload = async () => {
+    try {
+      const items = session.items
+      let processed = 0
+
+      if (cloudDb) {
+        // 云端入库 - 使用分片并行处理提高性能 (每组 10 个)
+        const CHUNK_SIZE = 10
+        for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+          const chunk = items.slice(i, i + CHUNK_SIZE)
+          await Promise.all(
+            chunk.map(async (item) => {
+              try {
+                await cloudDb.upsert('quotes', { stock_code: item.stock_code }, item)
+                processed++
+              } catch (e) {
+                console.error(`❌ 云端同步股票 ${item.stock_code} 失败:`, e.message)
+              }
+            }),
+          )
+        }
+      } else {
+        // 本地入库 - 使用 Map 优化查找性能
+        const db = loadMockDb()
+        if (!Array.isArray(db.stocks)) db.stocks = []
+
+        const stockMap = new Map(db.stocks.map((s) => [s.stock_code, s]))
+
+        items.forEach((item) => {
+          if (stockMap.has(item.stock_code)) {
+            const existing = stockMap.get(item.stock_code)
+            Object.assign(existing, item)
+          } else {
+            db.stocks.push(item)
+            stockMap.set(item.stock_code, item)
+          }
+          processed++
+        })
+        writeMockDb(db)
+      }
+
+      session.status = 'processed'
+      session.result = { success: true, processed }
+      session.processed_at = new Date().toISOString()
+      saveUploadSession(uploadId, session)
+    } catch (e) {
+      console.error('❌ 入库处理失败:', e.message)
+      session.status = 'failed'
+      session.result = { success: false, message: e.message }
+      saveUploadSession(uploadId, session)
+    }
+  }
+
+  // 立即开始异步处理
+  processUpload()
+
+  return res.json({
+    success: true,
+    data: { status: 'processing' },
+    message: '入库已开始处理',
   })
 })
 

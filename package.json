@@ -8,6 +8,7 @@
     "dev:node": "nodemon app.js",
     "dev:flask": "python -m flask run --port 5000",
     "dev:ui": "npm run dev --prefix admin-ui",
+    "dev:node-ui": "concurrently \"npm run dev:node\" \"npm run dev:ui\"",
     "dev": "concurrently \"npm run dev:node\" \"npm run dev:flask\" \"npm run dev:ui\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -23,15 +24,20 @@
     "npm": ">=9.0.0"
   },
   "dependencies": {
+    "axios": "^1.13.2",
     "better-sqlite3": "^12.4.1",
     "compression": "^1.7.4",
     "cors": "^2.8.5",
+    "csv-parse": "^6.1.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.1",
-    "socket.io": "^4.8.1"
+    "multer": "^2.0.2",
+    "socket.io": "^4.8.1",
+    "uuid": "^13.0.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
