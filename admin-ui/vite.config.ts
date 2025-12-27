@@ -61,7 +61,7 @@ export default defineConfig(({ mode }) => {
   return {
     envDir: repoRoot,
     plugins: [react()],
-    base: '/admin/',
+    base: '/',
     resolve: {
       dedupe: ['react', 'react-dom'],
     },

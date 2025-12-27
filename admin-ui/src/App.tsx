@@ -12,7 +12,7 @@ import './App.css';
 
 function App() {
   return (
-    <BrowserRouter basename="/admin">
+    <BrowserRouter basename="/">
       <Routes>
         <Route path="login" element={<Login />} />
         <Route path="/" element={<AuthGuard><AdminLayout /></AuthGuard>}>

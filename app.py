@@ -153,11 +153,22 @@ def create_app() -> Flask:
     flask_app.register_blueprint(admin_bp, url_prefix='/api/v1/admin')
     flask_app.register_blueprint(group_bp, url_prefix='/api/v1')
 
-    @flask_app.route('/admin/')
-    @flask_app.route('/admin/<path:path>')
+    @flask_app.route('/prototype/')
+    @flask_app.route('/prototype/<path:path>')
+    def serve_prototype(path='index.html'):
+        if not path or path == '':
+            path = 'index.html'
+        return send_from_directory('admin-web', path)
+
+    @flask_app.route('/')
+    @flask_app.route('/<path:path>')
     def serve_admin(path='index.html'):
         if not path or path == '':
             path = 'index.html'
+
+        # 如果是 API 请求，不应该进入静态资源处理
+        if path.startswith('api/'):
+            return flask_error_response("资源不存在", code=404)
 
         dist_dir = os.path.join(flask_app.root_path, 'admin-ui/dist')
 
@@ -165,22 +176,8 @@ def create_app() -> Flask:
         if os.path.exists(target_file) and os.path.isfile(target_file):
             return send_from_directory(dist_dir, path)
 
+        # React 路由回退到 index.html
         return send_from_directory(dist_dir, 'index.html')
-
-    @flask_app.route('/')
-    def index():
-        return send_from_directory('admin-web', 'index.html')
-
-    @flask_app.route('/<path:path>')
-    def serve_static_assets(path):
-        if path.startswith('api/') or path.startswith('admin/'):
-            return flask_error_response("资源不存在", code=404)
-
-        full_path = os.path.join(flask_app.root_path, 'admin-web', path)
-        if os.path.exists(full_path) and os.path.isfile(full_path):
-            return send_from_directory('admin-web', path)
-
-        return flask_error_response("资源不存在", code=404)
 
     @flask_app.errorhandler(404)
     def not_found(error):
