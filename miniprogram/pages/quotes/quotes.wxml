@@ -242,4 +242,20 @@
       </view>
     </view>
   </view>
+
+  <!-- 删除分组确认弹窗 -->
+  <view class="dialog-mask" wx:if="{{showDeleteGroupDialog}}">
+    <view class="dialog-box">
+      <view class="dialog-title">确认删除分组</view>
+      <view class="delete-dialog-desc">您确定要删除该分组吗？</view>
+      <view class="delete-dialog-checkbox-row" bindtap="onToggleDeleteRemoveFavorites">
+        <view class="delete-checkbox {{deleteRemoveFavorites ? 'checked' : ''}}"></view>
+        <view class="delete-checkbox-text">同时将分组内产品移出自选列表</view>
+      </view>
+      <view class="dialog-btns">
+        <view class="d-btn cancel" bindtap="onCancelDeleteGroupDialog">取消</view>
+        <view class="d-btn danger" bindtap="onConfirmDeleteGroupDialog">确认</view>
+      </view>
+    </view>
+  </view>
 </view>

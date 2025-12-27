@@ -103,6 +103,7 @@ Page({
     showDeleteGroupDialog: false,  // 删除确认弹窗
     deleteMigrationCount: 0,       // 需要迁移的自选数量
     availableTargetGroups: [],     // 可用于迁移的目标分组
+    deleteRemoveFavorites: false,  // 删除分组时是否同步移出自选
     
     // 添加自选弹窗相关状态
     showAddFavoritesPopup: false,  // 是否显示添加自选弹窗
@@ -712,6 +713,7 @@ Page({
     this.setData({
       showDeleteGroupDialog: true,
       editingGroupId: id,
+      deleteRemoveFavorites: false,
       deleteMigrationCount: migrationCount,
       availableTargetGroups,
       selectedTargetGroupId: availableTargetGroups.length > 0 ? availableTargetGroups[0].id : null
@@ -720,7 +722,11 @@ Page({
 
   // 关闭删除分组弹窗
   closeDeleteGroupDialog() {
-    this.setData({ showDeleteGroupDialog: false });
+    this.setData({ showDeleteGroupDialog: false, deleteRemoveFavorites: false });
+  },
+
+  toggleDeleteRemoveFavorites() {
+    this.setData({ deleteRemoveFavorites: !this.data.deleteRemoveFavorites });
   },
 
   // 选择迁移目标分组
@@ -733,41 +739,44 @@ Page({
 
   // 确认删除分组
   confirmDeleteGroup() {
-    const { editingGroupId, deleteMigrationCount, availableTargetGroups, selectedTargetGroupId, favoritesById } = this.data;
-    
+    const { editingGroupId, favoritesById } = this.data;
+    const removeFavorites = this.data.deleteRemoveFavorites === true;
+
     let updatedFavorites = { ...favoritesById };
-    
-    // 如果需要迁移
-    if (deleteMigrationCount > 0 && availableTargetGroups.length > 0) {
-      const targetGroupId = selectedTargetGroupId;
-      Object.keys(updatedFavorites).forEach(id => {
-        if ((updatedFavorites[id].groupId || 'all') === editingGroupId) {
-          updatedFavorites[id].groupId = targetGroupId;
-        }
-      });
-    } else {
-      // 直接删除该分组的自选
-      Object.keys(updatedFavorites).forEach(id => {
-        if ((updatedFavorites[id].groupId || 'all') === editingGroupId) {
-          delete updatedFavorites[id];
-        }
-      });
-    }
+
+    Object.keys(updatedFavorites).forEach(id => {
+      const fav = updatedFavorites[id];
+      if ((fav && (fav.groupId || 'all')) !== editingGroupId) return;
+
+      if (removeFavorites) {
+        delete updatedFavorites[id];
+        return;
+      }
+
+      const next = { ...fav };
+      if ('groupId' in next) {
+        delete next.groupId;
+      }
+      updatedFavorites[id] = next;
+    });
     
     // 删除分组
     const customGroups = this.data.customGroups.filter(g => g.id !== editingGroupId);
+    const nextActiveSubTab = this.data.activeSubTab === editingGroupId ? 'all' : this.data.activeSubTab;
     
     this.setData({ 
       customGroups,
       favoritesById: updatedFavorites,
-      showDeleteGroupDialog: false
+      showDeleteGroupDialog: false,
+      deleteRemoveFavorites: false,
+      activeSubTab: nextActiveSubTab
+    }, () => {
+      this.saveFavorites();
+      this.saveCustomGroups(); // 保存到本地存储
+      this.filterQuoteList();
+      this.computeGroupCounts();
+      wx.showToast({ title: '删除成功', icon: 'none' });
     });
-    
-    this.saveFavorites();
-    this.saveCustomGroups(); // 保存到本地存储
-    this.filterQuoteList();
-    this.computeGroupCounts();
-    wx.showToast({ title: '删除成功', icon: 'none' });
   },
 
   openEditGroups() {

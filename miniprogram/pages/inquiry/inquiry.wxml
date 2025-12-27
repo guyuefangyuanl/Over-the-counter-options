@@ -133,21 +133,17 @@
              position="center" 
              bind:close="closeDeleteGroupDialog">
     <view class="new-group-dialog delete-dialog">
-      <view class="dialog-title">删除分组</view>
+      <view class="dialog-title">确认删除分组</view>
       <view class="delete-content">
-        <text wx:if="{{deleteMigrationCount > 0}}">该分组下有{{deleteMigrationCount}}个自选，请选择迁移目标：</text>
-        <text wx:else>确认删除该分组？</text>
+        <text>您确定要删除该分组吗？</text>
       </view>
-      <dropdown-select wx:if="{{deleteMigrationCount > 0 && availableTargetGroups.length > 0}}" 
-              value="{{selectedTargetGroupId}}" 
-              options="{{availableTargetGroups}}" 
-              label-key="name"
-              value-key="id"
-              placeholder="请选择目标分组"
-              bind:change="onTargetGroupChange" />
-      <view class="dialog-actions">
+      <view class="delete-checkbox-row" bindtap="toggleDeleteRemoveFavorites">
+        <view class="delete-checkbox {{deleteRemoveFavorites ? 'checked' : ''}}"></view>
+        <text class="delete-checkbox-text">同时将分组内产品移出自选列表</text>
+      </view>
+      <view class="dialog-actions delete-dialog-actions">
         <van-button size="small" type="default" bind:click="closeDeleteGroupDialog">取消</van-button>
-        <van-button size="small" type="danger" bind:click="confirmDeleteGroup">删除</van-button>
+        <van-button size="small" type="danger" bind:click="confirmDeleteGroup">确认</van-button>
       </view>
     </view>
   </van-popup>

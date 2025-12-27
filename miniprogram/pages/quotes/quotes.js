@@ -109,7 +109,11 @@ Page({
     topGroups: [],
     topGroupAnimationClass: '',
     loadingGroups: false,
-    pendingGroupSwitchId: ''
+    pendingGroupSwitchId: '',
+    showDeleteGroupDialog: false,
+    deleteGroupId: '',
+    deleteGroupName: '',
+    deleteRemoveFavorites: false
   },
 
   onLoad: function (options) {
@@ -653,33 +657,70 @@ Page({
   // --- 删除分组 ---
   onDeleteGroup: function(e) {
     const { id, name } = e.currentTarget.dataset;
-    
-    wx.showModal({
-      title: '删除分组',
-      content: `确定删除"${name}"吗？`,
-      confirmColor: '#FF4D4F',
-      success: (res) => {
-        if (res.confirm) {
-          wx.showLoading({ title: '删除中...' });
-          api.deleteGroup(id)
-            .then(() => {
-              wx.hideLoading();
-              wx.showToast({ title: '已删除', icon: 'success' });
-              
-              // 如果当前正好在这个组，切回全部
-              if (this.data.activeGroupId === id) {
-                this.onSwitchGroup({ currentTarget: { dataset: { id: 'all' } } });
-              }
-              
-              this.loadGroups();
-            })
-            .catch(err => {
-              wx.hideLoading();
-              wx.showToast({ title: err.message || '删除失败', icon: 'none' });
-            });
-        }
-      }
+
+    this.setData({
+      showDeleteGroupDialog: true,
+      deleteGroupId: id,
+      deleteGroupName: name || '',
+      deleteRemoveFavorites: false
     });
+  },
+
+  onToggleDeleteRemoveFavorites: function() {
+    this.setData({ deleteRemoveFavorites: !this.data.deleteRemoveFavorites });
+  },
+
+  onCancelDeleteGroupDialog: function() {
+    this.setData({
+      showDeleteGroupDialog: false,
+      deleteGroupId: '',
+      deleteGroupName: '',
+      deleteRemoveFavorites: false
+    });
+  },
+
+  onConfirmDeleteGroupDialog: function() {
+    const groupId = this.data.deleteGroupId;
+    if (!groupId) {
+      this.onCancelDeleteGroupDialog();
+      return;
+    }
+
+    const removeFavorites = this.data.deleteRemoveFavorites === true;
+    const group = (this.data.customGroups || []).find(g => g && g.id === groupId);
+    const memberCodes = logic.extractGroupMemberCodes(group);
+
+    wx.showLoading({ title: '删除中...' });
+    api.deleteGroup(groupId, { removeFavorites })
+      .then(() => {
+        wx.hideLoading();
+
+        if (removeFavorites) {
+          const storedFavorites = wx.getStorageSync('favorites') || [];
+          const nextFavorites = logic.removeFavoritesByCodes(storedFavorites, memberCodes);
+          wx.setStorageSync('favorites', nextFavorites);
+        }
+
+        this.setData({
+          showDeleteGroupDialog: false,
+          deleteGroupId: '',
+          deleteGroupName: '',
+          deleteRemoveFavorites: false
+        });
+
+        if (this.data.activeGroupId === groupId) {
+          this.onSwitchGroup({ currentTarget: { dataset: { id: 'all' } } });
+        } else {
+          this.filterWatchlistByGroup(this.data.activeGroupId);
+        }
+
+        this.loadGroups({ silent: true });
+        wx.showToast({ title: '已删除', icon: 'success' });
+      })
+      .catch(err => {
+        wx.hideLoading();
+        wx.showToast({ title: err.message || '删除失败', icon: 'none' });
+      });
   },
 
   removeGroupFromItems: function(groupId) {

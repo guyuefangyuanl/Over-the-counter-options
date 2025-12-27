@@ -78,6 +78,36 @@ function migrateGroupItems(fromGroupId, toGroupId, favoritesById) {
   return updated;
 }
 
+function extractGroupMemberCodes(group) {
+  const members = group && Array.isArray(group.members) ? group.members : [];
+  return members
+    .map(m => (m && (m.stock_code || m.stockCode)) || '')
+    .map(s => String(s).trim())
+    .filter(Boolean);
+}
+
+function removeFavoritesByCodes(favorites, codes) {
+  const list = Array.isArray(favorites) ? favorites : [];
+  const rawCodes = Array.isArray(codes) ? codes : [];
+
+  const normalizedSet = new Set();
+  rawCodes.forEach(c => {
+    const s = String(c || '').trim();
+    if (!s) return;
+    normalizedSet.add(s);
+    normalizedSet.add(s.split('.')[0]);
+  });
+
+  if (normalizedSet.size === 0) return list.slice();
+
+  return list.filter(item => {
+    const code = item && item.code ? String(item.code) : '';
+    if (!code) return true;
+    const codeNoSuffix = code.split('.')[0];
+    return !normalizedSet.has(code) && !normalizedSet.has(codeNoSuffix);
+  });
+}
+
 const PROTECTED_GROUP_NAMES = new Set(['全部', '系统分组', '持仓', '我的持仓', '沪深', '指数']);
 const PROTECTED_GROUP_IDS = new Set(['all', 'system', 'holding', 'shsz', 'hs', 'index']);
 
@@ -163,6 +193,8 @@ module.exports = {
   getAvailableTargetGroups,
   computeMigrationCount,
   migrateGroupItems,
+  extractGroupMemberCodes,
+  removeFavoritesByCodes,
   isProtectedGroup,
   loadCustomGroups,
   createGroup,

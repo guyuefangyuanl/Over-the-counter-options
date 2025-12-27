@@ -150,7 +150,7 @@ describe('migrateGroupItems', () => {
       4: { groupId: 'holding' },
     };
     const result = logic.migrateGroupItems('g1', 'g2', favoritesById);
-    
+
     expect(result[1].groupId).toBe('g2');
     expect(result[2].groupId).toBe('g2');
     expect(result[3].groupId).toBe('g2');
@@ -167,7 +167,7 @@ describe('migrateGroupItems', () => {
       1: { groupId: 'g1', extra: 'data' },
     };
     const result = logic.migrateGroupItems('g1', 'g2', favoritesById);
-    
+
     expect(result[1].groupId).toBe('g2');
     expect(result[1].extra).toBe('data');
   });
@@ -190,3 +190,50 @@ describe('isProtectedGroup', () => {
     expect(logic.isProtectedGroup({ id: 'g1', name: '核心资产' })).toBe(false);
   });
 });
+
+describe('extractGroupMemberCodes', () => {
+  test('returns empty array for empty group', () => {
+    expect(logic.extractGroupMemberCodes(null)).toEqual([]);
+    expect(logic.extractGroupMemberCodes({})).toEqual([]);
+    expect(logic.extractGroupMemberCodes({ members: [] })).toEqual([]);
+  });
+
+  test('extracts stock codes from members', () => {
+    const group = {
+      members: [
+        { stock_code: '300750.SZ' },
+        { stockCode: '000001' },
+        { stock_code: '  603259.SH  ' },
+        {},
+        null
+      ]
+    };
+    expect(logic.extractGroupMemberCodes(group)).toEqual(['300750.SZ', '000001', '603259.SH']);
+  });
+});
+
+describe('removeFavoritesByCodes', () => {
+  test('returns copy when codes empty', () => {
+    const favorites = [{ code: '300750.SZ' }];
+    const res = logic.removeFavoritesByCodes(favorites, []);
+    expect(res).toEqual(favorites);
+    expect(res).not.toBe(favorites);
+  });
+
+  test('removes matching codes including suffix variations', () => {
+    const favorites = [
+      { code: '300750.SZ' },
+      { code: '000001' },
+      { code: '603259.SH' },
+      { code: 'AAPL' }
+    ];
+    const res = logic.removeFavoritesByCodes(favorites, ['300750', '603259.SH']);
+    expect(res.map(i => i.code)).toEqual(['000001', 'AAPL']);
+  });
+
+  test('handles non-array inputs safely', () => {
+    expect(logic.removeFavoritesByCodes(null, ['1'])).toEqual([]);
+    expect(logic.removeFavoritesByCodes([{ code: '1' }], null)).toEqual([{ code: '1' }]);
+  });
+});
+

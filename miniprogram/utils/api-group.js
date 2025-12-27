@@ -91,8 +91,10 @@ const api = {
   },
 
   // 删除分组
-  deleteGroup: (groupId) => {
-    return request(`/groups/${groupId}`, 'DELETE', undefined, { retries: 1 });
+  deleteGroup: (groupId, options = {}) => {
+    const removeFavorites = options && (options.removeFavorites === true || options.removeFavorites === 1 || options.removeFavorites === '1');
+    const query = `?remove_favorites=${removeFavorites ? 1 : 0}`;
+    return request(`/groups/${groupId}${query}`, 'DELETE', undefined, { retries: 1 });
   },
 
   // 添加成员

@@ -102,6 +102,14 @@ def update_group(group_id):
 @group_bp.route('/groups/<group_id>', methods=['DELETE'])
 def delete_group(group_id):
     try:
+        remove_favorites_raw = request.args.get('remove_favorites')
+        if remove_favorites_raw is None and request.is_json:
+            body = request.get_json(silent=True) or {}
+            remove_favorites_raw = body.get('remove_favorites')
+            if remove_favorites_raw is None:
+                remove_favorites_raw = body.get('removeFavorites')
+        remove_favorites = str(remove_favorites_raw).strip().lower() in ("1", "true", "yes", "y", "on")
+
         model = get_model()
         if not model.db and not model.cloud_client:
             return flask_error_response("数据库未连接", 503)
@@ -114,7 +122,15 @@ def delete_group(group_id):
             return flask_error_response("无权删除", 403)
         if is_protected_group_name(group.get("name")):
             return flask_error_response("系统保护分组不可删除", 403)
-            
+
+        current_app.logger.info(
+            "delete_group user=%s group_id=%s remove_favorites=%s members_count=%s",
+            get_current_user_id(),
+            group_id,
+            remove_favorites,
+            len(group.get("members") or []),
+        )
+
         success = model.delete_group(group_id)
         if success:
             return flask_success_response(message="删除成功")
