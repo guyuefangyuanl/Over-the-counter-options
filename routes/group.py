@@ -1,0 +1,172 @@
+from flask import Blueprint, request, jsonify, current_app
+from utils.response import flask_success_response, flask_error_response
+from models.group import GroupModel
+# from routes.auth import require_auth # Assuming auth is handled or we mock it for now
+
+group_bp = Blueprint('group', __name__)
+
+PROTECTED_GROUP_NAMES = {
+    "全部",
+    "系统分组",
+    "持仓",
+    "我的持仓",
+    "沪深",
+    "指数",
+}
+
+def is_protected_group_name(name: str) -> bool:
+    if not name:
+        return False
+    return str(name).strip() in PROTECTED_GROUP_NAMES
+
+# Mock auth for now if not available, or retrieve user_id from header/token
+def get_current_user_id():
+    # In a real app, this comes from JWT or session
+    # For now, we assume a default user or get from header 'X-User-ID'
+    return request.headers.get('X-User-ID', 'default_user')
+
+def get_model():
+    ensure_db = getattr(current_app, "ensure_db", None)
+    db = None
+    if callable(ensure_db):
+        db = ensure_db()
+    if db is None:
+        db = getattr(current_app, "db", None)
+    
+    cloud_db = getattr(current_app, "cloud_db", None)
+    return GroupModel(db, cloud_client=cloud_db)
+
+@group_bp.route('/groups', methods=['POST'])
+def create_group():
+    try:
+        data = request.json
+        if not data or not data.get('name'):
+            return flask_error_response("分组名称不能为空", 400)
+        if is_protected_group_name(data.get("name")):
+            return flask_error_response("该分组名称为系统保留名称，无法创建", 400)
+            
+        creator_id = get_current_user_id()
+        data['creator_id'] = creator_id
+        
+        model = get_model()
+        if not model.db and not model.cloud_client:
+            return flask_error_response("数据库未连接", 503)
+            
+        group_id = model.create_group(data)
+        
+        return flask_success_response(data={"id": group_id}, message="创建成功")
+    except Exception as e:
+        return flask_error_response(str(e), 500)
+
+@group_bp.route('/groups', methods=['GET'])
+def get_groups():
+    try:
+        creator_id = get_current_user_id()
+        model = get_model()
+        if not model.db and not model.cloud_client:
+            return flask_success_response(data=[], message="数据库未连接，返回空分组列表")
+            
+        groups = model.get_groups(creator_id)
+        
+        return flask_success_response(data=groups, message="获取成功")
+    except Exception as e:
+        return flask_error_response(str(e), 500)
+
+@group_bp.route('/groups/<group_id>', methods=['PUT'])
+def update_group(group_id):
+    try:
+        data = request.json
+        if data and "name" in data and is_protected_group_name(data.get("name")):
+            return flask_error_response("该分组名称为系统保留名称，无法使用", 400)
+        model = get_model()
+        if not model.db and not model.cloud_client:
+            return flask_error_response("数据库未连接", 503)
+        
+        # Check permission
+        group = model.get_group_by_id(group_id)
+        if not group:
+            return flask_error_response("分组不存在", 404)
+        if group['creator_id'] != get_current_user_id():
+            return flask_error_response("无权修改", 403)
+        if is_protected_group_name(group.get("name")):
+            return flask_error_response("系统保护分组不可重命名", 403)
+            
+        success = model.update_group(group_id, data)
+        if success:
+            return flask_success_response(message="更新成功")
+        else:
+            return flask_error_response("更新失败", 500)
+    except Exception as e:
+        return flask_error_response(str(e), 500)
+
+@group_bp.route('/groups/<group_id>', methods=['DELETE'])
+def delete_group(group_id):
+    try:
+        model = get_model()
+        if not model.db and not model.cloud_client:
+            return flask_error_response("数据库未连接", 503)
+        
+        # Check permission
+        group = model.get_group_by_id(group_id)
+        if not group:
+            return flask_error_response("分组不存在", 404)
+        if group['creator_id'] != get_current_user_id():
+            return flask_error_response("无权删除", 403)
+        if is_protected_group_name(group.get("name")):
+            return flask_error_response("系统保护分组不可删除", 403)
+            
+        success = model.delete_group(group_id)
+        if success:
+            return flask_success_response(message="删除成功")
+        else:
+            return flask_error_response("删除失败", 500)
+    except Exception as e:
+        return flask_error_response(str(e), 500)
+
+@group_bp.route('/groups/<group_id>/members', methods=['POST'])
+def add_member(group_id):
+    try:
+        data = request.json
+        if not data or not data.get('stock_code'):
+            return flask_error_response("股票代码不能为空", 400)
+            
+        model = get_model()
+        if not model.db and not model.cloud_client:
+            return flask_error_response("数据库未连接", 503)
+        
+        # Check permission
+        group = model.get_group_by_id(group_id)
+        if not group:
+            return flask_error_response("分组不存在", 404)
+        if group['creator_id'] != get_current_user_id():
+            return flask_error_response("无权操作", 403)
+            
+        success = model.add_member(group_id, data)
+        if success:
+            return flask_success_response(message="添加成功")
+        else:
+            return flask_error_response("添加失败或已存在", 400)
+    except Exception as e:
+        return flask_error_response(str(e), 500)
+
+@group_bp.route('/groups/<group_id>/members/<stock_code>', methods=['DELETE'])
+def remove_member(group_id, stock_code):
+    try:
+        model = get_model()
+        if not model.db and not model.cloud_client:
+            return flask_error_response("数据库未连接", 503)
+        
+        # Check permission
+        group = model.get_group_by_id(group_id)
+        if not group:
+            return flask_error_response("分组不存在", 404)
+        if group['creator_id'] != get_current_user_id():
+            return flask_error_response("无权操作", 403)
+            
+        success = model.remove_member(group_id, stock_code)
+        if success:
+            return flask_success_response(message="移除成功")
+        else:
+            return flask_error_response("移除失败", 500)
+    except Exception as e:
+        return flask_error_response(str(e), 500)

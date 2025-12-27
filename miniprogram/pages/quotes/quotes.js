@@ -1,5 +1,7 @@
 // 报价页面 - 核心功能页面（个股期权报价）
 const OptionPricingSystem = require('../../utils/option-pricing.js');
+const logic = require('../../utils/inquiry-logic.js');
+const api = require('../../utils/api-group.js');
 
 Page({
   data: {
@@ -84,14 +86,37 @@ Page({
       premiumPercent: '',
       notional: 100,
       buyPrice: ''
-    }
+    },
+    
+    // === 分组功能状态 ===
+    systemGroups: [
+      { id: 'all', name: '全部' },
+      { id: 'holding', name: '我的持仓' }
+    ],
+    customGroups: [],
+    showGroupManagePopup: false,
+    showNewGroupDialog: false,
+    newGroupName: '',
+    newGroupError: '',
+    canConfirmNewGroup: false,
+    showRenameGroupDialog: false,
+    editingGroupId: '',
+    editingGroupName: '',
+    renameGroupError: '',
+    canConfirmRenameGroup: false,
+    groupCountsById: {},
+    activeGroupId: 'all', // 当前激活的分组ID
+    topGroups: [],
+    topGroupAnimationClass: '',
+    loadingGroups: false,
+    pendingGroupSwitchId: ''
   },
 
   onLoad: function (options) {
     // 获取系统信息以适配自定义导航栏
-    const sysInfo = wx.getSystemInfoSync();
+    const windowInfo = wx.getWindowInfo();
     this.setData({
-      statusBarHeight: sysInfo.statusBarHeight,
+      statusBarHeight: windowInfo.statusBarHeight,
       navBarHeight: 44 // iOS标准，Android可能是48，这里简化
     });
 
@@ -181,6 +206,7 @@ Page({
     
     // 加载自选列表
     this.loadWatchlist();
+    this.loadGroups({ silent: true });
     
     // 重新检查收藏状态
     this.checkFavoriteStatus();
@@ -357,14 +383,317 @@ Page({
 
   // ==================== 分组功能逻辑 ====================
   onGroupClick: function() {
-    console.log('用户点击了分组功能按钮');
-    wx.showToast({
-      title: '分组功能暂未开放',
-      icon: 'none',
-      duration: 2000
+    console.log('打开分组管理');
+    this.setData({ showGroupManagePopup: true });
+    this.loadGroups({ silent: false });
+  },
+
+  closeGroupManagePopup: function() {
+    this.setData({ showGroupManagePopup: false });
+  },
+
+  // 加载分组列表
+  loadGroups: function(options) {
+    const silent = options && options.silent;
+    this.setData({ loadingGroups: true });
+    if (!silent) {
+      wx.showLoading({ title: '加载中...' });
+    }
+    api.getGroups()
+      .then(res => {
+        if (!silent) {
+          wx.hideLoading();
+        }
+        const groups = Array.isArray(res && res.data) ? res.data : [];
+        const enhancedGroups = groups.map(g => ({ ...g, _protected: logic.isProtectedGroup(g) }));
+        const pendingGroupId = this.data.pendingGroupSwitchId;
+        this.setData({ customGroups: enhancedGroups, topGroups: enhancedGroups, loadingGroups: false, topGroupAnimationClass: enhancedGroups.length ? 'fade-in' : '' });
+        this.updateGroupCounts();
+        if (enhancedGroups.length) {
+          setTimeout(() => {
+            if (this.data.topGroupAnimationClass) {
+              this.setData({ topGroupAnimationClass: '' });
+            }
+          }, 260);
+        }
+        if (pendingGroupId) {
+          const exists = (enhancedGroups || []).some(g => g && g.id === pendingGroupId);
+          if (exists) {
+            this.setData({ pendingGroupSwitchId: '' });
+            this.onSwitchGroup({ currentTarget: { dataset: { id: pendingGroupId } } });
+          } else {
+            this.setData({ pendingGroupSwitchId: '' });
+          }
+        }
+        if (!silent && res && typeof res.message === 'string' && res.message.indexOf('数据库未连接') > -1) {
+          wx.showToast({ title: '数据库未连接', icon: 'none' });
+        }
+      })
+      .catch(err => {
+        if (!silent) {
+          wx.hideLoading();
+          const msg = (err && err.message) ? err.message : '加载分组失败';
+          wx.showToast({ title: msg, icon: 'none' });
+        }
+        this.setData({ customGroups: [], topGroups: [], loadingGroups: false, pendingGroupSwitchId: '' });
+        this.updateGroupCounts();
+      });
+  },
+
+  // 更新各分组数量
+  updateGroupCounts: function() {
+    const counts = {};
+    const { watchlist, customGroups } = this.data;
+    
+    // 系统分组计数
+    counts['all'] = watchlist.length;
+    // 假设持仓逻辑
+    counts['holding'] = watchlist.filter(item => item.isHolding).length || 0;
+
+    // 自定义分组计数
+    (customGroups || []).forEach(group => {
+      // 使用后端返回的 members 长度
+      if (group.members) {
+        counts[group.id] = group.members.length;
+      } else {
+        counts[group.id] = 0;
+      }
     });
-    // 这里未来可以扩展为打开分组管理弹窗
-    // this.setData({ showGroupManage: true });
+
+    this.setData({ groupCountsById: counts });
+  },
+
+  // 切换分组
+  onSwitchGroup: function(e) {
+    const groupId = e.currentTarget.dataset.id;
+    this.setData({ 
+      activeGroupId: groupId,
+      showGroupManagePopup: false
+    });
+    
+    // 执行筛选逻辑
+    this.filterWatchlistByGroup(groupId);
+    
+    wx.showToast({ title: '已切换分组', icon: 'none' });
+  },
+
+  // 根据分组筛选自选列表
+  filterWatchlistByGroup: function(groupId) {
+    // 重新加载原始列表
+    let allItems = wx.getStorageSync('favorites') || [];
+    
+    let filtered;
+    if (groupId === 'all') {
+      filtered = allItems;
+    } else if (groupId === 'holding') {
+      filtered = allItems.filter(item => item.isHolding);
+    } else {
+      // 从后端分组数据中查找该分组
+      const group = this.data.customGroups.find(g => g.id === groupId);
+      if (group && group.members) {
+        // 获取该分组下的股票代码列表
+        const memberCodes = group.members.map(m => m.stock_code);
+        // 筛选出在分组中的自选股
+        filtered = allItems.filter(item => {
+          // 兼容带后缀和不带后缀的比较
+          const code = item.code;
+          const codeNoSuffix = code.split('.')[0];
+          return memberCodes.includes(code) || memberCodes.includes(codeNoSuffix);
+        });
+      } else {
+        filtered = [];
+      }
+    }
+    
+    const formatted = this.formatWatchlistItems(filtered);
+    this.setData({ watchlist: formatted });
+  },
+  
+  // 提取格式化逻辑
+  formatWatchlistItems: function(items) {
+    return items.map(item => {
+      let displayCode = item.code;
+      if (!displayCode.includes('.')) {
+        const market = item.market || (item.code.startsWith('6') ? 'SH' : 'SZ');
+        displayCode = `${item.code}.${market}`;
+      }
+      const atm = item.atm || (Math.random() * 10 + 5).toFixed(2);
+      const otm105 = item.otm105 || (atm * 0.8).toFixed(2);
+      const otm110 = item.otm110 || (atm * 0.6).toFixed(2);
+      return {
+        ...item,
+        code: displayCode,
+        atm: Number(atm).toFixed(2),
+        otm105: Number(otm105).toFixed(2),
+        otm110: Number(otm110).toFixed(2),
+        changePercent: Number(item.changePercent).toFixed(2)
+      };
+    });
+  },
+
+  // --- 新建分组 ---
+  onShowNewGroupDialog: function() {
+    this.setData({ 
+      showNewGroupDialog: true,
+      newGroupName: '',
+      newGroupError: '',
+      canConfirmNewGroup: false
+    });
+  },
+
+  onCloseNewGroupDialog: function() {
+    this.setData({ showNewGroupDialog: false });
+  },
+
+  onNewGroupNameInput: function(e) {
+    const name = e.detail.value;
+    const { canConfirm, error } = logic.validateNewGroupName(name, this.data.customGroups);
+    this.setData({
+      newGroupName: name,
+      newGroupError: error || '',
+      canConfirmNewGroup: canConfirm
+    });
+  },
+
+  onConfirmNewGroup: function() {
+    if (!this.data.canConfirmNewGroup) return;
+    
+    const name = this.data.newGroupName;
+    
+    wx.showLoading({ title: '创建中...' });
+    
+    api.createGroup(name)
+      .then(res => {
+        wx.hideLoading();
+        wx.showToast({ title: '创建成功', icon: 'success' });
+        const groupId = res && res.data && res.data.id ? res.data.id : '';
+        if (groupId) {
+          this.setData({ showNewGroupDialog: false, pendingGroupSwitchId: groupId, activeGroupId: groupId });
+        } else {
+          this.setData({ showNewGroupDialog: false });
+        }
+        this.loadGroups();
+      })
+      .catch(err => {
+        wx.hideLoading();
+        this.setData({ newGroupError: err.message || '创建失败' });
+      });
+  },
+
+  // --- 重命名分组 ---
+  onShowRenameGroupDialog: function(e) {
+    const { id, name } = e.currentTarget.dataset;
+    this.setData({
+      showRenameGroupDialog: true,
+      editingGroupId: id,
+      editingGroupName: name,
+      renameGroupError: '',
+      canConfirmRenameGroup: false 
+    });
+  },
+
+  onCloseRenameGroupDialog: function() {
+    this.setData({ showRenameGroupDialog: false });
+  },
+
+  onRenameGroupNameInput: function(e) {
+    const name = e.detail.value;
+    const { canConfirm, error } = logic.validateRenameGroupName(name, this.data.editingGroupId, this.data.customGroups);
+    
+    this.setData({
+      editingGroupName: name,
+      renameGroupError: error || '',
+      canConfirmRenameGroup: canConfirm
+    });
+  },
+
+  onConfirmRenameGroup: function() {
+    if (!this.data.canConfirmRenameGroup) return;
+    
+    const groupId = this.data.editingGroupId;
+    const name = this.data.editingGroupName;
+    
+    wx.showLoading({ title: '更新中...' });
+    
+    api.updateGroup(groupId, { name })
+      .then(res => {
+        wx.hideLoading();
+        wx.showToast({ title: '重命名成功', icon: 'success' });
+        this.setData({ showRenameGroupDialog: false });
+        this.loadGroups();
+      })
+      .catch(err => {
+        wx.hideLoading();
+        this.setData({ renameGroupError: err.message || '更新失败' });
+      });
+  },
+
+  onOpenGroupActions: function(e) {
+    const { id, name, protected: protectedRaw } = e.currentTarget.dataset || {};
+    if (!id) return;
+    const isProtected = protectedRaw === true || protectedRaw === 'true' || protectedRaw === 1 || protectedRaw === '1';
+    if (isProtected) {
+      wx.showToast({ title: '系统保护分组不可重命名或删除', icon: 'none' });
+      return;
+    }
+    wx.showActionSheet({
+      itemList: ['重命名分组', '删除分组'],
+      success: (res) => {
+        if (res.tapIndex === 0) {
+          this.onShowRenameGroupDialog({ currentTarget: { dataset: { id, name } } });
+          return;
+        }
+        if (res.tapIndex === 1) {
+          this.onDeleteGroup({ currentTarget: { dataset: { id, name } } });
+        }
+      }
+    });
+  },
+
+  // --- 删除分组 ---
+  onDeleteGroup: function(e) {
+    const { id, name } = e.currentTarget.dataset;
+    
+    wx.showModal({
+      title: '删除分组',
+      content: `确定删除"${name}"吗？`,
+      confirmColor: '#FF4D4F',
+      success: (res) => {
+        if (res.confirm) {
+          wx.showLoading({ title: '删除中...' });
+          api.deleteGroup(id)
+            .then(() => {
+              wx.hideLoading();
+              wx.showToast({ title: '已删除', icon: 'success' });
+              
+              // 如果当前正好在这个组，切回全部
+              if (this.data.activeGroupId === id) {
+                this.onSwitchGroup({ currentTarget: { dataset: { id: 'all' } } });
+              }
+              
+              this.loadGroups();
+            })
+            .catch(err => {
+              wx.hideLoading();
+              wx.showToast({ title: err.message || '删除失败', icon: 'none' });
+            });
+        }
+      }
+    });
+  },
+
+  removeGroupFromItems: function(groupId) {
+    let allItems = wx.getStorageSync('favorites') || [];
+    const newItems = allItems.map(item => {
+      if (item.groupIds && item.groupIds.includes(groupId)) {
+        return {
+          ...item,
+          groupIds: item.groupIds.filter(gid => gid !== groupId)
+        };
+      }
+      return item;
+    });
+    wx.setStorageSync('favorites', newItems);
   },
   // ==================== 分组功能逻辑结束 ====================
 

@@ -172,3 +172,21 @@ describe('migrateGroupItems', () => {
     expect(result[1].extra).toBe('data');
   });
 });
+
+describe('isProtectedGroup', () => {
+  test('returns true for protected names', () => {
+    expect(logic.isProtectedGroup('全部')).toBe(true);
+    expect(logic.isProtectedGroup('持仓')).toBe(true);
+    expect(logic.isProtectedGroup('沪深')).toBe(true);
+    expect(logic.isProtectedGroup('指数')).toBe(true);
+  });
+
+  test('returns true for protected ids', () => {
+    expect(logic.isProtectedGroup({ id: 'all', name: '随便' })).toBe(true);
+    expect(logic.isProtectedGroup({ id: 'holding', name: '我的持仓' })).toBe(true);
+  });
+
+  test('returns false for normal custom group', () => {
+    expect(logic.isProtectedGroup({ id: 'g1', name: '核心资产' })).toBe(false);
+  });
+});

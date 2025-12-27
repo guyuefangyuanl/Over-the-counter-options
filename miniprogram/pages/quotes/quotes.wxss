@@ -78,6 +78,61 @@
   padding-bottom: 4rpx; /* 微调对齐 */
 }
 
+.top-groups {
+  flex: 1;
+  min-width: 0;
+}
+
+.top-groups-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 16rpx;
+  padding-right: 8rpx;
+}
+
+.top-groups.fade-in {
+  animation: topGroupFadeIn 0.25s ease-out;
+}
+
+.top-group-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+  white-space: nowrap;
+}
+
+.top-group-count-inline {
+  font-size: 24rpx;
+}
+
+.top-group-item-hover {
+  opacity: 0.7;
+}
+
+.top-group-skeleton {
+  display: flex;
+  align-items: center;
+}
+
+.top-group-skeleton-chip {
+  width: 110rpx;
+  height: 32rpx;
+  border-radius: 6rpx;
+  background: linear-gradient(90deg, #f3f6fb 0%, #e9eef6 50%, #f3f6fb 100%);
+  background-size: 200% 100%;
+  animation: topGroupShimmer 1.0s ease-in-out infinite;
+}
+
+@keyframes topGroupFadeIn {
+  from { opacity: 0; transform: translateY(6rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes topGroupShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .sub-filter-item {
   font-size: 28rpx;
   color: #333;
@@ -509,3 +564,242 @@
   opacity: 0.8;
 }
 /* ==================== 数据说明弹窗样式结束 ==================== */
+
+/* ==================== 分组管理半屏弹窗 ==================== */
+.half-screen-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  z-index: 3000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s;
+}
+
+.half-screen-mask.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.half-screen-container {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 60vh;
+  background-color: #fff;
+  border-radius: 24rpx 24rpx 0 0;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.half-screen-container.show {
+  transform: translateY(0);
+}
+
+.hs-header {
+  padding: 32rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.hs-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.hs-close {
+  font-size: 40rpx;
+  color: #999;
+  padding: 10rpx;
+}
+
+.hs-content {
+  flex: 1;
+  padding: 24rpx 32rpx;
+  box-sizing: border-box;
+}
+
+.group-section-title {
+  font-size: 26rpx;
+  color: #999;
+  margin-bottom: 24rpx;
+  display: block;
+}
+
+.group-list {
+  margin-bottom: 40rpx;
+}
+
+.group-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid #f8f8f8;
+}
+
+.group-item.active .group-name {
+  color: #409eff;
+  font-weight: 500;
+}
+
+.group-name {
+  font-size: 30rpx;
+  color: #333;
+}
+
+.group-count {
+  font-size: 26rpx;
+  color: #999;
+  background-color: #f5f5f5;
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+}
+
+.group-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24rpx;
+}
+
+.add-group-btn {
+  font-size: 26rpx;
+  color: #409eff;
+}
+
+.group-item-custom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid #f8f8f8;
+}
+
+.group-info-area {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-right: 24rpx;
+}
+
+.active-text {
+  color: #409eff;
+  font-weight: 500;
+}
+
+.group-actions {
+  display: flex;
+  gap: 32rpx;
+}
+
+.action-btn {
+  font-size: 32rpx;
+  color: #999;
+  padding: 10rpx;
+}
+
+.action-btn.more {
+  font-size: 44rpx;
+  line-height: 44rpx;
+  padding: 6rpx 14rpx;
+  border-radius: 10rpx;
+  background: #f5f5f5;
+  color: #666;
+}
+
+.action-btn.disabled {
+  opacity: 0.4;
+}
+
+.empty-tip {
+  text-align: center;
+  color: #ccc;
+  font-size: 26rpx;
+  padding: 40rpx 0;
+}
+
+/* ==================== 弹窗通用样式 ==================== */
+.dialog-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dialog-box {
+  width: 560rpx;
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 40rpx 32rpx;
+}
+
+.dialog-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 32rpx;
+}
+
+.dialog-input {
+  height: 80rpx;
+  background-color: #f5f5f5;
+  border-radius: 8rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  margin-bottom: 12rpx;
+}
+
+.error-text {
+  height: 30rpx;
+  font-size: 22rpx;
+  color: #ff4d4f;
+  margin-bottom: 20rpx;
+}
+
+.dialog-btns {
+  display: flex;
+  justify-content: space-between;
+  gap: 24rpx;
+}
+
+.d-btn {
+  flex: 1;
+  height: 80rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8rpx;
+  font-size: 30rpx;
+}
+
+.d-btn.cancel {
+  background-color: #f5f5f5;
+  color: #666;
+}
+
+.d-btn.confirm {
+  background-color: #409eff;
+  color: #fff;
+}
+
+.d-btn.confirm.disabled {
+  background-color: #a0cfff;
+  opacity: 0.7;
+}

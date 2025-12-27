@@ -1,14 +1,21 @@
 const automator = require('miniprogram-automator');
+const fs = require('fs');
 
-describe('报价 E2E 测试', () => {
+const cliPath = process.env.WECHAT_DEVTOOLS_CLI || 'C:\\Program Files (x86)\\Tencent\\微信web开发者工具\\cli.bat';
+const shouldRun = process.env.RUN_MINIPROGRAM_E2E === '1' && fs.existsSync(cliPath);
+const describeE2E = shouldRun ? describe : describe.skip;
+
+describeE2E('报价 E2E 测试', () => {
   let miniProgram, page;
 
   beforeAll(async () => {
-    miniProgram = await automator.launch({ projectPath: '.', cliPath: 'C:\\Program Files (x86)\\Tencent\\微信web开发者工具\\cli.bat' });
+    miniProgram = await automator.launch({ projectPath: '.', cliPath });
   }, 30000);
 
   afterAll(async () => {
-    await miniProgram.close();
+    if (miniProgram) {
+      await miniProgram.close();
+    }
   });
 
   test('启动并进入报价页', async () => {

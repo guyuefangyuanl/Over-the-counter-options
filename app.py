@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+import time
 import logging
 from flask import Flask, jsonify, request, Blueprint, send_from_directory
 from flask_cors import CORS
@@ -7,6 +8,7 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 import akshare as ak
+from services.cloud_db import CloudDbClient, CloudDbConfigError
 
 # 配置日志
 logging.basicConfig(
@@ -82,10 +84,36 @@ def create_app() -> Flask:
     from routes.stock import stock_bp
     from routes.admin import admin_bp
     from routes.auth import auth_bp
+    from routes.group import group_bp
 
     flask_app = Flask(__name__)
     flask_app.config["NODE_ENV"] = NODE_ENV
     flask_app.db = init_db()
+    
+    # 初始化云数据库客户端
+    try:
+        flask_app.cloud_db = CloudDbClient.from_env()
+        logger.info("✅ 微信云数据库客户端初始化成功")
+    except CloudDbConfigError as e:
+        flask_app.cloud_db = None
+        logger.warning(f"⚠️ 微信云数据库配置未就绪: {e}")
+    except Exception as e:
+        flask_app.cloud_db = None
+        logger.error(f"❌ 微信云数据库初始化失败: {e}")
+
+    def ensure_db():
+        if flask_app.db is not None:
+            return flask_app.db
+        if os.getenv("SKIP_DB_INIT") == "1" or flask_app.config.get("NODE_ENV") == "testing":
+            return None
+        now = time.time()
+        last_attempt = getattr(flask_app, "_db_last_attempt_ts", 0)
+        if now - last_attempt < 10:
+            return None
+        flask_app._db_last_attempt_ts = now
+        flask_app.db = init_db()
+        return flask_app.db
+    flask_app.ensure_db = ensure_db
 
     allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost,http://127.0.0.1').split(',')
 
@@ -95,7 +123,7 @@ def create_app() -> Flask:
             r"/api/*": {
                 "origins": allowed_origins,
                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+                "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "X-User-ID"],
                 "supports_credentials": True,
                 "max_age": 86400,
             }
@@ -123,6 +151,7 @@ def create_app() -> Flask:
     flask_app.register_blueprint(inquiry_bp, url_prefix='/api/v1')
     flask_app.register_blueprint(stock_bp, url_prefix='/api/v1/stock')
     flask_app.register_blueprint(admin_bp, url_prefix='/api/v1/admin')
+    flask_app.register_blueprint(group_bp, url_prefix='/api/v1')
 
     @flask_app.route('/admin/')
     @flask_app.route('/admin/<path:path>')

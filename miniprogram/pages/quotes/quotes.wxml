@@ -22,11 +22,35 @@
     
     <!-- 2. 次级筛选栏 -->
     <view class="sub-filter-bar">
-      <view class="sub-filters" style="position: relative; left: 11rpx; top: -77rpx; width: 350rpx; display: flex; box-sizing: border-box">
+      <view class="sub-filters" style="position: relative; left: 11rpx; top: -77rpx; flex: 1; min-width: 0; display: flex; box-sizing: border-box">
         <view class="sub-filter-item {{subFilter === '全部' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="全部">全部</view>
         <view class="sub-filter-item {{subFilter === '持仓' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="持仓">持仓</view>
         <view class="sub-filter-item {{subFilter === '沪深' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="沪深">沪深</view>
         <view class="sub-filter-item {{subFilter === '指数' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="指数">指数</view>
+        <scroll-view
+          class="top-groups {{topGroupAnimationClass}}"
+          scroll-x
+          show-scrollbar="{{false}}"
+          wx:if="{{topGroups.length > 0}}"
+        >
+          <view class="top-groups-inner">
+            <view
+              class="sub-filter-item top-group-item {{activeGroupId === item.id ? 'active' : ''}}"
+              wx:for="{{topGroups}}"
+              wx:key="id"
+              bindtap="onSwitchGroup"
+              data-id="{{item.id}}"
+              hover-class="top-group-item-hover"
+              hover-stay-time="80"
+            >
+              <text class="top-group-name">{{item.name}}</text>
+              <text class="top-group-count-inline">({{groupCountsById[item.id] || 0}})</text>
+            </view>
+          </view>
+        </scroll-view>
+        <view class="top-group-skeleton" wx:if="{{loadingGroups}}">
+          <view class="top-group-skeleton-chip"></view>
+        </view>
       </view>
       <view class="filter-right-area">
          <view class="group-func-btn" bindtap="onGroupClick" aria-label="分组功能" role="button">
@@ -144,6 +168,77 @@
       </scroll-view>
       <view class="modal-footer">
         <button class="confirm-btn" bindtap="hideDataInfo">我知道了</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 分组管理半屏弹窗 -->
+  <view class="half-screen-mask {{showGroupManagePopup ? 'show' : ''}}" bindtap="closeGroupManagePopup">
+    <view class="half-screen-container {{showGroupManagePopup ? 'show' : ''}}" catchtap="stopBubble">
+      <view class="hs-header">
+        <text class="hs-title">分组管理</text>
+        <view class="hs-close" bindtap="closeGroupManagePopup">×</view>
+      </view>
+      
+      <scroll-view scroll-y class="hs-content">
+        <!-- 系统分组 -->
+        <view class="group-section-title">系统分组</view>
+        <view class="group-list">
+          <view class="group-item {{activeGroupId === item.id ? 'active' : ''}}" 
+                wx:for="{{systemGroups}}" wx:key="id" 
+                bindtap="onSwitchGroup" data-id="{{item.id}}">
+            <text class="group-name">{{item.name}}</text>
+            <text class="group-count">{{groupCountsById[item.id] || 0}}</text>
+          </view>
+        </view>
+        
+        <!-- 自定义分组 -->
+        <view class="group-section-header">
+          <text class="group-section-title">自定义分组</text>
+          <view class="add-group-btn" bindtap="onShowNewGroupDialog">+ 新建分组</view>
+        </view>
+        
+        <view class="group-list custom">
+          <view class="group-item-custom" wx:for="{{customGroups}}" wx:key="id">
+             <view class="group-info-area" bindtap="onSwitchGroup" data-id="{{item.id}}">
+                <text class="group-name {{activeGroupId === item.id ? 'active-text' : ''}}">{{item.name}}</text>
+                <text class="group-count">{{groupCountsById[item.id] || 0}}</text>
+             </view>
+             <view class="group-actions">
+                <view class="action-btn more {{item._protected ? 'disabled' : ''}}" catchtap="onOpenGroupActions" data-id="{{item.id}}" data-name="{{item.name}}" data-protected="{{item._protected}}" aria-label="分组操作" role="button">⋯</view>
+             </view>
+          </view>
+          
+          <view class="empty-tip" wx:if="{{customGroups.length === 0}}">
+            暂无自定义分组
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <!-- 新建分组弹窗 -->
+  <view class="dialog-mask" wx:if="{{showNewGroupDialog}}">
+    <view class="dialog-box">
+      <view class="dialog-title">新建分组</view>
+      <input class="dialog-input" placeholder="请输入分组名称" value="{{newGroupName}}" bindinput="onNewGroupNameInput" maxlength="10" focus="{{showNewGroupDialog}}" />
+      <view class="error-text">{{newGroupError}}</view>
+      <view class="dialog-btns">
+        <view class="d-btn cancel" bindtap="onCloseNewGroupDialog">取消</view>
+        <view class="d-btn confirm {{canConfirmNewGroup ? '' : 'disabled'}}" bindtap="onConfirmNewGroup">确定</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 重命名分组弹窗 -->
+  <view class="dialog-mask" wx:if="{{showRenameGroupDialog}}">
+    <view class="dialog-box">
+      <view class="dialog-title">重命名分组</view>
+      <input class="dialog-input" placeholder="请输入新名称" value="{{editingGroupName}}" bindinput="onRenameGroupNameInput" maxlength="10" focus="{{showRenameGroupDialog}}" />
+      <view class="error-text">{{renameGroupError}}</view>
+      <view class="dialog-btns">
+        <view class="d-btn cancel" bindtap="onCloseRenameGroupDialog">取消</view>
+        <view class="d-btn confirm {{canConfirmRenameGroup ? '' : 'disabled'}}" bindtap="onConfirmRenameGroup">确定</view>
       </view>
     </view>
   </view>

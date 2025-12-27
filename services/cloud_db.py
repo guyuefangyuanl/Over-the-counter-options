@@ -330,7 +330,10 @@ class CloudDbClient:
 
                 errcode = data.get("errcode")
                 if errcode not in (None, 0):
-                    raise CloudDbRequestError(data.get("errmsg") or f"cloud errcode={errcode}")
+                    errmsg = data.get("errmsg") or f"cloud errcode={errcode}"
+                    if "Db or Table not exist" in errmsg:
+                        raise CloudDbRequestError(f"云数据库集合不存在。请确保已在微信云开发控制台中创建名为该请求所使用的集合。详情: {errmsg}")
+                    raise CloudDbRequestError(errmsg)
                 return data
             except Exception as e:
                 last_err = str(e)

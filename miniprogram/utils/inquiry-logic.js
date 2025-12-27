@@ -78,6 +78,84 @@ function migrateGroupItems(fromGroupId, toGroupId, favoritesById) {
   return updated;
 }
 
+const PROTECTED_GROUP_NAMES = new Set(['全部', '系统分组', '持仓', '我的持仓', '沪深', '指数']);
+const PROTECTED_GROUP_IDS = new Set(['all', 'system', 'holding', 'shsz', 'hs', 'index']);
+
+function isProtectedGroup(group) {
+  if (!group) return false;
+  if (typeof group === 'string') {
+    const name = group.trim();
+    return PROTECTED_GROUP_NAMES.has(name);
+  }
+  const id = (group.id || '').trim();
+  if (id && PROTECTED_GROUP_IDS.has(id)) return true;
+  const name = (group.name || '').trim();
+  if (!name) return false;
+  if (PROTECTED_GROUP_NAMES.has(name)) return true;
+  if (name === '沪深' || name === '指数') return true;
+  if (name === '持仓' || name === '我的持仓') return true;
+  if (name === '全部') return true;
+  return false;
+}
+
+// --- Storage Helper Functions ---
+const STORAGE_KEY_CUSTOM_GROUPS = 'customGroups';
+
+function loadCustomGroups() {
+  try {
+    return wx.getStorageSync(STORAGE_KEY_CUSTOM_GROUPS) || [];
+  } catch (e) {
+    console.error('loadCustomGroups failed', e);
+    return [];
+  }
+}
+
+function saveCustomGroups(groups) {
+  try {
+    wx.setStorageSync(STORAGE_KEY_CUSTOM_GROUPS, groups);
+    return true;
+  } catch (e) {
+    console.error('saveCustomGroups failed', e);
+    return false;
+  }
+}
+
+function createGroup(name) {
+  const groups = loadCustomGroups();
+  // Double check validation
+  if (groups.some(g => g.name === name)) return null;
+  
+  const newGroup = {
+    id: 'g_' + Date.now(),
+    name: name,
+    createTime: Date.now()
+  };
+  groups.push(newGroup);
+  saveCustomGroups(groups);
+  return newGroup;
+}
+
+function renameGroup(groupId, newName) {
+  const groups = loadCustomGroups();
+  const index = groups.findIndex(g => g.id === groupId);
+  if (index === -1) return false;
+  
+  groups[index].name = newName;
+  groups[index].updateTime = Date.now();
+  return saveCustomGroups(groups);
+}
+
+function deleteGroup(groupId) {
+  let groups = loadCustomGroups();
+  const initialLen = groups.length;
+  groups = groups.filter(g => g.id !== groupId);
+  if (groups.length !== initialLen) {
+    saveCustomGroups(groups);
+    return true;
+  }
+  return false;
+}
+
 module.exports = {
   validateNewGroupName,
   computeGroupCountsFromFavorites,
@@ -85,4 +163,9 @@ module.exports = {
   getAvailableTargetGroups,
   computeMigrationCount,
   migrateGroupItems,
+  isProtectedGroup,
+  loadCustomGroups,
+  createGroup,
+  renameGroup,
+  deleteGroup
 };
