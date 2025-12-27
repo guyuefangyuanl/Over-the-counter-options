@@ -40,12 +40,14 @@ class AccessTokenProvider:
         timeout: float = 8.0,
         session: Optional[requests.Session] = None,
         refresh_margin_seconds: int = 300,
+        verify: bool = True,
     ) -> None:
         self._appid = appid.strip()
         self._secret = secret.strip()
         self._timeout = timeout
         self._session = session or requests.Session()
         self._refresh_margin_seconds = max(0, int(refresh_margin_seconds))
+        self._verify = verify
 
         self._lock = threading.Lock()
         self._access_token: Optional[str] = None
@@ -72,7 +74,9 @@ class AccessTokenProvider:
         last_err: Optional[str] = None
         for attempt in range(3):
             try:
-                resp = self._session.get(url, params=params, timeout=self._timeout)
+                resp = self._session.get(
+                    url, params=params, timeout=self._timeout, verify=self._verify
+                )
                 resp.raise_for_status()
                 payload = resp.json()
                 if not isinstance(payload, dict):
@@ -107,11 +111,13 @@ class CloudDbClient:
         token_provider: AccessTokenProvider,
         timeout: float = 8.0,
         session: Optional[requests.Session] = None,
+        verify: bool = True,
     ) -> None:
         self._env_id = env_id.strip()
         self._token_provider = token_provider
         self._timeout = timeout
         self._session = session or requests.Session()
+        self._verify = verify
 
     @classmethod
     def from_env(cls) -> "CloudDbClient":
@@ -126,6 +132,8 @@ class CloudDbClient:
         raw_secret = os.getenv("WX_SECRET")
         if raw_secret is None:
             raw_secret = os.getenv("WECHAT_SECRET")
+
+        verify_ssl = os.getenv("WX_VERIFY_SSL", "true").lower() != "false"
 
         env_id = (raw_env_id or "").strip()
         appid = (raw_appid or "").strip()
@@ -142,7 +150,8 @@ class CloudDbClient:
             "正在从环境变量加载云配置: "
             f"env_id={_state(raw_env_id, env_id)}, "
             f"appid={_state(raw_appid, appid)}, "
-            f"secret={_state(raw_secret, secret)}"
+            f"secret={_state(raw_secret, secret)}, "
+            f"verify_ssl={verify_ssl}"
         )
 
         if raw_env_id is None:
@@ -154,8 +163,8 @@ class CloudDbClient:
         if not appid or not secret:
             raise CloudDbConfigError("环境变量 WX_APPID/WX_SECRET 为空")
 
-        provider = AccessTokenProvider(appid=appid, secret=secret)
-        return cls(env_id=env_id, token_provider=provider)
+        provider = AccessTokenProvider(appid=appid, secret=secret, verify=verify_ssl)
+        return cls(env_id=env_id, token_provider=provider, verify=verify_ssl)
 
     def query(self, query: str) -> List[Dict[str, Any]]:
         try:
@@ -322,7 +331,9 @@ class CloudDbClient:
         last_err: Optional[str] = None
         for attempt in range(3):
             try:
-                resp = self._session.post(url, json=payload, timeout=self._timeout)
+                resp = self._session.post(
+                    url, json=payload, timeout=self._timeout, verify=self._verify
+                )
                 resp.raise_for_status()
                 data = resp.json()
                 if not isinstance(data, dict):
