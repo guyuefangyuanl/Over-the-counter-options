@@ -4,8 +4,10 @@ import os
 import re
 import sys
 import time
+import random
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import requests
@@ -155,6 +157,7 @@ def fetch_sina_quotes(
     timeout: float = 8.0,
     retries: int = 2,
     chunk_size: int = 50,
+    max_workers: Optional[int] = None,
     session: Optional[requests.Session] = None,
 ) -> Tuple[List[SinaQuote], List[Dict[str, Any]]]:
     normalized: List[str] = []
@@ -168,7 +171,6 @@ def fetch_sina_quotes(
     if not normalized:
         return [], [{"code": "NO_VALID_CODES", "message": "未提供有效股票代码"}]
 
-    sess = session or requests.Session()
     url_base = "http://hq.sinajs.cn/list="
     headers = {
         "Referer": "https://finance.sina.com.cn",
@@ -178,29 +180,69 @@ def fetch_sina_quotes(
     quotes: List[SinaQuote] = []
     errors: List[Dict[str, Any]] = []
 
-    for batch in _chunked(normalized, chunk_size):
+    batches = list(_chunked(normalized, chunk_size))
+
+    def _resolve_max_workers() -> int:
+        raw = os.getenv("SINA_FETCH_MAX_WORKERS") or ""
+        env_workers: Optional[int] = None
+        if raw.strip():
+            try:
+                env_workers = int(raw)
+            except Exception:
+                env_workers = None
+        requested = max_workers if max_workers is not None else env_workers
+        if requested is None:
+            requested = 4
+        try:
+            requested = int(requested)
+        except Exception:
+            requested = 4
+        return max(1, min(int(requested), len(batches)))
+
+    def _fetch_batch(batch: List[str]) -> Tuple[List[SinaQuote], List[Dict[str, Any]]]:
+        batch_quotes: List[SinaQuote] = []
+        batch_errors: List[Dict[str, Any]] = []
+
         query = ",".join(batch)
         url = f"{url_base}{query}"
+
+        sess_local = session or requests.Session()
 
         last_err: Optional[str] = None
         for attempt in range(max(0, retries) + 1):
             try:
-                resp = sess.get(url, headers=headers, timeout=timeout)
+                if attempt == 0:
+                    time.sleep(random.random() * 0.05)
+                resp = sess_local.get(url, headers=headers, timeout=timeout)
                 resp.raise_for_status()
                 raw_text = resp.content.decode("gbk", errors="replace")
                 parsed = parse_sina_hq(raw_text)
                 for fullcode, fields in parsed.items():
                     q = _fields_to_quote(fullcode, fields)
                     if q is not None:
-                        quotes.append(q)
-                break
+                        batch_quotes.append(q)
+                return batch_quotes, batch_errors
             except Exception as e:
                 last_err = str(e)
                 if attempt < max(0, retries):
-                    time.sleep(min(2.0, 0.3 * (2**attempt)))
+                    time.sleep(min(2.0, 0.3 * (2**attempt)) + random.random() * 0.05)
                     continue
-        else:
-            errors.append({"code": "FETCH_FAILED", "message": last_err or "请求失败", "url": url})
+        batch_errors.append({"code": "FETCH_FAILED", "message": last_err or "请求失败", "url": url})
+        return batch_quotes, batch_errors
+
+    workers = _resolve_max_workers()
+    if workers <= 1 or len(batches) <= 1:
+        for batch in batches:
+            bq, be = _fetch_batch(batch)
+            quotes.extend(bq)
+            errors.extend(be)
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = [ex.submit(_fetch_batch, batch) for batch in batches]
+            for fut in as_completed(futs):
+                bq, be = fut.result()
+                quotes.extend(bq)
+                errors.extend(be)
 
     return quotes, errors
 
@@ -283,4 +325,3 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

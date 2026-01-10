@@ -504,7 +504,7 @@ app.get('/api/v1/auth/me', (req, res) => {
   }
 })
 
-app.get('/api/v1/admin/stats', (req, res) => {
+app.get('/api/v1/admin/stats', adminAuth, (req, res) => {
   void req
   const db = loadMockDb()
   const stocks = Array.isArray(db.stocks) ? db.stocks : []
@@ -520,7 +520,7 @@ app.get('/api/v1/admin/stats', (req, res) => {
   })
 })
 
-app.get('/api/v1/admin/quotes', (req, res) => {
+app.get('/api/v1/admin/quotes', adminAuth, (req, res) => {
   const pagination = parsePagination(req.query)
   if (!pagination.ok) {
     return res.status(pagination.error.status).json({
@@ -543,7 +543,158 @@ app.get('/api/v1/admin/quotes', (req, res) => {
   })
 })
 
-app.get('/api/v1/admin/orders', (req, res) => {
+app.delete('/api/v1/admin/quotes', adminAuth, async (req, res) => {
+  const payload = req.body && typeof req.body === 'object' ? req.body : {}
+  const rawCodes = payload.codes
+  const codes = Array.isArray(rawCodes)
+    ? rawCodes.map((c) => String(c || '').trim()).filter((c) => c !== '')
+    : []
+
+  try {
+    if (cloudDb) {
+      if (codes.length > 0) {
+        let totalDeleted = 0
+        for (let i = 0; i < codes.length; i += 200) {
+          const batch = codes.slice(i, i + 200)
+          const arrJs = JSON.stringify(batch)
+          const whereJs = `{stock_code: db.command.in(${arrJs})}`
+          const deleted = await cloudDb.deleteWhere('quotes', whereJs)
+          totalDeleted += Number(deleted || 0)
+        }
+        return res.json({
+          success: true,
+          data: { deleted: totalDeleted },
+          message: `已成功删除 ${totalDeleted} 条记录`,
+        })
+      }
+
+      const taskId = uuidv4()
+      const session = {
+        task_id: taskId,
+        type: 'clear_quotes',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: 'processing',
+        deleted: 0,
+        result: null,
+        requested_by: req.admin && typeof req.admin === 'object' ? req.admin.sub : null,
+      }
+      saveUploadSession(taskId, session)
+
+      return res.status(202).json({
+        success: true,
+        data: { status: 'processing', taskId },
+        message: '清空任务已创建，正在处理中',
+      })
+    }
+
+    const db = loadMockDb()
+    const stocks = Array.isArray(db.stocks) ? db.stocks : []
+    const before = stocks.length
+    if (codes.length > 0) {
+      const set = new Set(codes)
+      db.stocks = stocks.filter((s) => !(s && typeof s === 'object' && set.has(String(s.stock_code || '').trim())))
+    } else {
+      db.stocks = []
+    }
+    writeMockDb(db)
+    const deleted = before - (Array.isArray(db.stocks) ? db.stocks.length : 0)
+    return res.json({
+      success: true,
+      data: { deleted },
+      message: `已成功删除 ${deleted} 条记录`,
+    })
+  } catch (e) {
+    console.error('❌ 删除报价失败:', e.message)
+    return res.status(500).json({ success: false, data: null, message: `删除失败: ${e.message}` })
+  }
+})
+
+app.get('/api/v1/admin/quotes/delete-task/:taskId', adminAuth, async (req, res) => {
+  const rawId = req.params && typeof req.params.taskId === 'string' ? req.params.taskId.trim() : ''
+  if (!rawId) {
+    return res.status(400).json({ success: false, data: null, message: '缺少 taskId' })
+  }
+
+  const session = loadUploadSession(rawId)
+  if (!session || session.type !== 'clear_quotes') {
+    return res.status(404).json({ success: false, data: null, message: '任务不存在或已过期' })
+  }
+
+  if (session.status === 'processed') {
+    const deleted = Number(session.deleted || 0)
+    return res.json({
+      success: true,
+      data: { status: 'processed', taskId: rawId, deleted, durationMs: session.result?.durationMs || 0 },
+      message: `已清空 ${deleted} 条记录`,
+    })
+  }
+
+  if (session.status === 'failed') {
+    return res.status(500).json({
+      success: false,
+      data: { status: 'failed', taskId: rawId },
+      message: session.result?.message ? String(session.result.message) : '删除失败',
+    })
+  }
+
+  if (!cloudDb) {
+    return res.status(500).json({ success: false, data: null, message: '当前环境未启用云数据库，无法处理任务' })
+  }
+
+  try {
+    const startedAt = typeof session.created_at === 'string' ? Date.parse(session.created_at) : NaN
+    const timeBudgetMs = 4500
+    const maxLoopsRaw = process.env.WX_DB_DELETE_BATCHES_PER_POLL || '20'
+    const maxLoops = Math.max(1, Number.parseInt(String(maxLoopsRaw), 10) || 20)
+    const whereAll = '{_id: db.command.exists(true)}'
+    const t0 = Date.now()
+
+    let deletedThisPoll = 0
+    let loops = 0
+    while (loops < maxLoops && Date.now() - t0 < timeBudgetMs) {
+      const deleted = await cloudDb.deleteWhere('quotes', whereAll)
+      const n = Number(deleted || 0)
+      if (n <= 0) break
+      deletedThisPoll += n
+      loops++
+    }
+
+    session.deleted = Number(session.deleted || 0) + deletedThisPoll
+    session.updated_at = new Date().toISOString()
+
+    if (deletedThisPoll <= 0) {
+      const durationMs = Number.isFinite(startedAt) ? Date.now() - startedAt : 0
+      session.status = 'processed'
+      session.processed_at = new Date().toISOString()
+      session.result = { success: true, deleted: Number(session.deleted || 0), durationMs }
+      saveUploadSession(rawId, session)
+
+      const deleted = Number(session.deleted || 0)
+      return res.json({
+        success: true,
+        data: { status: 'processed', taskId: rawId, deleted, durationMs },
+        message: `已清空 ${deleted} 条记录`,
+      })
+    }
+
+    saveUploadSession(rawId, session)
+    const deleted = Number(session.deleted || 0)
+    return res.json({
+      success: true,
+      data: { status: 'processing', taskId: rawId, deleted },
+      message: `清空进行中，已删除 ${deleted} 条记录`,
+    })
+  } catch (e) {
+    session.status = 'failed'
+    session.updated_at = new Date().toISOString()
+    session.result = { success: false, message: e instanceof Error ? e.message : String(e) }
+    saveUploadSession(rawId, session)
+    return res.status(500).json({ success: false, data: { status: 'failed', taskId: rawId }, message: session.result.message })
+  }
+})
+
+app.get('/api/v1/admin/orders', adminAuth, (req, res) => {
   const pagination = parsePagination(req.query)
   if (!pagination.ok) {
     return res.status(pagination.error.status).json({
@@ -560,7 +711,7 @@ app.get('/api/v1/admin/orders', (req, res) => {
   })
 })
 
-app.get('/api/v1/admin/inquiries', (req, res) => {
+app.get('/api/v1/admin/inquiries', adminAuth, (req, res) => {
   const pagination = parsePagination(req.query)
   if (!pagination.ok) {
     return res.status(pagination.error.status).json({
@@ -577,7 +728,7 @@ app.get('/api/v1/admin/inquiries', (req, res) => {
   })
 })
 
-app.post('/api/v1/admin/sync-quotes', (req, res) => {
+app.post('/api/v1/admin/sync-quotes', adminAuth, (req, res) => {
   void req
 
   const db = loadMockDb()
@@ -664,7 +815,7 @@ app.post('/api/v1/admin/sync-quotes', (req, res) => {
   })
 })
 
-app.post('/api/v1/admin/crawl-quotes', (req, res) => {
+app.post('/api/v1/admin/crawl-quotes', adminAuth, (req, res) => {
   void req
 
   const db = loadMockDb()
@@ -959,37 +1110,41 @@ app.post('/api/v1/admin/upload-quotes/confirm', adminAuth, async (req, res) => {
       data: {
         status: 'processed',
         processed: session.result?.processed || 0,
+        durationMs: session.result?.durationMs || 0,
       },
       message: '入库已完成',
     })
   }
 
+  if (session.status === 'failed') {
+    return res.status(500).json({
+      success: false,
+      data: { status: 'failed' },
+      message: session.result?.message ? String(session.result.message) : '入库失败',
+    })
+  }
+
   // 开始处理
   session.status = 'processing'
+  session.processing_started_at_ms = Date.now()
   saveUploadSession(uploadId, session)
 
   // 异步处理入库
   const processUpload = async () => {
     try {
+      const t0 = typeof session.processing_started_at_ms === 'number' ? session.processing_started_at_ms : Date.now()
       const items = session.items
       let processed = 0
 
       if (cloudDb) {
-        // 云端入库 - 使用分片并行处理提高性能 (每组 10 个)
-        const CHUNK_SIZE = 10
-        for (let i = 0; i < items.length; i += CHUNK_SIZE) {
-          const chunk = items.slice(i, i + CHUNK_SIZE)
-          await Promise.all(
-            chunk.map(async (item) => {
-              try {
-                await cloudDb.upsert('quotes', { stock_code: item.stock_code }, item)
-                processed++
-              } catch (e) {
-                console.error(`❌ 云端同步股票 ${item.stock_code} 失败:`, e.message)
-              }
-            }),
-          )
-        }
+        const rawWorkers = process.env.WX_DB_MAX_WORKERS || process.env.WX_CLOUD_MAX_WORKERS || '8'
+        const writeConcurrency = Number.parseInt(String(rawWorkers), 10)
+        const safeConcurrency = Number.isFinite(writeConcurrency) && writeConcurrency > 0 ? writeConcurrency : 8
+        const result = await cloudDb.batchUpsert('quotes', 'stock_code', items, {
+          chunkSize: 50,
+          writeConcurrency: safeConcurrency,
+        })
+        processed = Number(result && result.processed ? result.processed : 0)
       } else {
         // 本地入库 - 使用 Map 优化查找性能
         const db = loadMockDb()
@@ -1011,7 +1166,7 @@ app.post('/api/v1/admin/upload-quotes/confirm', adminAuth, async (req, res) => {
       }
 
       session.status = 'processed'
-      session.result = { success: true, processed }
+      session.result = { success: true, processed, durationMs: Math.max(0, Date.now() - t0) }
       session.processed_at = new Date().toISOString()
       saveUploadSession(uploadId, session)
     } catch (e) {
@@ -1032,8 +1187,133 @@ app.post('/api/v1/admin/upload-quotes/confirm', adminAuth, async (req, res) => {
   })
 })
 
+app.post('/api/v1/admin/bench-quotes', adminAuth, async (req, res) => {
+  if (String(process.env.ENABLE_BENCHMARK_API || 'false').toLowerCase() !== 'true') {
+    return res.status(404).json({ success: false, data: null, message: 'Not Found' })
+  }
+
+  const payload = req.body && typeof req.body === 'object' ? req.body : {}
+  const compare = Boolean(payload.compare)
+  const count = Number.parseInt(String(payload.count ?? 500), 10)
+  if (!Number.isFinite(count) || count < 1 || count > 20000) {
+    return res.status(400).json({ success: false, data: null, message: 'count 必须为 1-20000' })
+  }
+
+  const chunkSize = Number.parseInt(String(payload.chunkSize ?? 50), 10)
+  if (!Number.isFinite(chunkSize) || chunkSize < 1 || chunkSize > 200) {
+    return res.status(400).json({ success: false, data: null, message: 'chunkSize 必须为 1-200' })
+  }
+
+  const maxWorkersRaw = payload.maxWorkers ?? payload.max_workers
+  const maxWorkers = maxWorkersRaw === undefined || maxWorkersRaw === null ? null : Number.parseInt(String(maxWorkersRaw), 10)
+  if (maxWorkersRaw !== undefined && (!Number.isFinite(maxWorkers) || maxWorkers < 1)) {
+    return res.status(400).json({ success: false, data: null, message: 'maxWorkers 必须为正整数' })
+  }
+
+  const mode = String(payload.mode || 'roundtrip').trim().toLowerCase()
+  if (!['upsert', 'delete', 'roundtrip'].includes(mode)) {
+    return res.status(400).json({ success: false, data: null, message: 'mode 必须为 upsert/delete/roundtrip' })
+  }
+
+  const seed = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  const codes = Array.from({ length: count }, (_, i) => `BENCH_${seed}_${String(i).padStart(6, '0')}`)
+  const nowIso = new Date().toISOString()
+  const docs = codes.map((code, i) => ({
+    stock_code: code,
+    code,
+    name: 'BENCH',
+    price: Number(i),
+    changePercent: 0,
+    updateSource: 'benchmark',
+    updated_at: nowIso,
+  }))
+
+  const runOnce = async (label, workers) => {
+    const t0 = Date.now()
+    let processed = 0
+    let errors = []
+    if (cloudDb) {
+      const upsertRes = await cloudDb.batchUpsert('quotes', 'stock_code', docs, {
+        chunkSize,
+        writeConcurrency: workers,
+      })
+      processed = Number(upsertRes && upsertRes.processed ? upsertRes.processed : 0)
+      errors = Array.isArray(upsertRes && upsertRes.errors) ? upsertRes.errors.slice(0, 20) : []
+    } else {
+      const db = loadMockDb()
+      if (!Array.isArray(db.stocks)) db.stocks = []
+      const stockMap = new Map(db.stocks.map((s) => [s.stock_code, s]))
+      for (const it of docs) {
+        if (stockMap.has(it.stock_code)) Object.assign(stockMap.get(it.stock_code), it)
+        else {
+          db.stocks.push(it)
+          stockMap.set(it.stock_code, it)
+        }
+      }
+      writeMockDb(db)
+      processed = docs.length
+    }
+    const upsertMs = Date.now() - t0
+
+    let deleted = 0
+    let deleteMs = 0
+    if (mode === 'delete' || mode === 'roundtrip') {
+      const t1 = Date.now()
+      if (cloudDb) {
+        let totalDeleted = 0
+        for (let i = 0; i < codes.length; i += 200) {
+          const batch = codes.slice(i, i + 200)
+          const arrJs = JSON.stringify(batch)
+          const whereJs = `{stock_code: db.command.in(${arrJs})}`
+          const n = await cloudDb.deleteWhere('quotes', whereJs)
+          totalDeleted += Number(n || 0)
+        }
+        deleted = totalDeleted
+      } else {
+        const db = loadMockDb()
+        const stocks = Array.isArray(db.stocks) ? db.stocks : []
+        const before = stocks.length
+        const set = new Set(codes)
+        db.stocks = stocks.filter((s) => !(s && typeof s === 'object' && set.has(String(s.stock_code || '').trim())))
+        writeMockDb(db)
+        deleted = before - (Array.isArray(db.stocks) ? db.stocks.length : 0)
+      }
+      deleteMs = Date.now() - t1
+    }
+
+    return {
+      label,
+      maxWorkers: workers,
+      count,
+      chunkSize,
+      processed,
+      deleted,
+      errors,
+      upsertMs,
+      deleteMs,
+      totalMs: upsertMs + deleteMs,
+    }
+  }
+
+  try {
+    if (compare) {
+      const baseline = await runOnce('baseline', 1)
+      const targetWorkers = Math.max(1, Number(maxWorkers || process.env.WX_DB_MAX_WORKERS || 8))
+      const optimized = await runOnce('optimized', targetWorkers)
+      return res.json({ success: true, data: { results: [baseline, optimized] }, message: '基准测试完成' })
+    }
+    const workers = Math.max(1, Number(maxWorkers || process.env.WX_DB_MAX_WORKERS || 8))
+    const single = await runOnce('single', workers)
+    return res.json({ success: true, data: single, message: '基准测试完成' })
+  } catch (e) {
+    console.error('❌ 行情基准测试失败:', e.message)
+    return res.status(500).json({ success: false, data: null, message: `基准测试失败: ${e.message}` })
+  }
+})
+
 app.post(
   '/api/v1/admin/upload-quotes',
+  adminAuth,
   express.raw({
     type: () => true,
     limit: '50mb',
@@ -1078,9 +1358,9 @@ app.all('/api/webviewClick', (req, res) => {
 app.use(notFoundHandler)
 app.use(errorHandler)
 
-const portRaw = process.env.PORT || process.env.FLASK_PORT || '5000'
+const portRaw = process.env.PORT || '5002'
 const port = Number.parseInt(String(portRaw), 10)
-const listenPort = Number.isFinite(port) && port > 0 ? port : 5000
+const listenPort = Number.isFinite(port) && port > 0 ? port : 5002
 
 app.listen(listenPort, () => {
   console.log(`✅ Node API Server running at http://127.0.0.1:${listenPort}`)

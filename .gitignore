@@ -115,6 +115,15 @@ project.private.config.json
 .idea/
 *.swp
 
+# Startup scripts runtime artifacts
+logs/
+*.pid
+
 .env
+.env.local
 .env.*.local
 .local
+
+# Runtime temp data
+temp_uploads/
+~$*

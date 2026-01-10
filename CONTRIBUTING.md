@@ -39,6 +39,19 @@
 - `release → main`：Merge 并创建 Tag；更新 `CHANGELOG.md` 与 Gitee Releases
 - `hotfix → main`：Merge 并打补丁版本；回灌 `develop`
 
+## 仓库权限与分支保护（建议）
+- 成员必须使用个人码云账号加入仓库，禁止共享同一账号
+- `main`/`develop` 设置为保护分支：禁止直接 push，只允许通过 PR 合并
+- `main`/`develop` 合并前要求至少 1-2 人 Review（按公司制度调整）
+- 启用“禁止强制推送/禁止删除分支”
+- 启用 CI（如 `.github/workflows/ci.yml`）作为合并前置条件：lint/build 通过才允许合并
+- 统一使用 SSH Key 或个人 Access Token（最小权限），禁止在仓库中提交任何密钥
+
+## 账号与密钥管理（约束）
+- 本地环境变量放在 `.env.local`（已被 `.gitignore` 忽略），只提交 `.env.example`
+- 禁止提交：`.env*`、私钥、日志、数据库文件、`temp_uploads/`、以及 Office 临时文件（`~$*`）
+- 账号密码禁止明文写入代码与文档；生产环境使用公司统一的密钥管理/凭证下发流程
+
 ## 发布与版本
 - 版本号规则：`vMAJOR.MINOR.PATCH`（语义化版本）
 - 标签：`v1.0.0`、`v1.0.1`

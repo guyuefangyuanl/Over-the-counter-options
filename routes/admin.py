@@ -1,17 +1,22 @@
 # -*- coding: utf-8 -*-
 from flask import Blueprint, request, current_app
 import logging
+import os
+import time
+import uuid
 from utils.response import flask_success_response, flask_error_response, flask_paginated_response
 from models.stock import StockModel
 from models.inquiry import InquiryModel
 from models.order import OrderModel
-from routes.auth import require_auth
+from routes.auth import require_auth, require_roles
 from services.cloud_db import CloudDbClient, CloudDbConfigError, CloudDbRequestError
 from services.file_parser import (
     create_upload_session,
     delete_upload_session,
     load_upload_session,
     parse_quotes_file,
+    load_upload_session_payload,
+    save_upload_session_payload,
 )
 from services.sync_service import sync_quotes, upsert_quotes_from_file, delete_quotes
 
@@ -145,25 +150,142 @@ def get_quotes():
 
 @admin_bp.route('/quotes', methods=['DELETE'])
 @require_auth
+@require_roles("admin", "editor")
 def delete_quotes_api():
     """管理后台：删除报价"""
     try:
         payload = request.get_json(silent=True) or {}
         codes = payload.get("codes")
-        # 如果 codes 为空数组或未提供，则视为清空所有（慎用，或根据需求调整为必须提供 codes）
-        result = delete_quotes(codes=codes)
-        if result.get("success"):
-            return flask_success_response(
-                data={"deleted": result.get("deleted", 0)},
-                message=f"已成功删除 {result.get('deleted', 0)} 条记录",
-            )
-        return flask_error_response(result.get("message") or "删除失败", 500)
+
+        has_codes = (isinstance(codes, list) and len(codes) > 0) or (isinstance(codes, str) and codes.strip() != "")
+        if has_codes:
+            result = delete_quotes(codes=codes)
+            if result.get("success"):
+                return flask_success_response(
+                    data={"deleted": result.get("deleted", 0)},
+                    message=f"已成功删除 {result.get('deleted', 0)} 条记录",
+                )
+            return flask_error_response(result.get("message") or "删除失败", 500)
+
+        try:
+            CloudDbClient.from_env()
+        except CloudDbConfigError as e:
+            return flask_error_response(str(e), 500)
+
+        task_id = uuid.uuid4().hex
+        session_payload = {
+            "type": "clear_quotes",
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "processing_started_at_ms": int(time.time() * 1000),
+            "status": "processing",
+            "deleted": 0,
+            "result": None,
+        }
+        save_upload_session_payload(upload_id=task_id, payload=session_payload)
+
+        import threading
+
+        def _run_job(delete_task_id: str):
+            try:
+                started_at = time.time()
+                result = delete_quotes(codes=None)
+                duration_ms = int((time.time() - started_at) * 1000)
+
+                try:
+                    payload = load_upload_session_payload(upload_id=delete_task_id)
+                except Exception:
+                    payload = {"type": "clear_quotes"}
+
+                payload["processed_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+                if result.get("success"):
+                    payload["status"] = "processed"
+                    payload["deleted"] = int(result.get("deleted") or 0)
+                    payload["result"] = {
+                        "success": True,
+                        "deleted": int(result.get("deleted") or 0),
+                        "durationMs": int(result.get("durationMs") or duration_ms),
+                    }
+                else:
+                    payload["status"] = "failed"
+                    payload["deleted"] = int(result.get("deleted") or payload.get("deleted") or 0)
+                    payload["result"] = {
+                        "success": False,
+                        "message": result.get("message") or "删除失败",
+                        "deleted": int(payload.get("deleted") or 0),
+                        "durationMs": int(result.get("durationMs") or duration_ms),
+                    }
+
+                save_upload_session_payload(upload_id=delete_task_id, payload=payload)
+            except Exception as e:
+                try:
+                    payload = load_upload_session_payload(upload_id=delete_task_id)
+                except Exception:
+                    payload = {"type": "clear_quotes"}
+                payload["status"] = "failed"
+                payload["processed_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                payload["result"] = {"success": False, "message": str(e)}
+                save_upload_session_payload(upload_id=delete_task_id, payload=payload)
+
+        threading.Thread(target=_run_job, args=(task_id,), daemon=True).start()
+
+        return flask_success_response(
+            data={"status": "processing", "taskId": task_id},
+            message="清空任务已创建，正在处理中",
+            code=202,
+        )
     except Exception as e:
         logger.error(f"删除报价失败: {e}")
         return flask_error_response(f"删除失败: {str(e)}", 500)
 
+@admin_bp.route('/quotes/delete-task/<task_id>', methods=['GET'])
+@require_auth
+def delete_quotes_task_status(task_id: str):
+    try:
+        safe_task_id = str(task_id or "").strip()
+        if not safe_task_id:
+            return flask_error_response("缺少 taskId", 400)
+
+        try:
+            session_payload = load_upload_session_payload(upload_id=safe_task_id)
+        except Exception:
+            return flask_error_response("任务不存在或已过期", 404)
+
+        if session_payload.get("type") != "clear_quotes":
+            return flask_error_response("任务不存在或已过期", 404)
+
+        status = session_payload.get("status")
+        result = session_payload.get("result")
+        deleted = int(session_payload.get("deleted") or 0)
+
+        if status == "processed" and isinstance(result, dict) and result.get("success"):
+            return flask_success_response(
+                data={
+                    "status": "processed",
+                    "taskId": safe_task_id,
+                    "deleted": deleted,
+                    "durationMs": int(result.get("durationMs") or 0),
+                },
+                message=f"已清空 {deleted} 条记录",
+            )
+
+        if status == "failed":
+            if isinstance(result, dict):
+                return flask_error_response("删除失败", 500, data=result)
+            return flask_error_response("删除失败", 500)
+
+        return flask_success_response(
+            data={"status": "processing", "taskId": safe_task_id, "deleted": deleted},
+            message="清空进行中，请稍后刷新",
+            code=202,
+        )
+    except Exception as e:
+        logger.error(f"查询删除任务失败: {e}")
+        return flask_error_response(f"查询任务失败: {str(e)}", 500)
+
 @admin_bp.route('/sync-quotes', methods=['POST'])
 @require_auth
+@require_roles("admin", "editor")
 def sync_quotes_api():
     """管理后台：触发同步行情（Sina）"""
     try:
@@ -184,6 +306,113 @@ def sync_quotes_api():
     except Exception as e:
         logger.error(f"同步行情失败: {e}")
         return flask_error_response(f"同步失败: {str(e)}", 500)
+
+
+@admin_bp.route('/bench-quotes', methods=['POST'])
+@require_auth
+@require_roles("admin", "editor")
+def bench_quotes_api():
+    if os.getenv("ENABLE_BENCHMARK_API", "false").lower() != "true":
+        return flask_error_response("Not Found", 404)
+
+    payload = request.get_json(silent=True) or {}
+    compare = bool(payload.get("compare"))
+
+    count = _parse_int(payload.get("count"), 500)
+    if count < 1 or count > 20000:
+        return flask_error_response("count 必须为 1-20000", 400)
+
+    chunk_size = _parse_int(payload.get("chunkSize") or payload.get("chunk_size"), 50)
+    if chunk_size < 1 or chunk_size > 200:
+        return flask_error_response("chunkSize 必须为 1-200", 400)
+
+    max_workers = payload.get("maxWorkers") or payload.get("max_workers")
+    if max_workers is not None:
+        try:
+            max_workers = int(max_workers)
+        except Exception:
+            return flask_error_response("maxWorkers 必须为整数", 400)
+
+    mode = str(payload.get("mode") or "roundtrip").strip().lower()
+    if mode not in ("upsert", "delete", "roundtrip"):
+        return flask_error_response("mode 必须为 upsert/delete/roundtrip", 400)
+
+    codes = payload.get("codes")
+    if mode == "delete" and (not codes):
+        return flask_error_response("delete 模式必须提供 codes", 400)
+
+    try:
+        cloud = CloudDbClient.from_env()
+    except CloudDbConfigError as e:
+        return flask_error_response(str(e), 500)
+
+    now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    seed = str(time.time_ns())
+    bench_codes = [f"BENCH_{seed}_{i:06d}" for i in range(count)]
+    docs = [
+        {
+            "stock_code": code,
+            "code": code,
+            "name": "BENCH",
+            "price": float(i),
+            "changePercent": 0.0,
+            "updateSource": "benchmark",
+            "updated_at": now_iso,
+        }
+        for i, code in enumerate(bench_codes)
+    ]
+
+    def _run_once(label: str, *, workers: int):
+        t0 = time.perf_counter()
+        processed, errors = cloud.batch_upsert(
+            collection="quotes",
+            unique_key="stock_code",
+            items=docs,
+            chunk_size=chunk_size,
+            max_workers=workers,
+        )
+        upsert_ms = int((time.perf_counter() - t0) * 1000)
+
+        deleted = 0
+        delete_ms = 0
+        if mode in ("delete", "roundtrip"):
+            t1 = time.perf_counter()
+            target = bench_codes if mode == "roundtrip" else codes
+            result = delete_quotes(codes=target)
+            delete_ms = int((time.perf_counter() - t1) * 1000)
+            if result.get("success"):
+                deleted = int(result.get("deleted") or 0)
+
+        total_ms = upsert_ms + delete_ms
+        return {
+            "label": label,
+            "maxWorkers": workers,
+            "count": count,
+            "chunkSize": chunk_size,
+            "processed": int(processed or 0),
+            "deleted": deleted,
+            "errors": errors[:20] if isinstance(errors, list) else [],
+            "upsertMs": upsert_ms,
+            "deleteMs": delete_ms,
+            "totalMs": total_ms,
+        }
+
+    try:
+        if compare:
+            baseline = _run_once("baseline", workers=1)
+            target_workers = int(max_workers or int(os.getenv("WX_DB_MAX_WORKERS") or 8))
+            target_workers = max(1, target_workers)
+            optimized = _run_once("optimized", workers=target_workers)
+            return flask_success_response(data={"results": [baseline, optimized]}, message="基准测试完成")
+
+        workers = int(max_workers or int(os.getenv("WX_DB_MAX_WORKERS") or 8))
+        workers = max(1, workers)
+        single = _run_once("single", workers=workers)
+        return flask_success_response(data=single, message="基准测试完成")
+    except Exception as e:
+        logger.error(f"行情基准测试失败: {e}")
+        return flask_error_response(f"基准测试失败: {str(e)}", 500)
+
 
 @admin_bp.route('/sync-logs', methods=['GET'])
 @require_auth
@@ -231,6 +460,7 @@ def get_sync_logs():
 
 @admin_bp.route('/upload-quotes/preview', methods=['POST'])
 @require_auth
+@require_roles("admin", "editor")
 def upload_quotes_preview():
     if 'file' not in request.files:
         return flask_error_response("未找到上传文件", 400)
@@ -258,6 +488,7 @@ def upload_quotes_preview():
 
 @admin_bp.route('/upload-quotes/confirm', methods=['POST'])
 @require_auth
+@require_roles("admin", "editor")
 def upload_quotes_confirm():
     from services.file_parser import load_upload_session_payload, save_upload_session_payload
     import time
@@ -336,6 +567,7 @@ def upload_quotes_confirm():
 
 @admin_bp.route('/upload-quotes', methods=['POST'])
 @require_auth
+@require_roles("admin", "editor")
 def upload_quotes():
     if 'file' not in request.files:
         return flask_error_response("未找到上传文件", 400)
@@ -361,5 +593,6 @@ def upload_quotes():
 
 @admin_bp.route('/crawl-quotes', methods=['POST'])
 @require_auth
+@require_roles("admin", "editor")
 def crawl_quotes():
     return sync_quotes_api()

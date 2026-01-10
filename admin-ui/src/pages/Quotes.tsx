@@ -44,6 +44,13 @@ type ConfirmUploadPayload = {
   durationMs?: number;
 };
 
+type DeleteQuotesPayload = {
+  status?: 'processing' | 'processed' | 'failed';
+  taskId?: string;
+  deleted?: number;
+  durationMs?: number;
+};
+
 type SyncLog = {
   _id?: string;
   type?: string;
@@ -89,6 +96,7 @@ const Quotes: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const crawlAbortRef = useRef<AbortController | null>(null);
   const uploadPollTimerRef = useRef<number | null>(null);
+  const deletePollTimerRef = useRef<number | null>(null);
 
   const fetchQuotes = useCallback(async (page = 1, pageSize = 10) => {
     setIsFetching(true);
@@ -125,6 +133,10 @@ const Quotes: React.FC = () => {
       if (uploadPollTimerRef.current !== null) {
         window.clearInterval(uploadPollTimerRef.current);
         uploadPollTimerRef.current = null;
+      }
+      if (deletePollTimerRef.current !== null) {
+        window.clearInterval(deletePollTimerRef.current);
+        deletePollTimerRef.current = null;
       }
     };
   }, []);
@@ -193,20 +205,75 @@ const Quotes: React.FC = () => {
       cancelText: '取消',
       onOk: async () => {
         setIsDeleting(true);
+        if (deletePollTimerRef.current !== null) {
+          window.clearInterval(deletePollTimerRef.current);
+          deletePollTimerRef.current = null;
+        }
         try {
-          const res = await api.delete<ApiResponse<{ deleted: number }>>('/admin/quotes', {
+          const res = await api.delete<ApiResponse<DeleteQuotesPayload>>('/admin/quotes', {
             data: { codes },
           });
           if (res.success) {
-            message.success(res.message || `成功删除 ${res.data?.deleted ?? 0} 条数据`);
+            const status = res.data?.status;
+            if (status === 'processing' && res.data?.taskId) {
+              const taskId = res.data.taskId;
+              message.loading({ content: res.message || '清空进行中…', key: 'delete-quotes', duration: 0 });
+              deletePollTimerRef.current = window.setInterval(async () => {
+                try {
+                  const pollRes = await api.get<ApiResponse<DeleteQuotesPayload>>(`/admin/quotes/delete-task/${taskId}`);
+                  if (!pollRes.success) {
+                    message.error({ content: pollRes.message || '删除失败', key: 'delete-quotes' });
+                    if (deletePollTimerRef.current !== null) {
+                      window.clearInterval(deletePollTimerRef.current);
+                      deletePollTimerRef.current = null;
+                    }
+                    setIsDeleting(false);
+                    return;
+                  }
+
+                  const pollStatus = pollRes.data?.status;
+                  if (pollStatus === 'processing') return;
+
+                  if (pollStatus === 'processed') {
+                    const deleted = pollRes.data?.deleted ?? 0;
+                    message.success({ content: pollRes.message || `已清空：删除 ${deleted} 条`, key: 'delete-quotes' });
+                    if (deletePollTimerRef.current !== null) {
+                      window.clearInterval(deletePollTimerRef.current);
+                      deletePollTimerRef.current = null;
+                    }
+                    setSelectedRowKeys([]);
+                    setIsDeleting(false);
+                    void fetchQuotes(pagination.current, pagination.pageSize);
+                    return;
+                  }
+
+                  message.error({ content: pollRes.message || '删除失败', key: 'delete-quotes' });
+                  if (deletePollTimerRef.current !== null) {
+                    window.clearInterval(deletePollTimerRef.current);
+                    deletePollTimerRef.current = null;
+                  }
+                  setIsDeleting(false);
+                } catch (err) {
+                  message.error({ content: getApiErrorMessage(err, '删除失败'), key: 'delete-quotes' });
+                  if (deletePollTimerRef.current !== null) {
+                    window.clearInterval(deletePollTimerRef.current);
+                    deletePollTimerRef.current = null;
+                  }
+                  setIsDeleting(false);
+                }
+              }, 2000);
+              return;
+            }
+
+            const deleted = res.data?.deleted ?? 0;
+            message.success(res.message || `成功删除 ${deleted} 条数据`);
             setSelectedRowKeys([]);
             void fetchQuotes(pagination.current, pagination.pageSize);
           }
         } catch (err) {
           message.error(getApiErrorMessage(err, '删除失败'));
-        } finally {
-          setIsDeleting(false);
         }
+        setIsDeleting(false);
       },
     });
   }, [fetchQuotes, message, pagination]);
