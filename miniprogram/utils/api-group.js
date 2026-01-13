@@ -1,4 +1,6 @@
-const BASE_URL = 'http://localhost:5000/api/v1';
+const { getBaseUrl } = require('../config/api.config.js');
+
+const BASE_URL = getBaseUrl();
 
 const getUserId = () => {
   let userId = wx.getStorageSync('userId');

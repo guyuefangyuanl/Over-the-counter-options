@@ -10,6 +10,7 @@
     "dev:ui": "npm run dev --prefix admin-ui",
     "dev:node-ui": "concurrently \"npm run dev:node\" \"npm run dev:ui\"",
     "dev": "concurrently \"npm run dev:node\" \"npm run dev:flask\" \"npm run dev:ui\"",
+    "check:urls": "node scripts/check-hardcoded-urls.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

@@ -171,8 +171,9 @@ Page({
     
     // 当后端服务器完全启动后，可以取消注释以下代码：
     /*
+    const { getApiUrl } = require('../../config/api.config.js');
     wx.request({
-      url: 'http://localhost:3000/api/auth/wechat/login',
+      url: getApiUrl('/auth/wechat/login'),
       method: 'POST',
       data: {
         code: code,
