@@ -1,9 +1,23 @@
 const fs = require('fs')
 const path = require('path')
+const dotenv = require('dotenv')
+
+// 加载环境变量
+const defaultEnvPath = path.resolve(__dirname, '.env')
+const localEnvPath = path.resolve(__dirname, '.env.local')
+
+if (fs.existsSync(defaultEnvPath)) {
+  dotenv.config({ path: defaultEnvPath })
+  console.log('✅ 已从 .env 加载基础环境变量')
+}
+
+if (fs.existsSync(localEnvPath)) {
+  dotenv.config({ path: localEnvPath, override: true })
+  console.log('✅ 已从 .env.local 加载并覆盖本地环境变量')
+}
 
 const compression = require('compression')
 const cors = require('cors')
-const dotenv = require('dotenv')
 const express = require('express')
 const helmet = require('helmet')
 const jwt = require('jsonwebtoken')
@@ -13,34 +27,30 @@ const XLSX = require('xlsx')
 const { parse: csvParse } = require('csv-parse/sync')
 const { v4: uuidv4 } = require('uuid')
 
-const CloudDbClient = require('./services/cloud_db')
+const { cloudDb, getMockDbPath, loadMockDb, writeMockDb, parsePagination } = require('./utils/db')
+const response = require('./utils/response')
 
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler')
 const { customLogger, requestLogger } = require('./middleware/logger')
-
-// 加载环境变量
-const localEnvPath = path.resolve(__dirname, '.env.local')
-const defaultEnvPath = path.resolve(__dirname, '.env')
-
-if (fs.existsSync(localEnvPath)) {
-  dotenv.config({ path: localEnvPath })
-  console.log('✅ 已从 .env.local 加载环境变量')
-} else {
-  dotenv.config({ path: defaultEnvPath })
-  console.log('✅ 已从 .env 加载环境变量')
-}
 
 const app = express()
 
 app.set('trust proxy', true)
 
-app.use(helmet())
+app.use(helmet({
+  contentSecurityPolicy: false,
+}))
 app.use(compression())
 app.use(cors())
-app.use(express.json({ limit: '2mb' }))
+app.use(express.json({ limit: '5mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(requestLogger)
 app.use(customLogger)
+
+// 静态文件服务
+app.use(express.static(path.join(__dirname, 'admin-ui/dist')))
+app.use('/admin-web', express.static(path.join(__dirname, 'admin-web')))
+app.use('/images', express.static(path.join(__dirname, 'images')))
 
 // 清理旧的上传会话文件
 try {
@@ -61,370 +71,16 @@ try {
   console.warn('⚠️ 清理临时上传文件失败:', e.message)
 }
 
-// 初始化云数据库客户端
-let cloudDb = null
-try {
-  cloudDb = CloudDbClient.fromEnv()
-  console.log('✅ 微信云数据库客户端初始化成功')
-} catch (e) {
-  console.warn('⚠️ 微信云数据库配置未就绪，将回退到本地 Mock 存储:', e.message)
-}
-
-function isIntegerString(value) {
-  return typeof value === 'string' && /^-?\d+$/.test(value)
-}
-
-function parsePagination(query) {
-  const rawPage = query && query.page != null ? String(query.page) : '1'
-  const rawPageSize = query && query.pageSize != null ? String(query.pageSize) : '10'
-
-  if (!isIntegerString(rawPage) || !isIntegerString(rawPageSize)) {
-    return { ok: false, error: { status: 400, message: '分页参数必须是整数' } }
-  }
-
-  const page = Number.parseInt(rawPage, 10)
-  const pageSize = Number.parseInt(rawPageSize, 10)
-
-  if (page < 1) return { ok: false, error: { status: 400, message: '页码必须大于等于1' } }
-  if (pageSize < 1 || pageSize > 100) {
-    return { ok: false, error: { status: 400, message: '每页数量必须在1-100之间' } }
-  }
-
-  return { ok: true, value: { page, pageSize } }
-}
-
-function getMockDbPath() {
-  return path.resolve(__dirname, process.env.FILE_DB_PATH || 'mock_db.json')
-}
-
-function loadMockDb() {
-  const filePath = getMockDbPath()
-  try {
-    const raw = fs.readFileSync(filePath, 'utf8')
-    const parsed = JSON.parse(raw)
-    if (parsed && typeof parsed === 'object') return parsed
-  } catch (e) {
-    console.error('❌ 读取 mock_db.json 失败:', e instanceof Error ? e.message : String(e))
-  }
-  return { stocks: [] }
-}
-
-function writeMockDb(nextDb) {
-  const filePath = getMockDbPath()
-  fs.writeFileSync(filePath, JSON.stringify(nextDb, null, 2), 'utf8')
-}
-
-app.get('/api/v1/groups', async (req, res) => {
-  void req
-
-  let cloudGroups = []
-  if (cloudDb) {
-    try {
-      const results = await cloudDb.query('db.collection("groups").get()')
-      cloudGroups = results.map((g) => ({
-        ...g,
-        id: g._id || g.id,
-        _source: 'cloud',
-      }))
-    } catch (e) {
-      console.error('❌ 获取云端分组失败:', e.message)
-    }
-  }
-
-  const db = loadMockDb()
-  const localGroups = (Array.isArray(db.groups) ? db.groups : []).map((g) => ({
-    ...g,
-    _source: 'local',
-  }))
-
-  // 合并分组，如果 ID 相同则以云端为准
-  const mergedGroups = [...cloudGroups]
-  localGroups.forEach((local) => {
-    if (!mergedGroups.some((cloud) => cloud.id === local.id)) {
-      mergedGroups.push(local)
-    }
-  })
-
-  return res.json({
-    success: true,
-    data: mergedGroups,
-    message: cloudDb ? '获取成功 (云端+本地)' : '获取成功 (本地)',
-  })
-})
-
-app.post('/api/v1/groups', async (req, res) => {
-  const name = req.body && typeof req.body.name === 'string' ? req.body.name.trim() : ''
-  if (!name) {
-    return res.status(400).json({ success: false, data: null, message: '分组名称不能为空' })
-  }
-
-  if (cloudDb) {
-    try {
-      const newGroup = {
-        name,
-        members: [],
-        created_at: new Date().toISOString(),
-      }
-      const ids = await cloudDb.add('groups', newGroup)
-      return res.json({
-        success: true,
-        data: { id: ids[0], ...newGroup },
-        message: '创建成功 (云端)',
-      })
-    } catch (e) {
-      console.error('❌ 创建云端分组失败:', e.message)
-    }
-  }
-
-  const db = loadMockDb()
-  if (!Array.isArray(db.groups)) {
-    db.groups = []
-  }
-
-  const newGroup = {
-    id: `g_${Date.now()}`,
-    name,
-    members: [],
-    created_at: new Date().toISOString(),
-  }
-
-  db.groups.push(newGroup)
-  writeMockDb(db)
-
-  return res.json({
-    success: true,
-    data: newGroup,
-    message: '创建成功 (本地)',
-  })
-})
-
-app.put('/api/v1/groups/:id', async (req, res) => {
-  const id = req.params.id
-  const name = req.body && typeof req.body.name === 'string' ? req.body.name.trim() : ''
-
-  if (cloudDb) {
-    try {
-      const updateData = {}
-      if (name) updateData.name = name
-      updateData.updated_at = new Date().toISOString()
-
-      const updatedCount = await cloudDb.updateWhere('groups', JSON.stringify({ _id: id }), updateData)
-      if (updatedCount > 0) {
-        return res.json({
-          success: true,
-          data: { id, ...updateData },
-          message: '更新成功 (云端)',
-        })
-      }
-    } catch (e) {
-      console.error('❌ 更新云端分组失败:', e.message)
-    }
-  }
-
-  const db = loadMockDb()
-  const groups = Array.isArray(db.groups) ? db.groups : []
-  const groupIndex = groups.findIndex((g) => g.id === id)
-
-  if (groupIndex === -1) {
-    return res.status(404).json({ success: false, data: null, message: '分组不存在' })
-  }
-
-  if (name) {
-    groups[groupIndex].name = name
-  }
-  groups[groupIndex].updated_at = new Date().toISOString()
-
-  writeMockDb(db)
-  return res.json({
-    success: true,
-    data: groups[groupIndex],
-    message: '更新成功 (本地)',
-  })
-})
-
-app.delete('/api/v1/groups/:id', async (req, res) => {
-  const id = req.params.id
-  console.log(`🗑️ 尝试删除分组: ${id}`)
-
-  if (cloudDb) {
-    try {
-      const deletedCount = await cloudDb.deleteWhere('groups', JSON.stringify({ _id: id }))
-      console.log(`☁️ 云端删除结果: ${deletedCount}`)
-      if (deletedCount > 0) {
-        return res.json({
-          success: true,
-          data: null,
-          message: '删除成功 (云端)',
-        })
-      }
-    } catch (e) {
-      console.error('❌ 删除云端分组失败:', e.message)
-    }
-  }
-
-  const db = loadMockDb()
-  const groups = Array.isArray(db.groups) ? db.groups : []
-  const groupIndex = groups.findIndex((g) => g.id === id)
-
-  if (groupIndex === -1) {
-    console.warn(`⚠️ 分组不存在，无法删除: ${id}`)
-    return res.status(404).json({ success: false, data: null, message: '分组不存在' })
-  }
-
-  db.groups.splice(groupIndex, 1)
-  writeMockDb(db)
-  console.log(`✅ 本地删除成功: ${id}`)
-
-  return res.json({
-    success: true,
-    data: null,
-    message: '删除成功 (本地)',
-  })
-})
-
-app.post('/api/v1/groups/:id/members', async (req, res) => {
-  const id = req.params.id
-  const { stock_code, market, name } = req.body || {}
-
-  if (!stock_code) {
-    return res.status(400).json({ success: false, data: null, message: '股票代码不能为空' })
-  }
-
-  if (cloudDb) {
-    try {
-      // 在云端，成员管理需要先查询再更新，或者使用 db.command.push
-      const groups = await cloudDb.query(`db.collection("groups").where({_id: "${id}"}).get()`)
-      if (groups && groups.length > 0) {
-        const group = groups[0]
-        const members = group.members || []
-        if (members.some((m) => m.stock_code === stock_code)) {
-          return res.status(400).json({ success: false, data: null, message: '成员已存在' })
-        }
-
-        const newMember = {
-          stock_code,
-          market: market || '',
-          name: name || '',
-          added_at: new Date().toISOString(),
-        }
-
-        // 使用简单覆盖方式更新数组 (云 API 限制)
-        await cloudDb.updateWhere('groups', JSON.stringify({ _id: id }), {
-          members: [...members, newMember],
-          updated_at: new Date().toISOString(),
-        })
-
-        return res.json({
-          success: true,
-          data: { id: group._id, ...group, members: [...members, newMember] },
-          message: '添加成功 (云端)',
-        })
-      }
-    } catch (e) {
-      console.error('❌ 添加云端成员失败:', e.message)
-    }
-  }
-
-  const db = loadMockDb()
-  const groups = Array.isArray(db.groups) ? db.groups : []
-  const groupIndex = groups.findIndex((g) => g.id === id)
-
-  if (groupIndex === -1) {
-    return res.status(404).json({ success: false, data: null, message: '分组不存在' })
-  }
-
-  if (!Array.isArray(groups[groupIndex].members)) {
-    groups[groupIndex].members = []
-  }
-
-  const memberExists = groups[groupIndex].members.some((m) => m.stock_code === stock_code)
-  if (memberExists) {
-    return res.status(400).json({ success: false, data: null, message: '成员已存在' })
-  }
-
-  groups[groupIndex].members.push({
-    stock_code,
-    market: market || '',
-    name: name || '',
-    added_at: new Date().toISOString(),
-  })
-
-  writeMockDb(db)
-  return res.json({
-    success: true,
-    data: groups[groupIndex],
-    message: '添加成功 (本地)',
-  })
-})
-
-app.delete('/api/v1/groups/:id/members/:stock_code', async (req, res) => {
-  const { id, stock_code } = req.params
-
-  if (cloudDb) {
-    try {
-      const groups = await cloudDb.query(`db.collection("groups").where({_id: "${id}"}).get()`)
-      if (groups && groups.length > 0) {
-        const group = groups[0]
-        const members = group.members || []
-        const memberIndex = members.findIndex((m) => m.stock_code === stock_code)
-
-        if (memberIndex !== -1) {
-          members.splice(memberIndex, 1)
-          await cloudDb.updateWhere('groups', JSON.stringify({ _id: id }), {
-            members,
-            updated_at: new Date().toISOString(),
-          })
-          return res.json({
-            success: true,
-            data: null,
-            message: '移除成功 (云端)',
-          })
-        }
-      }
-    } catch (e) {
-      console.error('❌ 移除云端成员失败:', e.message)
-    }
-  }
-
-  const db = loadMockDb()
-  const groups = Array.isArray(db.groups) ? db.groups : []
-  const groupIndex = groups.findIndex((g) => g.id === id)
-
-  if (groupIndex === -1) {
-    return res.status(404).json({ success: false, data: null, message: '分组不存在' })
-  }
-
-  if (!Array.isArray(groups[groupIndex].members)) {
-    return res.status(400).json({ success: false, data: null, message: '该分组无成员' })
-  }
-
-  const memberIndex = groups[groupIndex].members.findIndex((m) => m.stock_code === stock_code)
-  if (memberIndex === -1) {
-    return res.status(404).json({ success: false, data: null, message: '成员不在该分组中' })
-  }
-
-  groups[groupIndex].members.splice(memberIndex, 1)
-  writeMockDb(db)
-
-  return res.json({
-    success: true,
-    data: null,
-    message: '移除成功 (本地)',
-  })
-})
+// 路由配置
+app.use('/api/v1/groups', require('./routes/group'))
 
 app.get('/api/v1/health', (req, res) => {
-  void req
-  res.json({
-    success: true,
-    data: {
-      status: 'healthy',
-      version: 'v1',
-      service: 'stock-trading-backend',
-      environment: process.env.NODE_ENV || 'development',
-    },
-    message: 'API v1 运行正常',
-  })
+  return response.success(res, {
+    status: 'healthy',
+    version: 'v1',
+    service: 'stock-trading-backend',
+    environment: process.env.NODE_ENV || 'development',
+  }, 'API v1 运行正常')
 })
 
 function getBearerToken(req) {
@@ -435,8 +91,7 @@ function getBearerToken(req) {
 }
 
 function signAdminToken(username) {
-  const secret =
-    process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || process.env.SECRET_KEY || 'dev-secret-key-change-in-production'
+  const secret = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || 'option_trading_secret_key_backup'
   const expiresInRaw = process.env.JWT_EXPIRES_SECONDS || '86400'
   const expiresIn = Number.parseInt(String(expiresInRaw), 10)
   const safeExpiresIn = Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : 86400
@@ -452,17 +107,17 @@ app.post('/api/v1/auth/login', (req, res) => {
   const password = req.body && typeof req.body.password === 'string' ? req.body.password : ''
 
   if (username === '') {
-    return res.status(400).json({ success: false, data: null, message: 'username 不能为空' })
+    return response.error(res, 'username 不能为空', 400)
   }
   if (password.trim() === '') {
-    return res.status(400).json({ success: false, data: null, message: 'password 不能为空' })
+    return response.error(res, 'password 不能为空', 400)
   }
 
   const expectedUsername = process.env.ADMIN_USERNAME || 'admin'
   const expectedPassword = process.env.ADMIN_PASSWORD || 'admin123'
 
   if (username !== expectedUsername || password !== expectedPassword) {
-    return res.status(401).json({ success: false, data: null, message: '用户名或密码错误' })
+    return response.error(res, '用户名或密码错误', 401)
   }
 
   const expiresInRaw = process.env.JWT_EXPIRES_SECONDS || '86400'
@@ -470,77 +125,120 @@ app.post('/api/v1/auth/login', (req, res) => {
   const safeExpiresIn = Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : 86400
   const token = signAdminToken(username)
 
-  return res.json({
-    success: true,
-    data: {
-      token,
-      tokenType: 'Bearer',
-      expiresIn: safeExpiresIn,
-    },
-    message: '登录成功',
-  })
+  return response.success(res, {
+    token,
+    tokenType: 'Bearer',
+    expiresIn: safeExpiresIn,
+  }, '登录成功')
 })
 
 app.get('/api/v1/auth/me', (req, res) => {
   const token = getBearerToken(req)
   if (!token) {
-    return res.status(401).json({ success: false, data: null, message: '未登录或登录已过期' })
+    return response.error(res, '未登录或登录已过期', 401)
   }
 
-  const secret =
-    process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || process.env.SECRET_KEY || 'dev-secret-key-change-in-production'
+  const secret = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || 'option_trading_secret_key_backup'
 
   try {
     const payload = jwt.verify(token, secret, { algorithms: ['HS256'] })
     const username = payload && typeof payload === 'object' ? payload.sub : null
     const role = payload && typeof payload === 'object' ? payload.role : null
 
-    return res.json({
-      success: true,
-      data: { username, role },
-    })
+    return response.success(res, { username, role })
   } catch (e) {
-    return res.status(401).json({ success: false, data: null, message: '无效的登录凭证' })
+    return response.error(res, '无效的登录凭证', 401)
   }
 })
 
-app.get('/api/v1/admin/stats', adminAuth, (req, res) => {
-  void req
-  const db = loadMockDb()
-  const stocks = Array.isArray(db.stocks) ? db.stocks : []
+app.get('/api/v1/admin/stats', adminAuth, async (req, res) => {
+  try {
+    if (cloudDb) {
+      const [stockCount, inquiryCount, orderCount] = await Promise.all([
+        cloudDb.count('quotes'),
+        cloudDb.count('inquiries'),
+        cloudDb.count('orders')
+      ])
+      return response.success(res, {
+        stockCount: stockCount || 0,
+        inquiryCount: inquiryCount || 0,
+        pendingInquiryCount: 0,
+        orderCount: orderCount || 0,
+      })
+    }
 
-  res.json({
-    success: true,
-    data: {
+    const db = loadMockDb()
+    const stocks = Array.isArray(db.stocks) ? db.stocks : []
+    console.log(`[Quotes] Mock DB loaded: ${stocks.length} stocks found`)
+
+    return response.success(res, {
       stockCount: stocks.length,
       inquiryCount: 0,
       pendingInquiryCount: 0,
       orderCount: 0,
-    },
-  })
+    })
+  } catch (e) {
+    console.error('❌ 获取统计数据失败:', e.message)
+    return response.error(res, '获取统计失败', 500)
+  }
 })
 
-app.get('/api/v1/admin/quotes', adminAuth, (req, res) => {
+app.get('/api/v1/admin/quotes', adminAuth, async (req, res) => {
   const pagination = parsePagination(req.query)
   if (!pagination.ok) {
-    return res.status(pagination.error.status).json({
-      success: false,
-      data: null,
-      message: pagination.error.message,
-    })
+    return response.error(res, pagination.error.message, pagination.error.status)
   }
 
   const { page, pageSize } = pagination.value
-  const db = loadMockDb()
-  const stocks = Array.isArray(db.stocks) ? db.stocks : []
-
   const start = (page - 1) * pageSize
-  const items = stocks.slice(start, start + pageSize)
 
-  return res.json({
-    success: true,
-    data: items,
-  })
+  try {
+    console.log(`[Quotes] GET /api/v1/admin/quotes - page:${page}, pageSize:${pageSize}, forcing mock mode`)
+    /* 暂时禁用云端，强制使用本地以排查显示问题
+    if (cloudDb) {
+      const total = await cloudDb.count('quotes')
+      const items = await cloudDb.query(`db.collection("quotes").orderBy("updated_at", "desc").skip(${start}).limit(${pageSize}).get()`)
+      
+      return response.success(res, {
+        items,
+        pagination: {
+          page,
+          per_page: pageSize,
+          total: total || 0,
+          pages: Math.ceil((total || 0) / pageSize),
+        },
+      })
+    }
+    */
+
+    const db = loadMockDb()
+    const stocks = Array.isArray(db.stocks) ? db.stocks : []
+    console.log(`[Quotes] Mock fallback reached. Stocks in DB: ${stocks.length}`)
+    
+    // 增加排序逻辑：按更新时间倒序排列，确保新同步的数据排在前面
+    stocks.sort((a, b) => {
+      const ta = a.updated_at ? new Date(a.updated_at).getTime() : 0
+      const tb = b.updated_at ? new Date(b.updated_at).getTime() : 0
+      return tb - ta
+    })
+
+    const total = stocks.length
+    const items = stocks.slice(start, start + pageSize)
+    console.log(`[Quotes] Mock DB loaded. Total: ${total}, returning: ${items.length}`)
+
+    return response.success(res, {
+      items,
+      pagination: {
+        page,
+        per_page: pageSize,
+        total,
+        pages: Math.ceil(total / pageSize),
+      },
+    })
+  } catch (e) {
+    console.error('❌ 获取报价列表失败:', e.message)
+    return response.error(res, '获取列表失败', 500)
+  }
 })
 
 app.delete('/api/v1/admin/quotes', adminAuth, async (req, res) => {
@@ -557,15 +255,13 @@ app.delete('/api/v1/admin/quotes', adminAuth, async (req, res) => {
         for (let i = 0; i < codes.length; i += 200) {
           const batch = codes.slice(i, i + 200)
           const arrJs = JSON.stringify(batch)
-          const whereJs = `{stock_code: db.command.in(${arrJs})}`
+          // 对于 HTTP API，使用 SDK 语法中的 _.in 往往需要配合定义 _，
+          // 但在简单的 where 字符串中，直接使用 JSON 语法的 $in 更为通用
+          const whereJs = `{stock_code: {"$in": ${arrJs}}}`
           const deleted = await cloudDb.deleteWhere('quotes', whereJs)
           totalDeleted += Number(deleted || 0)
         }
-        return res.json({
-          success: true,
-          data: { deleted: totalDeleted },
-          message: `已成功删除 ${totalDeleted} 条记录`,
-        })
+        return response.success(res, { deleted: totalDeleted }, `已成功删除 ${totalDeleted} 条记录`)
       }
 
       const taskId = uuidv4()
@@ -581,11 +277,7 @@ app.delete('/api/v1/admin/quotes', adminAuth, async (req, res) => {
       }
       saveUploadSession(taskId, session)
 
-      return res.status(202).json({
-        success: true,
-        data: { status: 'processing', taskId },
-        message: '清空任务已创建，正在处理中',
-      })
+      return response.success(res, { status: 'processing', taskId }, '清空任务已创建，正在处理中', 202)
     }
 
     const db = loadMockDb()
@@ -599,47 +291,35 @@ app.delete('/api/v1/admin/quotes', adminAuth, async (req, res) => {
     }
     writeMockDb(db)
     const deleted = before - (Array.isArray(db.stocks) ? db.stocks.length : 0)
-    return res.json({
-      success: true,
-      data: { deleted },
-      message: `已成功删除 ${deleted} 条记录`,
-    })
+    return response.success(res, { deleted }, `已成功删除 ${deleted} 条记录`)
   } catch (e) {
     console.error('❌ 删除报价失败:', e.message)
-    return res.status(500).json({ success: false, data: null, message: `删除失败: ${e.message}` })
+    return response.error(res, `删除失败: ${e.message}`, 500)
   }
 })
 
 app.get('/api/v1/admin/quotes/delete-task/:taskId', adminAuth, async (req, res) => {
   const rawId = req.params && typeof req.params.taskId === 'string' ? req.params.taskId.trim() : ''
   if (!rawId) {
-    return res.status(400).json({ success: false, data: null, message: '缺少 taskId' })
+    return response.error(res, '缺少 taskId', 400)
   }
 
   const session = loadUploadSession(rawId)
   if (!session || session.type !== 'clear_quotes') {
-    return res.status(404).json({ success: false, data: null, message: '任务不存在或已过期' })
+    return response.error(res, '任务不存在或已过期', 404)
   }
 
   if (session.status === 'processed') {
     const deleted = Number(session.deleted || 0)
-    return res.json({
-      success: true,
-      data: { status: 'processed', taskId: rawId, deleted, durationMs: session.result?.durationMs || 0 },
-      message: `已清空 ${deleted} 条记录`,
-    })
+    return response.success(res, { status: 'processed', taskId: rawId, deleted, durationMs: session.result?.durationMs || 0 }, `已清空 ${deleted} 条记录`)
   }
 
   if (session.status === 'failed') {
-    return res.status(500).json({
-      success: false,
-      data: { status: 'failed', taskId: rawId },
-      message: session.result?.message ? String(session.result.message) : '删除失败',
-    })
+    return response.error(res, session.result?.message ? String(session.result.message) : '删除失败', 500, { status: 'failed', taskId: rawId })
   }
 
   if (!cloudDb) {
-    return res.status(500).json({ success: false, data: null, message: '当前环境未启用云数据库，无法处理任务' })
+    return response.error(res, '当前环境未启用云数据库，无法处理任务', 500)
   }
 
   try {
@@ -671,61 +351,159 @@ app.get('/api/v1/admin/quotes/delete-task/:taskId', adminAuth, async (req, res) 
       saveUploadSession(rawId, session)
 
       const deleted = Number(session.deleted || 0)
-      return res.json({
-        success: true,
-        data: { status: 'processed', taskId: rawId, deleted, durationMs },
-        message: `已清空 ${deleted} 条记录`,
-      })
+      return response.success(res, { status: 'processed', taskId: rawId, deleted, durationMs }, `已清空 ${deleted} 条记录`)
     }
 
     saveUploadSession(rawId, session)
     const deleted = Number(session.deleted || 0)
-    return res.json({
-      success: true,
-      data: { status: 'processing', taskId: rawId, deleted },
-      message: `清空进行中，已删除 ${deleted} 条记录`,
-    })
+    return response.success(res, { status: 'processing', taskId: rawId, deleted }, `清空进行中，已删除 ${deleted} 条记录`)
   } catch (e) {
     session.status = 'failed'
     session.updated_at = new Date().toISOString()
     session.result = { success: false, message: e instanceof Error ? e.message : String(e) }
     saveUploadSession(rawId, session)
-    return res.status(500).json({ success: false, data: { status: 'failed', taskId: rawId }, message: session.result.message })
+    return response.error(res, session.result.message, 500, { status: 'failed', taskId: rawId })
   }
 })
 
 app.get('/api/v1/admin/orders', adminAuth, (req, res) => {
   const pagination = parsePagination(req.query)
   if (!pagination.ok) {
-    return res.status(pagination.error.status).json({
-      success: false,
-      data: null,
-      message: pagination.error.message,
-    })
+    return response.error(res, pagination.error.message, pagination.error.status)
   }
 
-  return res.json({
-    success: true,
-    data: [],
-    message: '当前环境未接入订单数据源，已返回空列表',
-  })
+  const { page, pageSize } = pagination.value
+  return response.success(res, {
+    items: [],
+    pagination: {
+      page,
+      per_page: pageSize,
+      total: 0,
+      pages: 0,
+    },
+  }, '当前环境未接入订单数据源，已返回空列表')
 })
 
 app.get('/api/v1/admin/inquiries', adminAuth, (req, res) => {
   const pagination = parsePagination(req.query)
   if (!pagination.ok) {
-    return res.status(pagination.error.status).json({
-      success: false,
-      data: null,
-      message: pagination.error.message,
-    })
+    return response.error(res, pagination.error.message, pagination.error.status)
   }
 
-  return res.json({
-    success: true,
-    data: [],
-    message: '当前环境未接入询价数据源，已返回空列表',
+  const { page, pageSize } = pagination.value
+  return response.success(res, {
+    items: [],
+    pagination: {
+      page,
+      per_page: pageSize,
+      total: 0,
+      pages: 0,
+    },
+  }, '当前环境未接入询价数据源，已返回空列表')
+})
+
+app.get('/api/v1/admin/sync-logs', adminAuth, async (req, res) => {
+  const pagination = parsePagination(req.query)
+  if (!pagination.ok) {
+    return response.error(res, pagination.error.message, pagination.error.status)
+  }
+
+  const { page, pageSize } = pagination.value
+  const skip = (page - 1) * pageSize
+
+  try {
+    if (cloudDb) {
+      const items = await cloudDb.query(`db.collection("sync_logs").orderBy("created_at", "desc").skip(${skip}).limit(${pageSize}).get()`)
+      const total = await cloudDb.count('sync_logs')
+      return response.success(res, {
+        items,
+        pagination: {
+          page,
+          per_page: pageSize,
+          total: total || 0,
+          pages: Math.ceil((total || 0) / pageSize),
+        },
+      })
+    }
+
+    // 本地模式暂时返回空列表
+    return response.success(res, {
+      items: [],
+      pagination: { page, per_page: pageSize, total: 0, pages: 0 },
+    })
+  } catch (e) {
+    console.error('❌ 获取同步历史失败:', e.message)
+    return response.error(res, '获取失败', 500)
+  }
+})
+
+app.post('/api/v1/admin/sync-all-quotes', adminAuth, async (req, res) => {
+  const taskId = uuidv4()
+  const session = {
+    task_id: taskId,
+    type: 'sync_all_quotes',
+    created_at: new Date().toISOString(),
+    status: 'processing',
+    result: null,
+    requested_by: req.admin?.sub || 'admin',
+  }
+  saveUploadSession(taskId, session)
+
+  // 异步执行 Python 脚本
+  const fileDbPath = getMockDbPath()
+  const args = ['-3.12', 'sina_quotes.py', '--all', '--update-mock-db', '--mock-db-path', fileDbPath]
+  const child = spawn('py', args, {
+    cwd: __dirname,
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
   })
+
+  let stdout = ''
+  let stderr = ''
+
+  // 给全量同步更长的时间（5分钟）
+  const killTimer = setTimeout(() => {
+    child.kill()
+  }, 300_000)
+
+  child.stdout.on('data', (buf) => { stdout += buf.toString('utf8') })
+  child.stderr.on('data', (buf) => { stderr += buf.toString('utf8') })
+
+  child.on('close', (code) => {
+    clearTimeout(killTimer)
+    const latest = loadUploadSession(taskId) || session
+    
+    if (code !== 0 && code !== 2) {
+      latest.status = 'failed'
+      latest.result = { success: false, message: stderr.trim() || '全量同步失败' }
+    } else {
+      try {
+        const parsed = JSON.parse(stdout)
+        latest.status = 'processed'
+        latest.result = { 
+          success: true, 
+          processed: Array.isArray(parsed.data) ? parsed.data.length : 0,
+          durationMs: Date.now() - Date.parse(latest.created_at)
+        }
+      } catch (e) {
+        latest.status = 'failed'
+        latest.result = { success: false, message: '行情同步返回解析失败' }
+      }
+    }
+    latest.updated_at = new Date().toISOString()
+    saveUploadSession(taskId, latest)
+  })
+
+  return response.success(res, { status: 'processing', taskId }, '全量同步任务已创建，后台处理中', 202)
+})
+
+app.get('/api/v1/admin/sync-all-quotes/status/:taskId', adminAuth, (req, res) => {
+  const { taskId } = req.params
+  const session = loadUploadSession(taskId)
+  if (!session || session.type !== 'sync_all_quotes') {
+    return response.error(res, '任务不存在或已过期', 404)
+  }
+  return response.success(res, session)
 })
 
 app.post('/api/v1/admin/sync-quotes', adminAuth, (req, res) => {
@@ -902,8 +680,18 @@ app.post('/api/v1/admin/crawl-quotes', adminAuth, (req, res) => {
   })
 })
 
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = getUploadCacheDir()
+    cb(null, dir)
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${uuidv4()}-${file.originalname}`)
+  }
+})
+
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: storage,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
 })
 
@@ -1038,90 +826,75 @@ function parseQuotesBuffer(filename, buffer) {
 function adminAuth(req, res, next) {
   const token = getBearerToken(req)
   if (!token) {
-    return res.status(401).json({ success: false, data: null, message: '未登录或登录已过期' })
+    return response.error(res, '未登录或登录已过期', 401)
   }
 
-  const secret =
-    process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || process.env.SECRET_KEY || 'dev-secret-key-change-in-production'
+  const secret = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || 'option_trading_secret_key_backup'
 
   try {
     const payload = jwt.verify(token, secret, { algorithms: ['HS256'] })
     req.admin = payload
     next()
   } catch (e) {
-    return res.status(401).json({ success: false, data: null, message: '无效的登录凭证' })
+    return response.error(res, '无效的登录凭证', 401)
   }
 }
 
 app.post('/api/v1/admin/upload-quotes/preview', adminAuth, upload.single('file'), (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ success: false, data: null, message: '未找到上传文件' })
+    return response.error(res, '未找到上传文件', 400)
   }
 
   try {
-    const items = parseQuotesBuffer(req.file.originalname, req.file.buffer)
+    const buffer = fs.readFileSync(req.file.path)
+    const items = parseQuotesBuffer(req.file.originalname, buffer)
     const uploadId = uuidv4()
     const session = {
       upload_id: uploadId,
       created_at: new Date().toISOString(),
       status: 'pending',
       items: items,
+      original_path: req.file.path
     }
 
     saveUploadSession(uploadId, session)
 
-    return res.json({
-      success: true,
-      data: {
-        uploadId: uploadId,
-        total: items.length,
-        preview: items.slice(0, 20),
-      },
-      message: '解析成功，请确认入库',
-    })
+    return response.success(res, {
+      uploadId: uploadId,
+      total: items.length,
+      preview: items.slice(0, 20),
+    }, '解析成功，请确认入库')
   } catch (e) {
     console.error('❌ 文件预览解析失败:', e.message)
-    return res.status(500).json({ success: false, data: null, message: `解析失败: ${e.message}` })
+    return response.error(res, `解析失败: ${e.message}`, 500)
   }
 })
 
 app.post('/api/v1/admin/upload-quotes/confirm', adminAuth, async (req, res) => {
   const { uploadId } = req.body || {}
   if (!uploadId) {
-    return res.status(400).json({ success: false, data: null, message: '缺少 uploadId' })
+    return response.error(res, '缺少 uploadId', 400)
   }
 
   const session = loadUploadSession(uploadId)
   if (!session) {
-    return res.status(400).json({ success: false, data: null, message: '预览数据已过期或不存在' })
+    return response.error(res, '预览数据已过期或不存在', 400)
   }
 
   if (session.status === 'processing') {
-    return res.json({
-      success: true,
-      data: { status: 'processing' },
-      message: '入库正在处理中',
-    })
+    return response.success(res, { status: 'processing' }, '入库正在处理中')
   }
 
   if (session.status === 'processed') {
-    return res.json({
-      success: true,
-      data: {
-        status: 'processed',
-        processed: session.result?.processed || 0,
-        durationMs: session.result?.durationMs || 0,
-      },
-      message: '入库已完成',
-    })
+    return response.success(res, {
+      status: 'processed',
+      processed: session.result?.processed || 0,
+      durationMs: session.result?.durationMs || 0,
+    }, '入库已完成')
   }
 
   if (session.status === 'failed') {
-    return res.status(500).json({
-      success: false,
-      data: { status: 'failed' },
-      message: session.result?.message ? String(session.result.message) : '入库失败',
-    })
+    return response.error(res, session.result?.message ? String(session.result.message) : '入库失败', 500, { status: 'failed' })
   }
 
   // 开始处理
@@ -1168,6 +941,12 @@ app.post('/api/v1/admin/upload-quotes/confirm', adminAuth, async (req, res) => {
       session.status = 'processed'
       session.result = { success: true, processed, durationMs: Math.max(0, Date.now() - t0) }
       session.processed_at = new Date().toISOString()
+      
+      // 清理原文件
+      if (session.original_path && fs.existsSync(session.original_path)) {
+        fs.unlinkSync(session.original_path)
+      }
+      
       saveUploadSession(uploadId, session)
     } catch (e) {
       console.error('❌ 入库处理失败:', e.message)
@@ -1180,11 +959,7 @@ app.post('/api/v1/admin/upload-quotes/confirm', adminAuth, async (req, res) => {
   // 立即开始异步处理
   processUpload()
 
-  return res.json({
-    success: true,
-    data: { status: 'processing' },
-    message: '入库已开始处理',
-  })
+  return response.success(res, { status: 'processing' }, '入库已开始处理')
 })
 
 app.post('/api/v1/admin/bench-quotes', adminAuth, async (req, res) => {

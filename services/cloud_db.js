@@ -25,12 +25,12 @@ class CloudDbClient {
   }
 
   static fromEnv() {
-    const envId = process.env.WX_CLOUD_ENV || process.env.WX_ENV_ID
-    const appId = process.env.WX_APPID || process.env.WECHAT_APPID
-    const secret = process.env.WX_SECRET || process.env.WECHAT_SECRET
+    const envId = (process.env.WX_CLOUD_ENV || process.env.WX_ENV_ID || '').trim()
+    const appId = (process.env.WX_APPID || process.env.WECHAT_APPID || '').trim()
+    const secret = (process.env.WX_SECRET || process.env.WECHAT_SECRET || '').trim()
 
-    if (!envId || !appId || !secret) {
-      throw new Error('缺少微信云开发配置环境变量: WX_CLOUD_ENV, WX_APPID, WX_SECRET')
+    if (!envId || !appId || !secret || envId.includes('your_') || appId.includes('your_') || secret.includes('your_')) {
+      throw new Error('微信云开发配置未就绪或仍为占位符')
     }
 
     return new CloudDbClient({ envId, appId, secret })
@@ -305,6 +305,15 @@ class CloudDbClient {
     }
 
     return { processed, errors }
+  }
+
+  /**
+   * 统计数量
+   */
+  async count(collection, whereJs = '{}') {
+    const query = `db.collection("${collection}").where(${whereJs}).count()`
+    const resp = await this._post('tcb/databasecount', query)
+    return resp.count
   }
 }
 

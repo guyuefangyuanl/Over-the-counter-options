@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "dev:node": "nodemon app.js",
-    "dev:flask": "python -m flask run --port 5000",
+    "dev:flask": "py -3.12 -m flask --app app:create_app run --port 5000",
     "dev:ui": "npm run dev --prefix admin-ui",
     "dev:node-ui": "concurrently \"npm run dev:node\" \"npm run dev:ui\"",
     "dev": "concurrently \"npm run dev:node\" \"npm run dev:flask\" \"npm run dev:ui\"",

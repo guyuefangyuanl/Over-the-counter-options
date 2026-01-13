@@ -153,6 +153,10 @@ def create_app() -> Flask:
     flask_app.register_blueprint(admin_bp, url_prefix='/api/v1/admin')
     flask_app.register_blueprint(group_bp, url_prefix='/api/v1')
 
+    # 启动后台任务
+    if os.getenv("SKIP_SCHEDULER") != "1":
+        start_background_scheduler(flask_app)
+
     @flask_app.route('/prototype/')
     @flask_app.route('/prototype/<path:path>')
     def serve_prototype(path='index.html'):
@@ -178,6 +182,62 @@ def create_app() -> Flask:
 
         # React 路由回退到 index.html
         return send_from_directory(dist_dir, 'index.html')
+
+    return flask_app
+
+
+def start_background_scheduler(flask_app):
+    """启动背景定时任务"""
+    import threading
+    import time
+    from services.sync_service import sync_all_quotes
+
+    def scheduler_loop():
+        # 等待应用完全启动
+        time.sleep(10)
+        
+        # 从环境变量获取同步间隔（默认 10 分钟）
+        sync_interval = int(os.getenv("AUTO_SYNC_INTERVAL_SECONDS", "600"))
+        enabled = os.getenv("ENABLE_AUTO_SYNC", "false").lower() == "true"
+        
+        if not enabled:
+            logger.info("自动同步行情已禁用 (ENABLE_AUTO_SYNC=false)")
+            return
+
+        logger.info(f"自动同步行情已启动，间隔: {sync_interval}s")
+        
+        while True:
+            try:
+                # 检查是否在交易时间内
+                now = time.localtime()
+                is_weekday = now.tm_wday < 5
+                hour = now.tm_hour
+                minute = now.tm_min
+                
+                is_trading_time = False
+                if is_weekday:
+                    # 9:15-11:30
+                    if (hour == 9 and minute >= 15) or (hour == 10) or (hour == 11 and minute <= 30):
+                        is_trading_time = True
+                    # 13:00-15:00
+                    elif (hour >= 13 and hour < 15) or (hour == 15 and minute == 0):
+                        is_trading_time = True
+                
+                if is_trading_time:
+                    logger.info("开始定时自动同步全量行情...")
+                    sync_all_quotes(requested_by="system_scheduler")
+                    logger.info("定时自动同步全量行情完成")
+                else:
+                    logger.debug("当前非交易时间，跳过同步")
+                    
+            except Exception as e:
+                logger.error(f"定时同步行情发生错误: {e}")
+            
+            time.sleep(sync_interval)
+
+    thread = threading.Thread(target=scheduler_loop, daemon=True)
+    thread.start()
+    return thread
 
     @flask_app.errorhandler(404)
     def not_found(error):

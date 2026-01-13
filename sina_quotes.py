@@ -81,9 +81,11 @@ class SinaQuote:
     def to_admin_stock_item(self) -> Dict[str, Any]:
         out: Dict[str, Any] = {
             "stock_code": self.stock_code,
+            "code": self.stock_code,
             "name": self.name,
             "price": self.price,
             "changePercent": self.change_percent,
+            "change_percent": self.change_percent,
             "open": self.open,
             "high": self.high,
             "low": self.low,
@@ -215,7 +217,8 @@ def fetch_sina_quotes(
                     time.sleep(random.random() * 0.05)
                 resp = sess_local.get(url, headers=headers, timeout=timeout)
                 resp.raise_for_status()
-                raw_text = resp.content.decode("gbk", errors="replace")
+                # 使用 gb18030 解码，比 gbk 更全面，减少乱码
+                raw_text = resp.content.decode("gb18030", errors="replace")
                 parsed = parse_sina_hq(raw_text)
                 for fullcode, fields in parsed.items():
                     q = _fields_to_quote(fullcode, fields)
@@ -292,7 +295,8 @@ def upsert_quotes_to_mock_db(quotes: Sequence[SinaQuote], *, file_path: str) -> 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--codes", nargs="+", required=True)
+    parser.add_argument("--codes", nargs="+")
+    parser.add_argument("--all", action="store_true", help="抓取全量 A 股行情")
     parser.add_argument("--timeout", type=float, default=8.0)
     parser.add_argument("--retries", type=int, default=2)
     parser.add_argument("--chunk-size", type=int, default=50)
@@ -300,21 +304,65 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--mock-db-path", default=os.getenv("FILE_DB_PATH", "mock_db.json"))
     args = parser.parse_args(list(argv) if argv is not None else None)
 
+    target_codes = args.codes or []
+    code_name_map = {}
+    if args.all:
+        try:
+            import akshare as ak
+            df = ak.stock_zh_a_spot_em()
+            if not df.empty:
+                target_codes = df["代码"].tolist()
+                # 记录代码到名称的映射，作为新浪解析乱码时的回退
+                for _, row in df.iterrows():
+                    code_name_map[str(row["代码"])] = str(row["名称"])
+        except Exception as e:
+            sys.stderr.write(f"获取全量代码失败: {e}\n")
+            return 1
+
+    if not target_codes:
+        sys.stderr.write("未提供股票代码且未指定 --all\n")
+        return 1
+
     quotes, errors = fetch_sina_quotes(
-        args.codes,
+        target_codes,
         timeout=args.timeout,
         retries=args.retries,
         chunk_size=args.chunk_size,
     )
 
+    # 修复可能存在的乱码名称
+    final_quotes = []
+    for q in quotes:
+        # 如果名称包含乱码（通过检测是否包含特殊字符或利用 akshare 映射回退）
+        if q.stock_code in code_name_map:
+            # 重新创建一个带有正确名称的对象
+            new_q = SinaQuote(
+                stock_code=q.stock_code,
+                name=code_name_map[q.stock_code],
+                price=q.price,
+                change_percent=q.change_percent,
+                open=q.open,
+                high=q.high,
+                low=q.low,
+                pre_close=q.pre_close,
+                volume=q.volume,
+                amount=q.amount,
+                updated_at=q.updated_at,
+                date=q.date,
+                time=q.time
+            )
+            final_quotes.append(new_q)
+        else:
+            final_quotes.append(q)
+
     payload: Dict[str, Any] = {
         "success": len(errors) == 0,
-        "data": [q.to_admin_stock_item() for q in quotes],
+        "data": [q.to_admin_stock_item() for q in final_quotes],
         "errors": errors,
     }
 
     if args.update_mock_db:
-        db = upsert_quotes_to_mock_db(quotes, file_path=args.mock_db_path)
+        db = upsert_quotes_to_mock_db(final_quotes, file_path=args.mock_db_path)
         payload["mock_db_path"] = args.mock_db_path
         payload["mock_db_stock_count"] = len(db.get("stocks") or [])
 

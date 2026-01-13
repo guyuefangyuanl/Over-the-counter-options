@@ -18,7 +18,7 @@ from services.file_parser import (
     load_upload_session_payload,
     save_upload_session_payload,
 )
-from services.sync_service import sync_quotes, upsert_quotes_from_file, delete_quotes
+from services.sync_service import sync_quotes, upsert_quotes_from_file, delete_quotes, sync_all_quotes
 
 logger = logging.getLogger(__name__)
 admin_bp = Blueprint('admin', __name__)
@@ -125,19 +125,24 @@ def get_quotes():
 
         try:
             cloud = CloudDbClient.from_env()
-        except CloudDbConfigError as e:
+            stocks = cloud.query(
+                f'db.collection("quotes").orderBy("updated_at","desc").skip({skip}).limit({page_size}).get()'
+            )
+            total = cloud.count('db.collection("quotes").count()')
+        except CloudDbConfigError:
+            # 回退到本地 Mock 存储
+            from models.stock import StockModel
+            stock_model = StockModel(None) # None 表示使用本地 mock_db.json
+            stocks = stock_model.get_all_stocks(skip=skip, limit=page_size)
+            total = stock_model.count_stocks()
             return flask_paginated_response(
-                data=[],
+                data=stocks,
                 page=page,
                 per_page=page_size,
-                total=0,
-                message=str(e),
+                total=total,
+                message="微信云未配置，已从本地存储加载行情"
             )
 
-        stocks = cloud.query(
-            f'db.collection("quotes").orderBy("updated_at","desc").skip({skip}).limit({page_size}).get()'
-        )
-        total = cloud.count('db.collection("quotes").count()')
         return flask_paginated_response(
             data=stocks,
             page=page,
@@ -306,6 +311,72 @@ def sync_quotes_api():
     except Exception as e:
         logger.error(f"同步行情失败: {e}")
         return flask_error_response(f"同步失败: {str(e)}", 500)
+
+
+@admin_bp.route('/sync-all-quotes', methods=['POST'])
+@require_auth
+@require_roles("admin", "editor")
+def sync_all_quotes_api():
+    """管理后台：触发同步所有 A 股行情"""
+    try:
+        # 这是一个耗时任务，建议异步执行
+        task_id = uuid.uuid4().hex
+        session_payload = {
+            "type": "sync_all_quotes",
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "status": "processing",
+            "result": None,
+        }
+        save_upload_session_payload(upload_id=task_id, payload=session_payload)
+
+        import threading
+
+        def _run_sync_all(sync_task_id: str):
+            try:
+                result = sync_all_quotes(requested_by="admin")
+                try:
+                    payload = load_upload_session_payload(upload_id=sync_task_id)
+                except Exception:
+                    payload = {"type": "sync_all_quotes"}
+
+                payload["status"] = "processed" if result.get("success") else "failed"
+                payload["processed_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                payload["result"] = result
+                save_upload_session_payload(upload_id=sync_task_id, payload=payload)
+            except Exception as e:
+                logger.error(f"异步同步全量行情失败: {e}")
+                try:
+                    payload = load_upload_session_payload(upload_id=sync_task_id)
+                    payload["status"] = "failed"
+                    payload["result"] = {"success": False, "message": str(e)}
+                    save_upload_session_payload(upload_id=sync_task_id, payload=payload)
+                except Exception:
+                    pass
+
+        threading.Thread(target=_run_sync_all, args=(task_id,), daemon=True).start()
+
+        return flask_success_response(
+            data={"status": "processing", "taskId": task_id},
+            message="全量同步任务已创建，后台处理中",
+            code=202,
+        )
+    except Exception as e:
+        logger.error(f"同步全量行情失败: {e}")
+        return flask_error_response(f"启动全量同步失败: {str(e)}", 500)
+
+
+@admin_bp.route('/sync-all-quotes/status/<task_id>', methods=['GET'])
+@require_auth
+def sync_all_quotes_status(task_id: str):
+    """查询全量同步任务状态"""
+    try:
+        session_payload = load_upload_session_payload(upload_id=str(task_id))
+        if session_payload.get("type") != "sync_all_quotes":
+            return flask_error_response("任务不存在", 404)
+
+        return flask_success_response(data=session_payload)
+    except Exception:
+        return flask_error_response("任务不存在或已过期", 404)
 
 
 @admin_bp.route('/bench-quotes', methods=['POST'])

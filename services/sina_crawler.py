@@ -1,6 +1,27 @@
+import akshare as ak
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+import logging
 
 from sina_quotes import SinaQuote, fetch_sina_quotes
+
+logger = logging.getLogger(__name__)
+
+
+def get_all_stock_codes() -> List[str]:
+    """
+    获取所有 A 股股票代码
+    """
+    try:
+        # 使用 akshare 获取所有 A 股实时行情，从中提取代码
+        df = ak.stock_zh_a_spot_em()
+        if df.empty:
+            return []
+        codes = df["代码"].tolist()
+        logger.info(f"成功获取 {len(codes)} 条 A 股股票代码")
+        return codes
+    except Exception as e:
+        logger.error(f"获取 A 股列表失败: {e}")
+        return []
 
 
 def _is_suspended(q: SinaQuote) -> bool:

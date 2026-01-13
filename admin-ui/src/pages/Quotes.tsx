@@ -94,6 +94,7 @@ const Quotes: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCrawlingAll, setIsCrawlingAll] = useState(false);
   const crawlAbortRef = useRef<AbortController | null>(null);
   const uploadPollTimerRef = useRef<number | null>(null);
   const deletePollTimerRef = useRef<number | null>(null);
@@ -105,6 +106,7 @@ const Quotes: React.FC = () => {
       const res = await api.get<ApiResponse<PaginatedPayload<Quote>>>('/admin/quotes', {
         params: { page, pageSize },
       });
+      console.log('[Quotes] API Response:', res);
       if (res.success && res.data?.pagination && Array.isArray(res.data.items)) {
         setData(res.data.items);
         setPagination({
@@ -311,6 +313,51 @@ const Quotes: React.FC = () => {
     }
   }, [fetchQuotes, isCrawling, message, pagination]);
 
+  const handleCrawlAll = useCallback(async () => {
+    if (isCrawlingAll) return;
+
+    setIsCrawlingAll(true);
+    try {
+      const res = await api.post<ApiResponse<{ status: string; taskId: string }>>('/admin/sync-all-quotes');
+      if (res.success && res.data?.taskId) {
+        const taskId = res.data.taskId;
+        message.loading({ content: '全量同步进行中，可能需要几分钟...', key: 'sync-all', duration: 0 });
+        
+        // 开始轮询状态
+        const timer = window.setInterval(async () => {
+          try {
+            const pollRes = await api.get<ApiResponse<{ status: string; result?: SyncResultPayload }>>(`/admin/sync-all-quotes/status/${taskId}`);
+            if (!pollRes.success) {
+              message.error({ content: pollRes.message || '全量同步失败', key: 'sync-all' });
+              window.clearInterval(timer);
+              setIsCrawlingAll(false);
+              return;
+            }
+
+            if (pollRes.data?.status === 'processed') {
+              const processed = pollRes.data.result?.processed ?? 0;
+              message.success({ content: `全量同步完成：写入 ${processed} 条`, key: 'sync-all' });
+              window.clearInterval(timer);
+              setIsCrawlingAll(false);
+              void fetchQuotes(pagination.current, pagination.pageSize);
+            } else if (pollRes.data?.status === 'failed') {
+              message.error({ content: pollRes.message || '全量同步失败', key: 'sync-all' });
+              window.clearInterval(timer);
+              setIsCrawlingAll(false);
+            }
+          } catch (err) {
+            message.error({ content: getApiErrorMessage(err, '查询同步状态失败'), key: 'sync-all' });
+            window.clearInterval(timer);
+            setIsCrawlingAll(false);
+          }
+        }, 5000);
+      }
+    } catch (err) {
+      message.error(getApiErrorMessage(err, '启动全量同步失败'));
+      setIsCrawlingAll(false);
+    }
+  }, [fetchQuotes, isCrawlingAll, message, pagination]);
+
   const handleBeforeUpload: UploadProps['beforeUpload'] = async (file) => {
     setIsUploading(true);
     setUploadPreview(null);
@@ -485,11 +532,19 @@ const Quotes: React.FC = () => {
           <Button 
             type="primary" 
             icon={<ReloadOutlined />} 
+            onClick={handleCrawlAll}
+            loading={isCrawlingAll}
+            disabled={isCrawlingAll}
+          >
+            全量更新 (A股全部)
+          </Button>
+          <Button 
+            icon={<ReloadOutlined />} 
             onClick={handleCrawl}
             loading={isCrawling}
             disabled={isCrawling}
           >
-            从新浪同步最新行情
+            快速更新 (默认股票)
           </Button>
           <Upload
             name="file"

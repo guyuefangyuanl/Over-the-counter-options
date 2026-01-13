@@ -1,5 +1,6 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const response = require('../utils/response');
 const { generateToken } = require('../middleware/auth');
 
 // 创建数据库连接
@@ -32,10 +33,7 @@ async function wechatLogin(req, res) {
 
   // 验证参数
   if (!code) {
-    return res.status(400).json({
-      success: false,
-      message: '缺少登录凭证(code)'
-    });
+    return response.error(res, '缺少登录凭证(code)', 400);
   }
 
   try {
@@ -81,50 +79,15 @@ async function wechatLogin(req, res) {
       
       console.log(`🔄 用户信息已更新: ${updatedUser.nickname || '未知用户'} (ID: ${updatedUser.id})`);
     } else {
-      // 不存在则插入新用户
-      const insertStmt = db.prepare(`
-        INSERT INTO users (openid, nickname, avatar, gender)
-        VALUES (?, ?, ?, ?)
-      `);
-      
-      const info = insertStmt.run(
-        openid,
-        userInfo?.nickName || '匿名用户',
-        userInfo?.avatarUrl || '',
-        userInfo?.gender !== undefined ? userInfo.gender : 0
-      );
-      
-      // 查询新插入的用户信息
-      const newUser = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
-      
-      // 生成JWT token
-      const token = generateToken(newUser);
-      
-      result = {
-        token: token,
-        userId: newUser.id,
-        openid: newUser.openid,
-        userInfo: {
-          nickName: newUser.nickname,
-          avatarUrl: newUser.avatar,
-          gender: newUser.gender
-        }
-      };
-      
+// ... existing code ...
       console.log(`🆕 新用户注册: ${newUser.nickname || '匿名用户'} (ID: ${newUser.id})`);
     }
 
     // 返回成功响应
-    res.json({
-      success: true,
-      data: result
-    });
+    return response.success(res, result);
   } catch (error) {
     console.error('微信登录错误:', error);
-    res.status(500).json({
-      success: false,
-      message: '服务器内部错误'
-    });
+    return response.error(res, '服务器内部错误', 500);
   }
 }
 
@@ -139,10 +102,7 @@ async function qqLogin(req, res) {
 
   // 验证参数
   if (!code) {
-    return res.status(400).json({
-      success: false,
-      message: '缺少登录凭证(code)'
-    });
+    return response.error(res, '缺少登录凭证(code)', 400);
   }
 
   try {
@@ -187,44 +147,12 @@ async function qqLogin(req, res) {
       
       console.log(`🔄 QQ用户信息已更新: ${updatedUser.nickname || '未知用户'} (ID: ${updatedUser.id})`);
     } else {
-      // 不存在则插入新用户
-      const insertStmt = db.prepare(`
-        INSERT INTO users (openid, nickname, avatar, gender)
-        VALUES (?, ?, ?, ?)
-      `);
-      
-      const info = insertStmt.run(
-        openid,
-        userInfo?.nickName || 'QQ用户',
-        userInfo?.avatarUrl || '',
-        userInfo?.gender !== undefined ? userInfo.gender : 0
-      );
-      
-      // 查询新插入的用户信息
-      const newUser = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
-      
-      // 生成JWT token
-      const token = generateToken(newUser);
-      
-      result = {
-        token: token,
-        userId: newUser.id,
-        openid: newUser.openid,
-        userInfo: {
-          nickName: newUser.nickname,
-          avatarUrl: newUser.avatar,
-          gender: newUser.gender
-        }
-      };
-      
+// ... existing code ...
       console.log(`🆕 新QQ用户注册: ${newUser.nickname || 'QQ用户'} (ID: ${newUser.id})`);
     }
 
     // 返回成功响应
-    res.json({
-      success: true,
-      data: result
-    });
+    return response.success(res, result);
   } catch (error) {
     console.error('QQ登录错误:', error);
     res.status(500).json({
@@ -243,19 +171,16 @@ async function getUserInfo(req, res) {
 
   try {
     // 返回用户完整信息
-    res.json({
-      success: true,
-      data: {
-        userId: req.user.id,
-        openid: req.user.openid,
-        userInfo: {
-          nickName: req.user.nickname,
-          avatarUrl: req.user.avatar,
-          gender: req.user.gender
-        },
-        createdAt: req.user.created_at,
-        updatedAt: req.user.updated_at
-      }
+    return response.success(res, {
+      userId: req.user.id,
+      openid: req.user.openid,
+      userInfo: {
+        nickName: req.user.nickname,
+        avatarUrl: req.user.avatar,
+        gender: req.user.gender
+      },
+      createdAt: req.user.created_at,
+      updatedAt: req.user.updated_at
     });
   } catch (error) {
     console.error('获取用户信息错误:', error);
@@ -277,10 +202,7 @@ async function updateUserInfo(req, res) {
 
   // 验证参数
   if (!userInfo) {
-    return res.status(400).json({
-      success: false,
-      message: '缺少用户信息'
-    });
+    return response.error(res, '缺少用户信息', 400);
   }
 
   try {
@@ -301,10 +223,7 @@ async function updateUserInfo(req, res) {
       req.user.id
     );
     
-    res.json({
-      success: true,
-      message: '更新成功'
-    });
+    return response.success(res, null, '更新成功');
     
     console.log(`✅ 用户信息更新成功: ${req.user.nickname || '未知用户'} (ID: ${req.user.id})`);
   } catch (error) {
@@ -327,28 +246,19 @@ async function sendSmsCode(req, res) {
 
   // 验证参数
   if (!phone || !type) {
-    return res.status(400).json({
-      success: false,
-      message: '缺少必要参数'
-    });
+    return response.error(res, '缺少必要参数', 400);
   }
 
   // 验证手机号格式
   const phoneRegex = /^1[3-9]\d{9}$/;
   if (!phoneRegex.test(phone)) {
-    return res.status(400).json({
-      success: false,
-      message: '手机号格式不正确'
-    });
+    return response.error(res, '手机号格式不正确', 400);
   }
 
   // 验证类型
   const validTypes = ['login', 'register', 'bind', 'verify'];
   if (!validTypes.includes(type)) {
-    return res.status(400).json({
-      success: false,
-      message: '验证码类型不正确'
-    });
+    return response.error(res, '验证码类型不正确', 400);
   }
 
   try {
@@ -358,16 +268,12 @@ async function sendSmsCode(req, res) {
     // 模拟发送成功
     console.log(`发送验证码到 ${phone}: ${code}, 类型: ${type}`);
 
-    res.json({
-      success: true,
-      message: '验证码发送成功',
-      data: {
-        phone,
-        expiresIn: 300, // 5分钟后过期
-        // 仅在开发环境返回验证码
-        ...(process.env.NODE_ENV === 'development' && { code })
-      }
-    });
+    return response.success(res, {
+      phone,
+      expiresIn: 300, // 5分钟后过期
+      // 仅在开发环境返回验证码
+      ...(process.env.NODE_ENV === 'development' && { code })
+    }, '验证码发送成功');
   } catch (error) {
     console.error('发送验证码错误:', error);
     res.status(500).json({
@@ -388,37 +294,25 @@ async function verifySmsCode(req, res) {
 
   // 验证参数
   if (!phone || !code || !type) {
-    return res.status(400).json({
-      success: false,
-      message: '缺少必要参数'
-    });
+    return response.error(res, '缺少必要参数', 400);
   }
 
   // 验证手机号格式
   const phoneRegex = /^1[3-9]\d{9}$/;
   if (!phoneRegex.test(phone)) {
-    return res.status(400).json({
-      success: false,
-      message: '手机号格式不正确'
-    });
+    return response.error(res, '手机号格式不正确', 400);
   }
 
   // 验证验证码格式
   const codeRegex = /^\d{6}$/;
   if (!codeRegex.test(code)) {
-    return res.status(400).json({
-      success: false,
-      message: '验证码格式不正确'
-    });
+    return response.error(res, '验证码格式不正确', 400);
   }
 
   // 验证类型
   const validTypes = ['login', 'register', 'bind', 'verify'];
   if (!validTypes.includes(type)) {
-    return res.status(400).json({
-      success: false,
-      message: '验证码类型不正确'
-    });
+    return response.error(res, '验证码类型不正确', 400);
   }
 
   try {
@@ -427,21 +321,14 @@ async function verifySmsCode(req, res) {
     const isValid = /^\d{6}$/.test(code);
 
     if (!isValid) {
-      return res.status(400).json({
-        success: false,
-        message: '验证码格式错误'
-      });
+      return response.error(res, '验证码格式错误', 400);
     }
 
     // 模拟验证成功
-    res.json({
-      success: true,
-      message: '验证码验证成功',
-      data: {
-        phone,
-        verified: true
-      }
-    });
+    return response.success(res, {
+      phone,
+      verified: true
+    }, '验证码验证成功');
   } catch (error) {
     console.error('验证验证码错误:', error);
     res.status(500).json({

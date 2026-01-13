@@ -4,7 +4,7 @@ import hashlib
 from typing import Any, Dict, List, Optional, Sequence
 
 from services.cloud_db import CloudDbClient, CloudDbConfigError, CloudDbRequestError
-from services.sina_crawler import crawl_quotes
+from services.sina_crawler import crawl_quotes, get_all_stock_codes
 
 
 def _utc_now_iso() -> str:
@@ -79,15 +79,12 @@ def sync_quotes(
     shard_count: Optional[int] = None,
 ) -> Dict[str, Any]:
     started_at = time.time()
+    cloud = None
     try:
         cloud = CloudDbClient.from_env()
-    except CloudDbConfigError as e:
-        return {
-            "success": False,
-            "message": str(e),
-            "processed": 0,
-            "errors": [{"code": "CLOUD_DB_NOT_CONFIGURED", "message": str(e)}],
-        }
+    except CloudDbConfigError:
+        import logging
+        logging.getLogger(__name__).warning("微信云数据库配置未就绪，将尝试同步到本地 Mock 存储")
 
     target_codes = list(codes) if codes else _default_codes_from_env()
 
@@ -150,47 +147,79 @@ def sync_quotes(
 
     processed = 0
     upsert_errors: List[Dict[str, Any]] = []
-    try:
-        upsert_t0 = time.time()
-        processed, upsert_errors = cloud.batch_upsert(
-            collection="quotes",
-            unique_key="stock_code",
-            items=docs,
-            chunk_size=_load_int_env("WX_DB_UPSERT_CHUNK_SIZE", 50),
-            max_workers=max_workers,
-        )
-        upsert_ms = int((time.time() - upsert_t0) * 1000)
-    except CloudDbRequestError as e:
-        upsert_errors.append({"code": "CLOUD_DB_WRITE_FAILED", "message": str(e)})
-        upsert_ms = 0
+    upsert_ms = 0
+
+    if cloud:
+        try:
+            upsert_t0 = time.time()
+            processed, upsert_errors = cloud.batch_upsert(
+                collection="quotes",
+                unique_key="stock_code",
+                items=docs,
+                chunk_size=_load_int_env("WX_DB_UPSERT_CHUNK_SIZE", 50),
+                max_workers=max_workers,
+            )
+            upsert_ms = int((time.time() - upsert_t0) * 1000)
+        except CloudDbRequestError as e:
+            upsert_errors.append({"code": "CLOUD_DB_WRITE_FAILED", "message": str(e)})
+            upsert_ms = 0
+    else:
+        # 回退到本地 Mock 存储
+        try:
+            from sina_quotes import SinaQuote, upsert_quotes_to_mock_db
+            quotes_objs = []
+            for d in docs:
+                # 转换回 SinaQuote 对象以便复用现有逻辑
+                q = SinaQuote(
+                    stock_code=d.get("stock_code"),
+                    name=d.get("name"),
+                    price=d.get("price"),
+                    change_percent=d.get("changePercent"),
+                    open=d.get("open"),
+                    high=d.get("high"),
+                    low=d.get("low"),
+                    pre_close=d.get("pre_close"),
+                    volume=d.get("volume"),
+                    amount=d.get("amount"),
+                    updated_at=d.get("updated_at")
+                )
+                quotes_objs.append(q)
+            
+            mock_db_path = os.getenv("FILE_DB_PATH", "mock_db.json")
+            upsert_quotes_to_mock_db(quotes_objs, file_path=mock_db_path)
+            processed = len(quotes_objs)
+            logger.info(f"成功同步 {processed} 条行情到本地 Mock 存储: {mock_db_path}")
+        except Exception as e:
+            upsert_errors.append({"code": "MOCK_DB_WRITE_FAILED", "message": str(e)})
 
     duration_ms = int((time.time() - started_at) * 1000)
     errors = list(crawl_errors) + list(upsert_errors)
 
-    try:
-        cloud.add(
-            collection="sync_logs",
-            data={
-                "type": "sync_quotes",
-                "source": source,
-                "requested_by": requested_by or "",
-                "codes": target_codes,
-                "fetched": len(items),
-                "processed": processed,
-                "crawlMs": crawl_ms,
-                "upsertMs": upsert_ms,
-                "crawlErrorCount": len(crawl_errors),
-                "upsertErrorCount": len(upsert_errors),
-                "shardIndex": int(shard_index) if shard_index is not None else None,
-                "shardCount": int(shard_count) if shard_count is not None else None,
-                "errorCount": len(errors),
-                "errors": errors[:50],
-                "durationMs": duration_ms,
-                "created_at": now_iso,
-            },
-        )
-    except Exception:
-        pass
+    if cloud:
+        try:
+            cloud.add(
+                collection="sync_logs",
+                data={
+                    "type": "sync_quotes",
+                    "source": source,
+                    "requested_by": requested_by or "",
+                    "codes": target_codes,
+                    "fetched": len(items),
+                    "processed": processed,
+                    "crawlMs": crawl_ms,
+                    "upsertMs": upsert_ms,
+                    "crawlErrorCount": len(crawl_errors),
+                    "upsertErrorCount": len(upsert_errors),
+                    "shardIndex": int(shard_index) if shard_index is not None else None,
+                    "shardCount": int(shard_count) if shard_count is not None else None,
+                    "errorCount": len(errors),
+                    "errors": errors[:50],
+                    "durationMs": duration_ms,
+                    "created_at": now_iso,
+                },
+            )
+        except Exception:
+            pass
 
     return {
         "success": len(errors) == 0,
@@ -206,6 +235,33 @@ def sync_quotes(
         "shardIndex": int(shard_index) if shard_index is not None else None,
         "shardCount": int(shard_count) if shard_count is not None else None,
     }
+
+
+def sync_all_quotes(
+    *,
+    requested_by: Optional[str] = None,
+    source: str = "crawler_sina_all",
+    timeout: float = 15.0,
+    max_workers: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    抓取并同步所有股票的行情数据
+    """
+    codes = get_all_stock_codes()
+    if not codes:
+        return {
+            "success": False,
+            "message": "未能获取到股票代码列表",
+            "processed": 0,
+        }
+
+    return sync_quotes(
+        codes=codes,
+        requested_by=requested_by,
+        source=source,
+        timeout=timeout,
+        max_workers=max_workers,
+    )
 
 
 def upsert_quotes_from_file(
