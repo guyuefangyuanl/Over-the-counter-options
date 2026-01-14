@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { App, Table, Button, Tag, Modal, Form, Input, Select, Card, Typography, DatePicker, Space } from 'antd';
-import { ReloadOutlined, EditOutlined } from '@ant-design/icons';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
+import { App, Table, Button, Tag, Modal, Form, Input, Select, Card, Typography, DatePicker, Space, Badge, Statistic, Row, Col, Tooltip } from 'antd';
+import { ReloadOutlined, EditOutlined, ExportOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import api, { getApiErrorMessage, type ApiResponse } from '../utils/api';
 import type { ColumnsType } from 'antd/es/table';
 import PageState from '../components/PageState';
@@ -61,11 +61,15 @@ const Inquiries: React.FC = () => {
   const [currentInquiry, setCurrentInquiry] = useState<Inquiry | null>(null);
   const [form] = Form.useForm();
   const [filterForm] = Form.useForm<InquiryFilterFormValues>();
+  const [statistics, setStatistics] = useState({ pending: 0, processing: 0, completed: 0, rejected: 0 });
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const autoRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const maskPhone = (phone: string) => phone.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2');
 
-  const fetchInquiries = useCallback(async (page = 1, pageSize = 10, nextFilters: InquiryFilters = {}) => {
-    setLoading(true);
+  const fetchInquiries = useCallback(async (page = 1, pageSize = 10, nextFilters: InquiryFilters = {}, silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const res = await api.get<ApiResponse<PaginatedPayload<Inquiry>>>('/admin/inquiries', {
@@ -82,18 +86,51 @@ const Inquiries: React.FC = () => {
     } catch (err) {
       const msg = getApiErrorMessage(err, '获取询价列表失败');
       setError(msg);
-      message.error(msg);
+      if (!silent) message.error(msg);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [message]);
+
+  const fetchStatistics = useCallback(async () => {
+    try {
+      const res = await api.get<ApiResponse<any>>('/admin/inquiries/statistics');
+      if (res.success && res.data) {
+        setStatistics(res.data);
+      }
+    } catch (err) {
+      console.error('获取统计信息失败:', err);
+    }
+  }, []);
 
   const currentPage = pagination.current;
   const pageSize = pagination.pageSize;
 
   useEffect(() => {
     void fetchInquiries(currentPage, pageSize, filters);
-  }, [fetchInquiries, filters, currentPage, pageSize]);
+    void fetchStatistics();
+  }, [fetchInquiries, fetchStatistics, filters, currentPage, pageSize]);
+
+  // 自动刷新
+  useEffect(() => {
+    if (autoRefresh) {
+      autoRefreshTimerRef.current = setInterval(() => {
+        void fetchInquiries(currentPage, pageSize, filters, true);
+        void fetchStatistics();
+      }, 30000); // 每30秒刷新一次
+    } else {
+      if (autoRefreshTimerRef.current) {
+        clearInterval(autoRefreshTimerRef.current);
+        autoRefreshTimerRef.current = null;
+      }
+    }
+
+    return () => {
+      if (autoRefreshTimerRef.current) {
+        clearInterval(autoRefreshTimerRef.current);
+      }
+    };
+  }, [autoRefresh, currentPage, pageSize, filters, fetchInquiries, fetchStatistics]);
 
   const handleUpdateStatus = (inquiry: Inquiry) => {
     setCurrentInquiry(inquiry);
@@ -121,9 +158,56 @@ const Inquiries: React.FC = () => {
         message.success('更新成功');
         setIsModalVisible(false);
         void fetchInquiries(pagination.current, pagination.pageSize, filters);
+        void fetchStatistics();
       }
     } catch (err) {
       message.error(getApiErrorMessage(err, '更新失败'));
+    }
+  };
+
+  const handleBatchUpdate = async (status: string) => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请先选择要批量处理的询价');
+      return;
+    }
+
+    try {
+      const res = await api.post<ApiResponse<unknown>>('/admin/inquiries/batch-update', {
+        ids: selectedRowKeys,
+        status,
+      });
+      if (res.success) {
+        message.success(`已批量更新${selectedRowKeys.length}条询价`);
+        setSelectedRowKeys([]);
+        void fetchInquiries(pagination.current, pagination.pageSize, filters);
+        void fetchStatistics();
+      }
+    } catch (err) {
+      message.error(getApiErrorMessage(err, '批量更新失败'));
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      message.loading({ content: '正在导出...', key: 'export' });
+      const res = await api.get('/admin/inquiries/export', {
+        params: filters,
+        responseType: 'blob',
+      });
+      
+      const blob = new Blob([res as unknown as BlobPart], { type: 'application/vnd.ms-excel' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `inquiries_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      message.success({ content: '导出成功', key: 'export' });
+    } catch (err) {
+      message.error({ content: getApiErrorMessage(err, '导出失败'), key: 'export' });
     }
   };
 
@@ -216,13 +300,76 @@ const Inquiries: React.FC = () => {
     },
   ];
 
+  const rowSelection = {
+    selectedRowKeys,
+    onChange: (keys: React.Key[]) => setSelectedRowKeys(keys),
+  };
+
   return (
     <Card>
+      {/* 统计卡片 */}
+      <Row gutter={16} style={{ marginBottom: 24 }}>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="待处理"
+              value={statistics.pending}
+              valueStyle={{ color: '#faad14' }}
+              prefix={<ClockCircleOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="处理中"
+              value={statistics.processing}
+              valueStyle={{ color: '#1890ff' }}
+              prefix={<SyncOutlined spin />}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="已完成"
+              value={statistics.completed}
+              valueStyle={{ color: '#52c41a' }}
+              prefix={<CheckCircleOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="已拒绝"
+              value={statistics.rejected}
+              valueStyle={{ color: '#ff4d4f' }}
+              prefix={<CloseCircleOutlined />}
+            />
+          </Card>
+        </Col>
+      </Row>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <Title level={4}>询价处理</Title>
-        <Button icon={<ReloadOutlined />} onClick={() => fetchInquiries(pagination.current, pagination.pageSize, filters)}>
-          刷新
-        </Button>
+        <Space>
+          <Tooltip title={autoRefresh ? '自动刷新已开启' : '自动刷新已关闭'}>
+            <Button
+              type={autoRefresh ? 'primary' : 'default'}
+              icon={<SyncOutlined spin={autoRefresh} />}
+              onClick={() => setAutoRefresh(!autoRefresh)}
+            >
+              {autoRefresh ? '自动' : '手动'}
+            </Button>
+          </Tooltip>
+          <Button icon={<ReloadOutlined />} onClick={() => {void fetchInquiries(pagination.current, pagination.pageSize, filters); void fetchStatistics();}}>
+            刷新
+          </Button>
+          <Button icon={<ExportOutlined />} onClick={handleExport}>
+            导出
+          </Button>
+        </Space>
       </div>
       <Form form={filterForm} layout="inline" onFinish={handleFilterSubmit} style={{ marginBottom: 16 }}>
         <Form.Item name="status" label="状态">
@@ -244,16 +391,29 @@ const Inquiries: React.FC = () => {
           <Button onClick={handleFilterReset}>重置</Button>
         </Space>
       </Form>
+      {selectedRowKeys.length > 0 && (
+        <div style={{ marginBottom: 16, padding: '12px 16px', background: '#e6f7ff', borderRadius: 4 }}>
+          <Space>
+            <span>已选择 {selectedRowKeys.length} 项</span>
+            <Button size="small" onClick={() => handleBatchUpdate('processing')}>批量标记为处理中</Button>
+            <Button size="small" onClick={() => handleBatchUpdate('completed')}>批量标记为已完成</Button>
+            <Button size="small" danger onClick={() => handleBatchUpdate('rejected')}>批量标记为已拒绝</Button>
+            <Button size="small" onClick={() => setSelectedRowKeys([])}>取消选择</Button>
+          </Space>
+        </div>
+      )}
+
       <PageState
         loading={loading}
         error={error}
         empty={!loading && !error && data.length === 0}
-        onRetry={() => fetchInquiries(pagination.current, pagination.pageSize, filters)}
+        onRetry={() => {void fetchInquiries(pagination.current, pagination.pageSize, filters); void fetchStatistics();}}
       >
         <Table
           columns={columns}
           dataSource={data}
           rowKey="_id"
+          rowSelection={rowSelection}
           pagination={{
             current: pagination.current,
             pageSize: pagination.pageSize,

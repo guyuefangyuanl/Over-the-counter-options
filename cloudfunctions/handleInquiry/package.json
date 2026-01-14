@@ -1,0 +1,9 @@
+{
+  "name": "handleInquiry",
+  "version": "1.0.0",
+  "description": "处理询价相关的复杂逻辑",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

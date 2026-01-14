@@ -11,7 +11,20 @@ class InquiryModel:
     def __init__(self, db: Database):
         self.db = db
         self.collection: Collection = self.db.inquiries
-        self.collection.create_index("createdAt")
+        self._init_indexes()
+        self._cache = {}
+        self._cache_ttl = 300  # 5分钟缓存
+
+    def _init_indexes(self):
+        """初始化数据库索引"""
+        try:
+            self.collection.create_index("createdAt")
+            self.collection.create_index("status")
+            self.collection.create_index("phone")
+            self.collection.create_index([("contactName", 1), ("status", 1)])
+            self.collection.create_index([("selectedProduct.name", "text"), ("selectedProduct.code", "text")])
+        except Exception as e:
+            logger.warning(f"创建索引失败: {e}")
 
     def create_inquiry(self, data: Dict[str, Any]) -> str:
         try:
@@ -54,3 +67,18 @@ class InquiryModel:
         except Exception as e:
             logger.error(f"更新询价状态失败: {e}")
             return False
+
+    def batch_update_status(self, inquiry_ids: List[str], status: str) -> int:
+        from bson.objectid import ObjectId
+        try:
+            update_data = {"status": status, "updatedAt": datetime.utcnow()}
+            object_ids = [ObjectId(id) for id in inquiry_ids]
+            
+            result = self.collection.update_many(
+                {"_id": {"$in": object_ids}},
+                {"$set": update_data}
+            )
+            return result.modified_count
+        except Exception as e:
+            logger.error(f"批量更新询价状态失败: {e}")
+            return 0
