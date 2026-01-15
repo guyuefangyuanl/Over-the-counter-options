@@ -8,9 +8,16 @@ import PageState from '../components/PageState';
 const { Title } = Typography;
 
 interface Quote {
+  _id?: string;
+  _rowKey?: string;
   stock_code: string;
+  code: string;
   name: string;
-  price: number;
+  price?: number;
+  rate?: number;
+  type?: string;
+  term?: string;
+  trader?: string;
   changePercent?: number;
   updated_at?: string;
 }
@@ -108,7 +115,14 @@ const Quotes: React.FC = () => {
       });
       console.log('[Quotes] API Response:', res);
       if (res.success && res.data?.pagination && Array.isArray(res.data.items)) {
-        setData(res.data.items);
+        setData(
+          res.data.items.map((item, index) => ({
+            ...item,
+            _rowKey: item._id && item._id !== item.stock_code 
+              ? item._id 
+              : `${item.stock_code}_${item.updated_at || ''}_${index}_${createRowKey('row')}`,
+          }))
+        );
         setPagination({
           current: res.data.pagination.page,
           pageSize: res.data.pagination.per_page,
@@ -155,21 +169,32 @@ const Quotes: React.FC = () => {
       key: 'name',
     },
     {
-      title: '最新价',
-      dataIndex: 'price',
-      key: 'price',
-      render: (val) => val?.toFixed(2),
+      title: '类型',
+      dataIndex: 'type',
+      key: 'type',
+      render: (val) => val || '-',
     },
     {
-      title: '涨跌幅',
-      dataIndex: 'changePercent',
-      key: 'changePercent',
-      render: (val) =>
-        typeof val === 'number' ? (
-          <span style={{ color: val > 0 ? '#cf1322' : '#3f8600' }}>
-            {val > 0 ? '+' : ''}{val.toFixed(2)}%
-          </span>
-        ) : '-',
+      title: '期限',
+      dataIndex: 'term',
+      key: 'term',
+      render: (val) => val || '-',
+    },
+    {
+      title: '交易商',
+      dataIndex: 'trader',
+      key: 'trader',
+      render: (val) => val || '-',
+    },
+    {
+      title: '费率/价格',
+      dataIndex: 'rate',
+      key: 'rate',
+      render: (val, record: any) => {
+        if (typeof val === 'number') return `${(val * 100).toFixed(2)}%`;
+        if (typeof record.price === 'number') return record.price.toFixed(2);
+        return '-';
+      },
     },
     {
       title: '更新时间',
@@ -220,6 +245,13 @@ const Quotes: React.FC = () => {
             if (status === 'processing' && res.data?.taskId) {
               const taskId = res.data.taskId;
               message.loading({ content: res.message || '清空进行中…', key: 'delete-quotes', duration: 0 });
+              
+              // 乐观更新：如果是清空所有，直接清空本地数据
+              if (isClearAll) {
+                setData([]);
+                setPagination(prev => ({ ...prev, total: 0 }));
+              }
+
               deletePollTimerRef.current = window.setInterval(async () => {
                 try {
                   const pollRes = await api.get<ApiResponse<DeleteQuotesPayload>>(`/admin/quotes/delete-task/${taskId}`);
@@ -267,8 +299,18 @@ const Quotes: React.FC = () => {
               return;
             }
 
-            const deleted = res.data?.deleted ?? 0;
-            message.success(res.message || `成功删除 ${deleted} 条数据`);
+            const deletedCount = res.data?.deleted ?? 0;
+            message.success(res.message || `成功删除 ${deletedCount} 条数据`);
+            
+            // 乐观更新：从当前显示的数据中移除已删除的代码
+            if (codes && codes.length > 0) {
+              const codesSet = new Set(codes);
+              setData(prev => prev.filter(item => !codesSet.has(item.stock_code)));
+            } else if (isClearAll) {
+              setData([]);
+              setPagination(prev => ({ ...prev, total: 0 }));
+            }
+
             setSelectedRowKeys([]);
             void fetchQuotes(pagination.current, pagination.pageSize);
           }
@@ -358,19 +400,17 @@ const Quotes: React.FC = () => {
     }
   }, [fetchQuotes, isCrawlingAll, message, pagination]);
 
-  const handleBeforeUpload: UploadProps['beforeUpload'] = async (file) => {
+  const handleBeforeUpload: UploadProps['beforeUpload'] = useCallback(async (file: File) => {
     setIsUploading(true);
     setUploadPreview(null);
     try {
       const form = new FormData();
       form.append('file', file);
-      const res = await api.post<ApiResponse<UploadPreviewPayloadServer>>('/admin/upload-quotes/preview', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await api.post<ApiResponse<UploadPreviewPayloadServer>>('/admin/upload-quotes/preview', form);
       if (res.success) {
         const payload = res.data;
         const preview = Array.isArray(payload?.preview)
-          ? payload.preview.map((row) => ({ ...row, _rowKey: row.stock_code || createRowKey('preview') }))
+          ? payload.preview.map((row, index) => ({ ...row, _rowKey: `${row.stock_code || 'preview'}_${index}_${createRowKey('preview')}` }))
           : [];
         setUploadPreview({ ...payload, preview });
         setUploadModalOpen(true);
@@ -384,7 +424,7 @@ const Quotes: React.FC = () => {
       setIsUploading(false);
     }
     return false;
-  };
+  }, [message]);
 
   const confirmUpload = useCallback(async () => {
     if (!uploadPreview?.uploadId) {
@@ -480,9 +520,9 @@ const Quotes: React.FC = () => {
       });
       if (res.success && Array.isArray(res.data?.items)) {
         setSyncLogs(
-          res.data.items.map((row) => ({
+          res.data.items.map((row, index) => ({
             ...row,
-            _rowKey: row._id || createRowKey('sync-log'),
+            _rowKey: row._id || `${index}_${createRowKey('sync-log')}`,
           }))
         );
       }
@@ -567,7 +607,8 @@ const Quotes: React.FC = () => {
         <Table
           columns={columns}
           dataSource={data}
-          rowKey="stock_code"
+          rowKey="_rowKey"
+          scroll={{ x: 'max-content', y: 'calc(100vh - 400px)' }}
           rowSelection={{
             selectedRowKeys,
             onChange: (keys) => setSelectedRowKeys(keys),

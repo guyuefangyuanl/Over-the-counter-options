@@ -15,6 +15,7 @@ function App() {
     <BrowserRouter basename="/">
       <Routes>
         <Route path="login" element={<Login />} />
+        <Route path="admin/login" element={<Login />} />
         <Route path="/" element={<AuthGuard><AdminLayout /></AuthGuard>}>
           <Route index element={<Dashboard />} />
           <Route path="quotes" element={<Quotes />} />

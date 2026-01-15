@@ -36,7 +36,7 @@ class NotificationManager {
   /**
    * 发送询价状态变更通知
    */
-  notifyInquiryStatusChange(inquiryId: string, newStatus: string, contactName: string): void {
+  notifyInquiryStatusChange(_inquiryId: string, newStatus: string, contactName: string): void {
     const statusMap: Record<string, string> = {
       pending: '待处理',
       processing: '处理中',

@@ -9,6 +9,8 @@ from datetime import datetime
 from pathlib import Path
 import json
 import os
+import threading
+import time
 from pymongo.collection import Collection
 from pymongo.database import Database
 from pymongo.errors import PyMongoError
@@ -24,6 +26,11 @@ class StockModel:
     提供股票数据的增删改查操作
     """
     
+    _file_cache: Dict[str, Any] = {}
+    _cache_mtime: float = 0
+    _cache_lock = threading.Lock()
+    _stocks_dict: Dict[str, Dict[str, Any]] = {}
+
     def __init__(self, db: Optional[Database]):
         """
         初始化股票数据模型
@@ -35,9 +42,12 @@ class StockModel:
         self.collection: Optional[Collection] = None
         if self.db is not None:
             self.collection = self.db.stocks
-            self.collection.create_index("stock_code", unique=True)
-            self.collection.create_index("created_at")
-            self.collection.create_index("updated_at")
+            try:
+                self.collection.create_index("stock_code", unique=True)
+                self.collection.create_index("created_at")
+                self.collection.create_index("updated_at")
+            except Exception as e:
+                logger.warning(f"创建索引失败 (可能已存在): {e}")
 
         repo_root = Path(__file__).resolve().parents[1]
         self._file_db_path = Path(os.getenv("FILE_DB_PATH", str(repo_root / "mock_db.json")))
@@ -45,13 +55,30 @@ class StockModel:
     def _load_file_db(self) -> Dict[str, Any]:
         if not self._file_db_path.exists():
             return {"stocks": []}
+        
         try:
+            mtime = self._file_db_path.stat().st_mtime
+            with self._cache_lock:
+                if self._file_cache and mtime <= self._cache_mtime:
+                    return self._file_cache
+            
             with self._file_db_path.open("r", encoding="utf-8") as f:
                 data = json.load(f)
+            
             if not isinstance(data, dict):
-                return {"stocks": []}
-            if "stocks" not in data or not isinstance(data.get("stocks"), list):
-                data["stocks"] = []
+                data = {"stocks": []}
+            stocks = data.get("stocks", [])
+            if not isinstance(stocks, list):
+                stocks = []
+                data["stocks"] = stocks
+            
+            # 构建索引以提升性能
+            stocks_dict = {str(s.get("stock_code")): s for s in stocks if isinstance(s, dict) and s.get("stock_code")}
+            
+            with self._cache_lock:
+                self._file_cache = data
+                self._stocks_dict = stocks_dict
+                self._cache_mtime = mtime
             return data
         except Exception as e:
             logger.error(f"读取本地行情存储失败: {e}")
@@ -62,8 +89,17 @@ class StockModel:
         try:
             tmp_path.parent.mkdir(parents=True, exist_ok=True)
             with tmp_path.open("w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+                json.dump(data, f, ensure_ascii=False)
             os.replace(str(tmp_path), str(path))
+            
+            # 更新缓存
+            stocks = data.get("stocks", [])
+            stocks_dict = {str(s.get("stock_code")): s for s in stocks if isinstance(s, dict) and s.get("stock_code")}
+            
+            with self._cache_lock:
+                self._file_cache = data
+                self._stocks_dict = stocks_dict
+                self._cache_mtime = time.time()
             return True
         except Exception as e:
             logger.error(f"写入本地行情存储失败: {e}")
@@ -227,6 +263,52 @@ class StockModel:
             logger.error(f"批量保存股票数据失败: {e}")
             return 0
 
+    def delete_stock_data(self, stock_codes: Optional[List[str]] = None) -> int:
+        """
+        根据股票代码删除数据，如果为None则删除所有
+        
+        Args:
+            stock_codes (Optional[List[str]]): 股票代码列表
+            
+        Returns:
+            int: 成功删除的数量
+        """
+        try:
+            if self.collection is not None:
+                if stock_codes is None:
+                    result = self.collection.delete_many({})
+                    return result.deleted_count
+                
+                result = self.collection.delete_many({"stock_code": {"$in": stock_codes}})
+                return result.deleted_count
+
+            # 本地 Mock DB 处理
+            self._load_file_db()
+            
+            with self._cache_lock:
+                if stock_codes is None:
+                    count = len(self._stocks_dict)
+                    self._stocks_dict = {}
+                    file_db = {"stocks": []}
+                else:
+                    codes_set = set(str(c) for c in stock_codes)
+                    original_count = len(self._stocks_dict)
+                    self._stocks_dict = {k: v for k, v in self._stocks_dict.items() if k not in codes_set}
+                    count = original_count - len(self._stocks_dict)
+                    file_db = {"stocks": list(self._stocks_dict.values())}
+
+            if count > 0 or stock_codes is None:
+                ok = self._atomic_write_json(self._file_db_path, file_db)
+                return count if ok else 0
+            return 0
+            
+        except PyMongoError as e:
+            logger.error(f"删除股票数据时数据库错误: {e}")
+            return 0
+        except Exception as e:
+            logger.error(f"删除股票数据时发生未知错误: {e}")
+            return 0
+
     def get_stock_data(self, stock_code: str) -> Optional[Dict[str, Any]]:
         """
         根据股票代码获取数据
@@ -240,11 +322,11 @@ class StockModel:
         try:
             if self.collection is not None:
                 return self.collection.find_one({"stock_code": stock_code}, {"_id": 0})
-            file_db = self._load_file_db()
-            for s in file_db.get("stocks", []):
-                if isinstance(s, dict) and str(s.get("stock_code")) == str(stock_code):
-                    return dict(s)
-            return None
+            
+            self._load_file_db()
+            with self._cache_lock:
+                item = self._stocks_dict.get(str(stock_code))
+                return dict(item) if item else None
         except Exception as e:
             logger.error(f"查询股票数据失败: {stock_code}, {e}")
             return None
@@ -270,13 +352,15 @@ class StockModel:
                 )
                 return list(cursor)
 
-            file_db = self._load_file_db()
-            items = [dict(s) for s in file_db.get("stocks", []) if isinstance(s, dict)]
+            self._load_file_db()
+            with self._cache_lock:
+                items = [dict(s) for s in self._stocks_dict.values()]
+            
+            # 排序（可以考虑缓存排序结果，但这里先简单处理）
             items.sort(key=lambda x: self._parse_dt_for_sort(x.get("updated_at")), reverse=True)
-            if skip < 0:
-                skip = 0
-            if limit < 0:
-                limit = 0
+            
+            if skip < 0: skip = 0
+            if limit < 0: limit = 0
             return items[skip : skip + limit]
         except Exception as e:
             logger.error(f"获取股票列表失败: {e}")
@@ -289,8 +373,10 @@ class StockModel:
         try:
             if self.collection is not None:
                 return self.collection.count_documents({})
-            file_db = self._load_file_db()
-            return len([s for s in file_db.get("stocks", []) if isinstance(s, dict) and s.get("stock_code")])
+            
+            self._load_file_db()
+            with self._cache_lock:
+                return len(self._stocks_dict)
         except Exception as e:
             logger.error(f"获取股票总数失败: {e}")
             return 0

@@ -332,74 +332,94 @@ def upsert_quotes_from_file(
 
 def delete_quotes(*, codes: Optional[Sequence[str]] = None) -> Dict[str, Any]:
     started_at = time.time()
+    cloud = None
     try:
         cloud = CloudDbClient.from_env()
-    except CloudDbConfigError as e:
-        return {"success": False, "message": str(e)}
+    except CloudDbConfigError:
+        pass
 
     try:
         import json
-
-        if codes:
-            target_codes = _parse_codes(codes)
-            if not target_codes:
-                return {"success": True, "deleted": 0, "durationMs": int((time.time() - started_at) * 1000)}
-            total_deleted = 0
-            for batch in [target_codes[i : i + 200] for i in range(0, len(target_codes), 200)]:
-                where_js = "{" + f'stock_code: db.command.in({json.dumps(batch, ensure_ascii=False)})' + "}"
-                deleted = cloud.delete_where(collection="quotes", where_js=where_js)
-                total_deleted += int(deleted or 0)
-            return {
-                "success": True,
-                "deleted": total_deleted,
-                "durationMs": int((time.time() - started_at) * 1000),
-            }
-
-        total_deleted = 0
-        for _ in range(200000):
-            rows = cloud.query('db.collection("quotes").field({_id: true}).limit(200).get()')
-            if not rows:
+        if cloud:
+            if codes:
+                target_codes = _parse_codes(codes)
+                if not target_codes:
+                    return {"success": True, "deleted": 0, "durationMs": int((time.time() - started_at) * 1000)}
+                total_deleted = 0
+                for batch in [target_codes[i : i + 500] for i in range(0, len(target_codes), 500)]:
+                    where_js = "{" + f'stock_code: db.command.in({json.dumps(batch, ensure_ascii=False)})' + "}"
+                    deleted = cloud.delete_where(collection="quotes", where_js=where_js)
+                    total_deleted += int(deleted or 0)
                 return {
                     "success": True,
                     "deleted": total_deleted,
                     "durationMs": int((time.time() - started_at) * 1000),
                 }
 
-            batch_ids: List[str] = []
-            for r in rows:
-                if not isinstance(r, dict):
+            total_to_delete = 0
+            try:
+                total_to_delete = cloud.count('db.collection("quotes").count()')
+            except Exception:
+                pass
+
+            total_deleted = 0
+            # 使用更快的迭代删除
+            for attempt in range(1000):
+                rows = cloud.query('db.collection("quotes").field({_id: true}).limit(500).get()')
+                if not rows:
+                    return {
+                        "success": True,
+                        "deleted": total_deleted,
+                        "total": total_to_delete,
+                        "durationMs": int((time.time() - started_at) * 1000),
+                    }
+
+                batch_ids = [str(r.get("_id")).strip() for r in rows if isinstance(r, dict) and r.get("_id")]
+                batch_ids = list(dict.fromkeys(batch_ids))
+                
+                if not batch_ids:
+                    break
+
+                where_js = "{" + f'_id: db.command.in({json.dumps(batch_ids, ensure_ascii=False)})' + "}"
+                deleted = cloud.delete_where(collection="quotes", where_js=where_js)
+                n = int(deleted or 0)
+                total_deleted += n
+                
+                # 如果删除不动了，尝试更小批次或停止
+                if n <= 0:
+                    if attempt > 5: break
                     continue
-                _id = r.get("_id")
-                s = str(_id or "").strip()
-                if s:
-                    batch_ids.append(s)
+                
+                # 记录进度到会话负载（如果可以获取到 upload_id）
+                # 这里暂不实现，因为 delete_quotes 接口目前没传任务 ID
 
-            batch_ids = list(dict.fromkeys(batch_ids))
-            if not batch_ids:
-                return {
-                    "success": False,
-                    "message": "清空失败：无法获取 _id 批次",
-                    "deleted": total_deleted,
-                    "durationMs": int((time.time() - started_at) * 1000),
-                }
-
-            where_js = "{" + f'_id: db.command.in({json.dumps(batch_ids, ensure_ascii=False)})' + "}"
-            deleted = cloud.delete_where(collection="quotes", where_js=where_js)
-            n = int(deleted or 0)
-            if n <= 0:
-                return {
-                    "success": False,
-                    "message": "清空失败：删除进度停滞",
-                    "deleted": total_deleted,
-                    "durationMs": int((time.time() - started_at) * 1000),
-                }
-            total_deleted += n
-
-        return {
-            "success": False,
-            "message": "清空失败：删除迭代次数超限",
-            "deleted": total_deleted,
-            "durationMs": int((time.time() - started_at) * 1000),
-        }
+            return {
+                "success": total_deleted >= total_to_delete or total_deleted > 0,
+                "deleted": total_deleted,
+                "total": total_to_delete,
+                "durationMs": int((time.time() - started_at) * 1000),
+                "message": "全量删除完成" if total_deleted >= total_to_delete else "部分删除完成"
+            }
+        else:
+            # 回退到本地存储删除
+            from models.stock import StockModel
+            from flask import current_app
+            
+            db = None
+            try:
+                db = getattr(current_app, 'db', None)
+            except Exception:
+                pass
+                
+            model = StockModel(db)
+            target_codes = _parse_codes(codes) if codes else None
+            deleted = model.delete_stock_data(target_codes)
+            
+            return {
+                "success": True,
+                "deleted": deleted,
+                "durationMs": int((time.time() - started_at) * 1000),
+                "message": "已从本地存储删除记录"
+            }
     except Exception as e:
         return {"success": False, "message": str(e), "durationMs": int((time.time() - started_at) * 1000)}

@@ -9,11 +9,11 @@
  * @param {string} message 成功消息
  * @param {number} code 状态码
  */
-const success = (res, data = null, message = 'success', code = 200) => {
+const success = (res, data = {}, message = 'success', code = 200) => {
   return res.status(code).json({
     success: true,
     code,
-    data,
+    data: data || {},
     message,
     timestamp: new Date().toISOString()
   });
@@ -26,11 +26,11 @@ const success = (res, data = null, message = 'success', code = 200) => {
  * @param {number} code 状态码
  * @param {any} data 错误详情数据
  */
-const error = (res, message = 'error', code = 500, data = null) => {
+const error = (res, message = 'error', code = 500, data = {}) => {
   return res.status(code).json({
     success: false,
     code,
-    data,
+    data: data || {},
     message,
     timestamp: new Date().toISOString()
   });

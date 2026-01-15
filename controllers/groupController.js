@@ -1,5 +1,5 @@
-const { cloudDb, loadMockDb, writeMockDb } = require('../backend-utils/db');
-const response = require('../backend-utils/response');
+const { cloudDb, loadMockDb, writeMockDb } = require('../backend_utils/db');
+const response = require('../backend_utils/response');
 
 /**
  * 获取所有分组

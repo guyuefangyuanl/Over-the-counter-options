@@ -57,15 +57,94 @@ def _safe_float(value: Any) -> Optional[float]:
         return None
 
 
+def _parse_complex_matrix(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    """解析复杂的多级嵌套矩阵格式"""
+    # 处理表头：前 4 行为表头
+    if len(df) < 5:
+        return []
+
+    header_rows = df.iloc[0:4].copy()
+    # 填充合并单元格（前 2 行通常是合并的）
+    header_rows.iloc[0] = header_rows.iloc[0].ffill()
+    header_rows.iloc[1] = header_rows.iloc[1].ffill()
+
+    items: List[Dict[str, Any]] = []
+    now = _utc_now_iso()
+
+    for row_idx in range(4, len(df)):
+        row_data = df.iloc[row_idx]
+        raw_code = row_data[0]
+        code = _normalize_stock_code(raw_code)
+        if not code:
+            continue
+        
+        name = str(row_data[1]) if not pd.isna(row_data[1]) else ""
+
+        # 从第 3 列（索引 2）开始是报价数据
+        for col_idx in range(2, len(df.columns)):
+            val = _safe_float(row_data[col_idx])
+            # 如果是 "-" 或 NaN，跳过
+            if val is None:
+                continue
+
+            # 提取维度信息
+            group_type = str(header_rows.iloc[0, col_idx]).strip()
+            term_str = str(header_rows.iloc[1, col_idx]).strip()
+            trader = str(header_rows.iloc[3, col_idx]).strip()
+
+            # 过滤掉非数据列（如某些文件中可能在中间插入了代码列）
+            if trader in ("代码", "证券简称", "nan", "", "NaN"):
+                continue
+
+            # 构造唯一 ID，确保不同交易商、期限、类型的报价共存
+            # 格式：opt_{股票代码}_{类型}_{期限}_{交易商}
+            safe_trader = re.sub(r"[^a-zA-Z0-9\u4e00-\u9fa5]", "", trader)
+            safe_term = re.sub(r"[^a-zA-Z0-9\u4e00-\u9fa5]", "", term_str)
+            doc_id = f"opt_{code}_{group_type}_{safe_term}_{safe_trader}"
+
+            # 构造标准化对象
+            item = {
+                "stock_code": code,
+                "code": doc_id,
+                "name": name,
+                "type": group_type,
+                "term": term_str,
+                "trader": trader,
+                "rate": val,
+                "updateSource": "file_upload",
+                "updated_at": now,
+            }
+            items.append(item)
+    
+    return items
+
+
 def parse_quotes_file(*, filename: str, content: bytes) -> List[Dict[str, Any]]:
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     if ext in ("xlsx", "xls"):
-        df = pd.read_excel(io.BytesIO(content))
+        # 读取时不指定 header，以便我们手动处理多级表头
+        df = pd.read_excel(io.BytesIO(content), header=None)
     elif ext == "csv":
-        df = pd.read_csv(io.BytesIO(content))
+        df = pd.read_csv(io.BytesIO(content), header=None)
     else:
         raise ValueError("仅支持 Excel (.xlsx, .xls) 或 CSV 文件")
 
+    if df.empty:
+        return []
+
+    # 启发式判断：如果前几行包含 "普通香草" 或 "代码" 在 Row 3，说明是复杂矩阵
+    is_matrix = False
+    first_few_rows_str = str(df.iloc[:5].values)
+    if "普通香草" in first_few_rows_str or "证券简称" in first_few_rows_str:
+        is_matrix = True
+
+    if is_matrix:
+        return _parse_complex_matrix(df)
+
+    # 否则按原有扁平逻辑处理（但需要重新处理 df 及其 header）
+    df.columns = df.iloc[0]
+    df = df[1:].reset_index(drop=True)
+    
     column_mapping = {
         "stock_code": ["代码", "股票代码", "Code", "证券代码", "A股代码", "code", "stock_code", "指数代码", "合约编码"],
         "name": ["名称", "股票名称", "Name", "证券简称", "A股简称", "name", "指数简称", "合约简称"],

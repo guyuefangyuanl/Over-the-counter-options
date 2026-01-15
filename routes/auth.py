@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, Optional, TypeVar, cast, List, Tuple
 import jwt
 from flask import Blueprint, g, request, current_app
 
-from utils.response import flask_error_response, flask_success_response
+from backend_utils.response import flask_error_response, flask_success_response
 
 auth_bp = Blueprint("auth", __name__)
 

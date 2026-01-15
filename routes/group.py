@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
-from utils.response import flask_success_response, flask_error_response
+from backend_utils.response import flask_success_response, flask_error_response
 from models.group import GroupModel
 # from routes.auth import require_auth # Assuming auth is handled or we mock it for now
 

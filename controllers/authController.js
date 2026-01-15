@@ -1,6 +1,6 @@
 const Database = require('better-sqlite3');
 const path = require('path');
-const response = require('../backend-utils/response');
+const response = require('../backend_utils/response');
 const { generateToken } = require('../middleware/auth');
 
 // 创建数据库连接

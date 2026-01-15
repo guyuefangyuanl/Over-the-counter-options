@@ -5,7 +5,7 @@
 """
 
 from flask import Blueprint, request, current_app, jsonify
-from utils.response import success_response, error_response, paginated_response
+from backend_utils.response import success_response, error_response, paginated_response
 from services.stock_service import StockService
 from models.stock import StockModel
 from pymongo.errors import PyMongoError

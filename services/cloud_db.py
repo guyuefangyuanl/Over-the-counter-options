@@ -194,13 +194,15 @@ class CloudDbClient:
         return cls(env_id=env_id, token_provider=provider, verify=verify_ssl)
 
     def query(self, query: str) -> List[Dict[str, Any]]:
+        logger.debug(f"云数据库查询: {query}")
         try:
             payload = self._post_api("tcb/databasequery", {"env": self._env_id, "query": query})
             raw = payload.get("data")
             if raw is None:
                 return []
             if not isinstance(raw, list):
-                raise CloudDbRequestError("databasequery 返回 data 非数组")
+                logger.error(f"云数据库查询返回格式错误: data 非数组, query={query}")
+                return []
             out: List[Dict[str, Any]] = []
             for item in raw:
                 if not isinstance(item, str):
@@ -209,27 +211,37 @@ class CloudDbClient:
                     parsed = json.loads(item)
                     if isinstance(parsed, dict):
                         out.append(parsed)
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"云数据库查询解析单条记录失败: {e}, item={item}")
                     continue
             return out
         except CloudDbRequestError as e:
             if "[ResourceNotFound]" in str(e):
                 logger.warning(f"云数据库查询失败: 集合不存在 ({e})")
                 return []
+            logger.error(f"云数据库查询异常: {e}, query={query}")
             raise
 
     def count(self, query: str) -> int:
+        # 确保 query 包含 .count() 结尾
+        final_query = query
+        if not final_query.strip().endswith(".count()"):
+            final_query = f"{final_query.strip()}.count()"
+            
+        logger.debug(f"云数据库统计查询: {final_query}")
         try:
-            payload = self._post_api("tcb/databasecount", {"env": self._env_id, "query": query})
-            count = payload.get("count")
+            payload = self._post_api("tcb/databasecount", {"env": self._env_id, "query": final_query})
+            count_val = payload.get("count")
             try:
-                return int(count)
-            except Exception:
+                return int(count_val)
+            except (TypeError, ValueError) as e:
+                logger.warning(f"云数据库统计值转换失败: {e}, val={count_val}")
                 return 0
         except CloudDbRequestError as e:
             if "[ResourceNotFound]" in str(e):
                 logger.warning(f"云数据库统计失败: 集合不存在 ({e})")
                 return 0
+            logger.error(f"云数据库统计查询异常: {e}, query={final_query}")
             raise
 
     def add(self, *, collection: str, data: Dict[str, Any]) -> List[str]:

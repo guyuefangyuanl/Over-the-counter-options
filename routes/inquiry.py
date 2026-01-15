@@ -6,7 +6,7 @@ import json
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill
 from models.inquiry import InquiryModel
-from utils.response import flask_success_response, flask_error_response, flask_paginated_response
+from backend_utils.response import flask_success_response, flask_error_response, flask_paginated_response
 from routes.auth import require_auth
 
 logger = logging.getLogger(__name__)

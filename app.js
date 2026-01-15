@@ -27,8 +27,8 @@ const XLSX = require('xlsx')
 const { parse: csvParse } = require('csv-parse/sync')
 const { v4: uuidv4 } = require('uuid')
 
-const { cloudDb, getMockDbPath, loadMockDb, writeMockDb, parsePagination } = require('./backend-utils/db')
-const response = require('./backend-utils/response')
+const { cloudDb, getMockDbPath, loadMockDb, writeMockDb, parsePagination } = require('./backend_utils/db')
+const response = require('./backend_utils/response')
 
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler')
 const { customLogger, requestLogger } = require('./middleware/logger')
@@ -747,6 +747,52 @@ function normalizeStockCode(value) {
   return merged.padStart(6, '0').slice(-6)
 }
 
+function parseComplexMatrixRowsJS(sheetData) {
+  if (!sheetData || sheetData.length < 5) return []
+  const row0 = [...(sheetData[0] || [])]
+  const row1 = [...(sheetData[1] || [])]
+  const row3 = [...(sheetData[3] || [])]
+  for (let j = 1; j < row0.length; j++) {
+    if (row0[j] === undefined || row0[j] === null || row0[j] === '') row0[j] = row0[j - 1]
+  }
+  for (let j = 1; j < row1.length; j++) {
+    if (row1[j] === undefined || row1[j] === null || row1[j] === '') row1[j] = row1[j - 1]
+  }
+  const items = []
+  const rows = sheetData.slice(4)
+  for (const row of rows) {
+    const code = normalizeStockCode(row[0])
+    if (!code) continue
+    const name = String(row[1] || '').trim()
+    for (let colIdx = 2; colIdx < row.length; colIdx++) {
+      let val = row[colIdx]
+      if (val === undefined || val === null || val === '' || val === '-') continue
+      const numVal = parseFloat(val)
+      if (isNaN(numVal)) continue
+      const type = String(row0[colIdx] || '').trim()
+      const term = String(row1[colIdx] || '').trim()
+      const trader = String(row3[colIdx] || '').trim()
+      if (!trader || ['代码', '证券简称', 'nan', 'NaN'].includes(trader)) continue
+      const safeTrader = trader.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '')
+      const safeTerm = term.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '')
+      const docId = `opt_${code}_${type}_${safeTerm}_${safeTrader}`
+      items.push({
+        _id: docId,
+        code: docId,
+        stock_code: code,
+        name: name,
+        type: type,
+        term: term,
+        trader: trader,
+        rate: numVal,
+        updateSource: 'file_upload',
+        updated_at: new Date().toISOString()
+      })
+    }
+  }
+  return items
+}
+
 function parseQuotesBuffer(filename, buffer) {
   const ext = filename.split('.').pop().toLowerCase()
   let rows = []
@@ -755,6 +801,14 @@ function parseQuotesBuffer(filename, buffer) {
     const workbook = XLSX.read(buffer, { type: 'buffer' })
     const sheetName = workbook.SheetNames[0]
     const worksheet = workbook.Sheets[sheetName]
+    
+    // 增加：矩阵格式识别
+    const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+    const headerContent = JSON.stringify(sheetData.slice(0, 5))
+    if (headerContent.includes('普通香草') || headerContent.includes('证券简称')) {
+      return parseComplexMatrixRowsJS(sheetData)
+    }
+
     rows = XLSX.utils.sheet_to_json(worksheet)
   } else if (ext === 'csv') {
     rows = csvParse(buffer, { columns: true, skip_empty_lines: true })
@@ -1128,6 +1182,19 @@ app.use('/api/orders', require('./routes/orders'))
 app.all('/api/webviewClick', (req, res) => {
   void req
   return res.json({ success: true, data: null })
+})
+
+// SPA 路由支持：非 API 请求且非静态文件的路径均指向 index.html
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/') || req.path.startsWith('/admin-web/') || req.path.startsWith('/images/')) {
+    return next()
+  }
+  const indexPath = path.join(__dirname, 'admin-ui/dist/index.html')
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath)
+  } else {
+    next()
+  }
 })
 
 app.use(notFoundHandler)

@@ -4,7 +4,7 @@ import logging
 import os
 import time
 import uuid
-from utils.response import flask_success_response, flask_error_response, flask_paginated_response
+from backend_utils.response import flask_success_response, flask_error_response, flask_paginated_response
 from models.stock import StockModel
 from models.inquiry import InquiryModel
 from models.order import OrderModel
@@ -128,26 +128,27 @@ def get_quotes():
             stocks = cloud.query(
                 f'db.collection("quotes").orderBy("updated_at","desc").skip({skip}).limit({page_size}).get()'
             )
-            total = cloud.count('db.collection("quotes").count()')
-        except CloudDbConfigError:
+            total = cloud.count('db.collection("quotes")')
+        except (CloudDbConfigError, CloudDbRequestError) as e:
             # 回退到本地 Mock 存储
+            logger.warning(f"云数据库访问失败，回退到本地存储: {e}")
             from models.stock import StockModel
             stock_model = StockModel(None) # None 表示使用本地 mock_db.json
             stocks = stock_model.get_all_stocks(skip=skip, limit=page_size)
             total = stock_model.count_stocks()
             return flask_paginated_response(
-                data=stocks,
+                data=stocks if isinstance(stocks, list) else [],
                 page=page,
                 per_page=page_size,
-                total=total,
-                message="微信云未配置，已从本地存储加载行情"
+                total=total if isinstance(total, int) else 0,
+                message=f"云数据库不可用 ({type(e).__name__})，已加载本地数据"
             )
 
         return flask_paginated_response(
-            data=stocks,
+            data=stocks if isinstance(stocks, list) else [],
             page=page,
             per_page=page_size,
-            total=total,
+            total=total if isinstance(total, int) else 0,
         )
     except Exception as e:
         logger.error(f"获取报价列表失败: {e}")
@@ -499,6 +500,10 @@ def get_sync_logs():
 
         try:
             cloud = CloudDbClient.from_env()
+            items = cloud.query(
+                f'db.collection("sync_logs").orderBy("created_at","desc").skip({skip}).limit({page_size}).get()'
+            )
+            total = cloud.count('db.collection("sync_logs")')
         except CloudDbConfigError as e:
             return flask_paginated_response(
                 data=[],
@@ -507,12 +512,6 @@ def get_sync_logs():
                 total=0,
                 message=str(e),
             )
-
-        try:
-            items = cloud.query(
-                f'db.collection("sync_logs").orderBy("created_at","desc").skip({skip}).limit({page_size}).get()'
-            )
-            total = cloud.count('db.collection("sync_logs").count()')
         except CloudDbRequestError as e:
             if "[ResourceNotFound]" in str(e) or "Db or Table not exist" in str(e):
                 return flask_paginated_response(
@@ -523,7 +522,12 @@ def get_sync_logs():
                     message="同步历史未初始化（sync_logs 集合不存在）",
                 )
             raise
-        return flask_paginated_response(data=items, page=page, per_page=page_size, total=total)
+        return flask_paginated_response(
+            data=items if isinstance(items, list) else [],
+            page=page,
+            per_page=page_size,
+            total=total if isinstance(total, int) else 0
+        )
     except Exception as e:
         logger.error(f"获取同步历史失败: {e}")
         return flask_error_response(f"获取失败: {str(e)}", 500)

@@ -79,7 +79,7 @@ def resolve_port() -> int:
 
 
 def create_app() -> Flask:
-    from utils.response import flask_success_response, flask_error_response
+    from backend_utils.response import flask_success_response, flask_error_response
     from routes.inquiry import inquiry_bp
     from routes.stock import stock_bp
     from routes.admin import admin_bp
@@ -183,6 +183,26 @@ def create_app() -> Flask:
         # React 路由回退到 index.html
         return send_from_directory(dist_dir, 'index.html')
 
+    @flask_app.errorhandler(404)
+    def not_found(error):
+        return flask_error_response("请求的资源不存在", code=404)
+
+    @flask_app.errorhandler(500)
+    def internal_error(error):
+        logger.error(f"服务器错误: {str(error)}")
+        return flask_error_response(
+            "服务器内部错误" if NODE_ENV == 'production' else str(error),
+            code=500,
+        )
+
+    @flask_app.errorhandler(Exception)
+    def handle_exception(error):
+        logger.error(f"未处理的异常: {str(error)}")
+        return flask_error_response(
+            "服务器错误" if NODE_ENV == 'production' else str(error),
+            code=500,
+        )
+
     return flask_app
 
 
@@ -239,30 +259,9 @@ def start_background_scheduler(flask_app):
     thread.start()
     return thread
 
-    @flask_app.errorhandler(404)
-    def not_found(error):
-        return flask_error_response("请求的资源不存在", code=404)
-
-    @flask_app.errorhandler(500)
-    def internal_error(error):
-        logger.error(f"服务器错误: {str(error)}")
-        return flask_error_response(
-            "服务器内部错误" if NODE_ENV == 'production' else str(error),
-            code=500,
-        )
-
-    @flask_app.errorhandler(Exception)
-    def handle_exception(error):
-        logger.error(f"未处理的异常: {str(error)}")
-        return flask_error_response(
-            "服务器错误" if NODE_ENV == 'production' else str(error),
-            code=500,
-        )
-
-    return flask_app
-
 
 app = create_app()
+
 
 if __name__ == '__main__':
     port = resolve_port()
