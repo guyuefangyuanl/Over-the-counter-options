@@ -27,8 +27,7 @@
       <view class="history-section__header">
         <text class="history-section__title">搜索历史</text>
         <view class="history-section__clear-btn" bindtap="onClearHistory">
-          <icon type="clear" size="14"></icon>
-          <text>清空</text>
+          <icon type="clear" size="14" color="#999"></icon>
         </view>
       </view>
       <view class="history-section__tags">
@@ -39,6 +38,27 @@
           data-query="{{item}}"
           bindtap="onTagTap"
         >{{item}}</text>
+      </view>
+    </view>
+
+    <!-- 2.2 快速查询 (根据设计图新增) -->
+    <view wx:if="{{historyVisible}}" class="quick-query-section">
+      <view class="quick-query-card">
+        <view class="quick-query-header">快速查询</view>
+        <view class="quick-query-list">
+          <view class="quick-query-item" bindtap="onQuickQuery" data-type="otc">
+            <text>沪深场外个股期权</text>
+            <view class="arrow-right"></view>
+          </view>
+          <view class="quick-query-item" bindtap="onQuickQuery" data-type="vanilla">
+            <text>香草期权</text>
+            <view class="arrow-right"></view>
+          </view>
+          <view class="quick-query-item" bindtap="onQuickQuery" data-type="exchange">
+            <text>沪深场内期权</text>
+            <view class="arrow-right"></view>
+          </view>
+        </view>
       </view>
     </view>
 
@@ -75,13 +95,18 @@
         <view 
           wx:for="{{results}}"
           wx:key="id"
-          class="result-card"
+          class="result-item"
           bindtap="onResultTap"
           data-item="{{item}}"
         >
-          <view class="result-card__title">{{item.title}}</view>
-          <view class="result-card__desc">{{item.description}}</view>
-          <view class="result-card__arrow">></view>
+          <view class="result-item__left">
+            <view class="result-item__name">{{item.name}}</view>
+            <view class="result-item__code">{{item.code}}</view>
+          </view>
+          <view class="result-item__right">
+            <view class="result-item__price {{item.changePercent > 0 ? 'is-rise' : (item.changePercent < 0 ? 'is-fall' : '')}}">{{item.price || '--'}}</view>
+            <view class="result-item__change {{item.changePercent > 0 ? 'is-rise' : (item.changePercent < 0 ? 'is-fall' : '')}}">{{item.changePercent ? (item.changePercent > 0 ? '+' : '') + item.changePercent + '%' : '--'}}</view>
+          </view>
         </view>
       </view>
     </view>

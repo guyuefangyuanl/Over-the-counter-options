@@ -9,8 +9,12 @@
 
     <!-- 2. Tab导航容器 -->
     <view class="tabs-container">
-      
-      <primary-tabs active="{{activePrimaryTab}}" bind:change="switchPrimaryTabFromComponent" />
+      <view class="tabs-header-row">
+        <primary-tabs active="{{activePrimaryTab}}" bind:change="switchPrimaryTabFromComponent" style="flex: 1;" />
+        <view class="search-entry-btn" bindtap="openSearchPage">
+          <icon type="search" size="18" color="#666"></icon>
+        </view>
+      </view>
       
       <!-- 子Tab (自选时显示) -->
       <view class="sub-tabs" wx:if="{{activePrimaryTab === 'self'}}">

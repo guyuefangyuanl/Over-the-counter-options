@@ -3,6 +3,8 @@ const OptionPricingSystem = require('../../utils/option-pricing.js');
 const logic = require('../../utils/inquiry-logic.js');
 const api = require('../../utils/api-group.js');
 
+const FAVORITES_STORAGE_KEY = 'INQUIRY_FAVORITES_V1';
+
 Page({
   data: {
     // 新增：匹配图片设计的 UI 状态数据
@@ -15,7 +17,45 @@ Page({
       { name: '宁德时代', code: '300750.SZ', changePercent: 2.47, atm: 11.83, otm105: 9.77, otm110: 8.01 },
       { name: '东方财富', code: '300059.SZ', changePercent: 0.50, atm: 16.20, otm105: 14.21, otm110: 12.44 },
       { name: '平安银行', code: '000001.SZ', changePercent: -0.35, atm: 6.53, otm105: 4.46, otm110: 2.94 },
-      { name: '药明康德', code: '603259.SH', changePercent: -1.26, atm: 7.92, otm105: 5.83, otm110: 4.21 }
+      { name: '药明康德', code: '603259.SH', changePercent: -1.26, atm: 7.92, otm105: 5.83, otm110: 4.21 },
+      { name: '上海贝岭', code: '603259.SH', changePercent: -2.26, atm: 12.16, otm105: 10.16, otm110: 8.16 }
+    ],
+    hotStocks: [], // 热门10支个股
+    updateTime: '2024/12/23 15:00更新',
+    terms: ['1M', '2M', '3M', '6M'],
+    traders: [
+      { code: 'BEST', name: '最优报价' },
+      { code: 'ZXZZ', name: 'ZXZZ' },
+      { code: 'HTCC', name: 'HTCC' },
+      { code: 'YHRD', name: 'YHRD' },
+      { code: 'YAZB', name: 'YAZB' }
+    ],
+    selectedTrader: '最优报价',
+    selectedTraderCode: 'BEST',
+    
+    // 指数页面数据
+    indexUpdate: '2024/12/23 15:00更新',
+    topIndices: [
+      { name: '中证500', price: '5818.55', changePercent: -1.67 },
+      { name: '中证1000', price: '6096.38', changePercent: -2.80 },
+      { name: '沪深300', price: '3933.57', changePercent: 0.15 }
+    ],
+    indexQuotes: [
+      { name: '中证500', code: '000905.SH', changePercent: 2.47, atm: 11.83, otm105: 9.77, otm110: 8.01 },
+      { name: '中证1000', code: '000852.SH', changePercent: 0.50, atm: 16.20, otm105: 14.21, otm110: 12.44 },
+      { name: '沪深300', code: '000300.SH', changePercent: -0.35, atm: 6.53, otm105: 4.46, otm110: 2.94 },
+      { name: '上证50', code: '000016.SH', changePercent: -1.26, atm: 7.92, otm105: 5.83, otm110: 4.21 },
+      { name: '创业板', code: '399006.SZ', changePercent: -2.26, atm: 12.16, otm105: 10.16, otm110: 8.16 }
+    ],
+
+    // ETF 页面数据
+    etfUpdate: '2024/12/23 15:00更新',
+    etfQuotes: [
+      { name: '芯片ETF', code: '159995.SZ', changePercent: 2.47, atm: 11.83, otm105: 9.77, otm110: 8.01 },
+      { name: '5GETF', code: '515050.SH', changePercent: 0.50, atm: 16.20, otm105: 14.21, otm110: 12.44 },
+      { name: '新能源车ETF', code: '515030.SH', changePercent: -0.35, atm: 6.53, otm105: 4.46, otm110: 2.94 },
+      { name: '消费ETF', code: '159928.SZ', changePercent: -1.26, atm: 7.92, otm105: 5.83, otm110: 4.21 },
+      { name: '医药ETF', code: '512010.SH', changePercent: -2.26, atm: 12.16, otm105: 12.16, otm110: 8.16 }
     ],
 
     // 当前股票信息
@@ -67,6 +107,12 @@ Page({
     // 编辑自选状态
     isEditing: false,
     selectedForEdit: [],
+
+    // === 新增：矩阵视图数据 ===
+    bizType: 'vanilla',
+    matrixColumns: ['2W', '1M', '2M', '3M', '6M', '12M'],
+    matrixData: [],
+    matrixScrollLeft: 0,
     
     // 筛选条件
     filterOptions: {
@@ -131,6 +177,7 @@ Page({
       try {
         const stockInfo = JSON.parse(decodeURIComponent(options.stock));
         this.setData({
+          currentTab: '个股',
           currentStock: {
             code: stockInfo.code || '000001',
             name: stockInfo.name || '平安银行',
@@ -146,27 +193,223 @@ Page({
     } else {
       const sc = (options && (options.stockCode || options.code));
       const sn = (options && (options.stockName || options.name));
-      const code = this.normalizeParam(sc) || '000001';
-      const name = this.normalizeParam(sn) || '平安银行';
-      const price = Number((Math.random() * 100 + 10).toFixed(2));
-      const changePercent = Number((Math.random() * 4 - 2).toFixed(2));
-      this.setData({
-        currentStock: {
-          code,
-          name,
-          price,
-          change: Number((price * changePercent / 100).toFixed(2)),
-          changePercent,
-          displayText: `${price}  ${changePercent >= 0 ? '+' : ''}${changePercent}%`
-        }
-      });
+      if (sc) {
+        const code = this.normalizeParam(sc);
+        const name = this.normalizeParam(sn) || '平安银行';
+        const price = Number((Math.random() * 100 + 10).toFixed(2));
+        const changePercent = Number((Math.random() * 4 - 2).toFixed(2));
+        this.setData({
+          currentTab: '个股',
+          currentStock: {
+            code,
+            name,
+            price,
+            change: Number((price * changePercent / 100).toFixed(2)),
+            changePercent,
+            displayText: `${price}  ${changePercent >= 0 ? '+' : ''}${changePercent}%`
+          }
+        });
+      }
     }
     
     // 检查收藏状态
     this.checkFavoriteStatus();
     
-    this.initPricingSystem();
+    // 初始化数据
+    this.loadWatchlist();
+    this.loadHotStocks();
+    this.loadIndexData();
+    this.loadEtfData();
+    this.loadGroups({ silent: true });
+  },
+
+  // 加载 ETF 数据
+  loadEtfData: function() {
+    this.setData({ loading: true });
+    // 模拟从后端获取 ETF 数据
+    setTimeout(() => {
+      this.setData({
+        loading: false,
+        etfUpdate: new Date().toLocaleString('zh-CN', { 
+          year: 'numeric', 
+          month: '2-digit', 
+          day: '2-digit', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        }).replace(/\//g, '/') + '更新'
+      });
+    }, 500);
+  },
+
+  // 加载指数数据
+  loadIndexData: function() {
+    this.setData({ loading: true });
+    // 模拟从后端获取指数数据
+    setTimeout(() => {
+      this.setData({
+        loading: false,
+        indexUpdate: new Date().toLocaleString('zh-CN', { 
+          year: 'numeric', 
+          month: '2-digit', 
+          day: '2-digit', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        }).replace(/\//g, '/') + '更新'
+      });
+    }, 500);
+  },
+
+  // 加载热门个股
+  loadHotStocks: function() {
+    this.setData({ loading: true });
+    // 模拟从后端获取热门10支个股
+    setTimeout(() => {
+      const hotStocks = [
+        { name: '宁德时代', code: '300750.SZ', changePercent: 2.47, atm: 11.83, otm105: 9.77, otm110: 8.01 },
+        { name: '东方财富', code: '300059.SZ', changePercent: 0.50, atm: 16.20, otm105: 14.21, otm110: 12.44 },
+        { name: '平安银行', code: '000001.SZ', changePercent: -0.35, atm: 6.53, otm105: 4.46, otm110: 2.94 },
+        { name: '药明康德', code: '603259.SH', changePercent: -1.26, atm: 7.92, otm105: 5.83, otm110: 4.21 },
+        { name: '上海贝岭', code: '603259.SH', changePercent: -2.26, atm: 12.16, otm105: 10.16, otm110: 8.16 },
+        { name: '贵州茅台', code: '600519.SH', changePercent: 0.12, atm: 15.32, otm105: 13.12, otm110: 11.45 },
+        { name: '中信证券', code: '600030.SH', changePercent: 1.45, atm: 10.23, otm105: 8.56, otm110: 7.12 },
+        { name: '五粮液', code: '000858.SZ', changePercent: -0.56, atm: 14.12, otm105: 12.34, otm110: 10.56 },
+        { name: '比亚迪', code: '002594.SZ', changePercent: 3.12, atm: 18.56, otm105: 16.45, otm110: 14.23 },
+        { name: '隆基绿能', code: '601012.SH', changePercent: -1.89, atm: 22.34, otm105: 20.12, otm110: 18.45 }
+      ];
+      this.setData({ 
+        hotStocks,
+        loading: false,
+        updateTime: new Date().toLocaleString('zh-CN', { 
+          year: 'numeric', 
+          month: '2-digit', 
+          day: '2-digit', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        }).replace(/\//g, '/') + '更新'
+      });
+    }, 500);
+  },
+
+  // 切换期限
+  onTermChange: function(e) {
+    const term = e.currentTarget.dataset.term;
+    this.setData({ selectedTerm: term });
+    this.loadHotStocks(); // 实际应重新获取对应期限的数据
+  },
+
+  // 切换交易商
+  onTraderChange: function(e) {
+    const { code, name } = e.currentTarget.dataset;
+    this.setData({ 
+      selectedTrader: name,
+      selectedTraderCode: code,
+      showTraderPicker: false
+    });
+    this.loadHotStocks();
+  },
+
+  toggleTraderPicker: function() {
+    this.setData({ showTraderPicker: !this.data.showTraderPicker });
+  },
+
+  // 切换业务类型 (香草/雪球)
+  onBizTypeChange: function(e) {
+    const type = e.currentTarget.dataset.type;
+    this.setData({ bizType: type });
     this.loadOptionQuotes();
+  },
+
+  // 将列表数据转换为矩阵格式
+  transformToMatrix: function(quotes) {
+    const { matrixColumns } = this.data;
+    // 固定的执行价/结构行，匹配图片中的样式
+    const strikes = ['100C', '103C', '105C', '110C', '80C', '90C', '95C'];
+    
+    const matrix = strikes.map(strike => {
+      const row = { strike: strike, values: [] };
+      matrixColumns.forEach(term => {
+        let value = '--';
+        let badge = null;
+        
+        // 模拟逻辑：匹配图片中的 100C / 1M 单元格显示黄色角标 1
+        if (strike === '100C' && term === '1M') {
+          value = '3.65%';
+          badge = '1';
+        } else {
+          // 根据图片大致模拟一些百分比
+          const baseMap = {
+            '100C': 4.98, '103C': 4.62, '105C': 4.27, '110C': 5.89, '80C': 2.42, '90C': 3.12, '95C': 2.91
+          };
+          const base = baseMap[strike] || 3.00;
+          // 随期限增加费率（模拟）
+          const termIdx = matrixColumns.indexOf(term);
+          const val = (base + termIdx * 0.8 + Math.random() * 0.5).toFixed(2);
+          value = val + '%';
+        }
+
+        row.values.push({ term: term, value: value, badge: badge });
+      });
+      return row;
+    });
+
+    this.setData({ matrixData: matrix });
+  },
+
+  // 同步滚动 (已由 CSS sticky 实现，此处留作备用或移除)
+  onMatrixHeaderScroll: function(e) {},
+  onMatrixRowScroll: function(e) {},
+
+  // 显示/隐藏选择器
+  showDatePicker: function() {
+    wx.showActionSheet({
+      itemList: this.data.quoteDates.map(d => d.label),
+      success: (res) => {
+        const date = this.data.quoteDates[res.tapIndex];
+        this.setData({ selectedQuoteDate: date.label });
+        this.loadOptionQuotes();
+      }
+    });
+  },
+
+  showTraderPicker: function() {
+    wx.showActionSheet({
+      itemList: this.data.traders.map(t => t.name),
+      success: (res) => {
+        const trader = this.data.traders[res.tapIndex];
+        this.setData({ 
+          selectedTrader: trader.name,
+          selectedTraderCode: trader.code
+        });
+        this.loadOptionQuotes();
+      }
+    });
+  },
+
+  // 点击矩阵单元格
+  onCellTap: function(e) {
+    const { strike, term } = e.currentTarget.dataset;
+    const { currentStock } = this.data;
+    
+    wx.showActionSheet({
+      itemList: [`下单 ${currentStock.name} ${strike} ${term}`, '查看分时图', '分析盈亏'],
+      success: (res) => {
+        if (res.tapIndex === 0) {
+           wx.navigateTo({
+             url: `/pages/order/order?stock=${encodeURIComponent(JSON.stringify(currentStock))}&strike=${strike}&term=${term}`
+           });
+        }
+      }
+    });
+  },
+
+  // 跳转到计算器
+  goToCalculator: function() {
+    wx.navigateTo({ url: '/pages/calculator/calculator' });
+  },
+
+  // 跳转到工作台
+  goToWorkspace: function() {
+    wx.switchTab({ url: '/pages/workspace/workspace' });
   },
 
   normalizeParam: function(v) {
@@ -782,15 +1025,37 @@ Page({
   loadOptionQuotes: function() {
     this.setData({ loading: true });
     
-    const { currentStock, selectedQuoteDate, selectedTrader } = this.data;
+    const { currentStock } = this.data;
     
-    // 生成真实的期权报价数据
-    const quotes = this.generateRealisticQuotes(currentStock);
-    
-    this.setData({
-      optionQuotes: quotes,
-      loading: false
-    });
+    // 如果是“个股”模式，尝试从云数据库获取
+    if (this.data.currentTab === '个股') {
+      const db = wx.cloud.database();
+      db.collection('quotes').where({
+        code: currentStock.code
+      }).get().then(res => {
+        if (res.data && res.data.length > 0) {
+           // 真实数据
+           const quotes = this.generateRealisticQuotes(currentStock); // 这里可以用真实数据增强
+           this.transformToMatrix(quotes);
+        } else {
+           // 模拟数据
+           const quotes = this.generateRealisticQuotes(currentStock);
+           this.transformToMatrix(quotes);
+        }
+        this.setData({ loading: false });
+      }).catch(err => {
+        console.error('获取期权报价失败:', err);
+        const quotes = this.generateRealisticQuotes(currentStock);
+        this.transformToMatrix(quotes);
+        this.setData({ loading: false });
+      });
+    } else {
+      const quotes = this.generateRealisticQuotes(currentStock);
+      this.setData({
+        optionQuotes: quotes,
+        loading: false
+      });
+    }
   },
   
   // 生成真实的期权报价数据
@@ -1527,7 +1792,15 @@ Page({
   generateOrderTextFromForm: function(form) {
     const time = new Date().toLocaleString('zh-CN');
     const buyPriceText = form.buyPrice ? `${form.buyPrice}元` : '市价';
-    const text = `【场外期权下单】\n方向：${form.direction}\n交易商：${form.traderCode} (${form.traderName})\n标的资产：${form.underlying}\n结构期限：${form.structure}\n期权费率：${form.premiumPercent}%\n名义本金：${form.notional}万元\n买入价格：${buyPriceText}\n时间：${time}`;
+    const text = `【场外期权下单】
+方向：${form.direction}
+交易商：${form.traderCode} (${form.traderName})
+标的资产：${form.underlying}
+结构期限：${form.structure}
+期权费率：${form.premiumPercent}%
+名义本金：${form.notional}万元
+买入价格：${buyPriceText}
+时间：${time}`;
     return text;
   },
 
@@ -1703,7 +1976,7 @@ Page({
 
   // 跳转到搜索股票页面（添加自选）
   goToSearchStock: function() {
-    const url = '/pages/search-stock/search-stock';
+    const url = '/pages/search/search?source=quotes';
     wx.navigateTo({
       url,
       fail: () => {
@@ -1717,163 +1990,58 @@ Page({
     });
   },
 
-  // 切换收藏状态
-  toggleFavorite: function() {
-    const newFavoritedState = !this.data.isFavorited;
-    
-    if (newFavoritedState) {
-      // 添加收藏
-      this.addToFavorites();
-    } else {
-      // 移除收藏
-      this.removeFromFavorites();
-    }
-  },
-
-  // 添加到收藏
-  addToFavorites: function() {
-    const { currentStock } = this.data;
-    
-    // 获取现有收藏
-    let favorites = wx.getStorageSync('favorites') || [];
-    
-    // 检查是否已经收藏
-    const existingIndex = favorites.findIndex(item => item.code === currentStock.code);
-    
-    if (existingIndex === -1) {
-      // 自动判断分组（沪深/港股/美股）
-      let autoGroup = '全部';
-      const stockCode = currentStock.code;
-      
-      // 判断市场类型
-      if (stockCode.startsWith('6') || stockCode.startsWith('0') || stockCode.startsWith('3')) {
-        // 沪深股票（6开头是沪市，0/3开头是深市）
-        autoGroup = '沪深';
-      } else if (stockCode.startsWith('8') || stockCode.startsWith('4')) {
-        // 新三板
-        autoGroup = '新三板';
-      } else if (stockCode.length >= 4 && /^[A-Z]/.test(stockCode)) {
-        // 港股或美股（以字母开头）
-        if (stockCode.length <= 5) {
-          autoGroup = '港股';
-        } else {
-          autoGroup = '美股';
-        }
-      }
-      
-      // 添加到收藏
-      favorites.push({
-        code: currentStock.code,
-        name: currentStock.name,
-        market: currentStock.market || (currentStock.code.startsWith('6') ? 'SH' : 'SZ'),
-        price: currentStock.price,
-        change: currentStock.change,
-        changePercent: currentStock.changePercent,
-        addedTime: new Date().toISOString(),
-        group: autoGroup // 自动分组
-      });
-      
-      // 保存到本地存储
-      wx.setStorageSync('favorites', favorites);
-      
-      // 更新状态
-      this.setData({ isFavorited: true });
-      
-      // 显示成功消息
-      wx.showToast({
-        title: '已添加到自选',
-        icon: 'success',
-        duration: 2000
-      });
-      
-      // 显示编辑分组选项（允许用户修改自动分组）
-      setTimeout(() => {
-        wx.showModal({
-          title: '编辑分组',
-          content: `已自动分配到${autoGroup}组，是否需要修改？`,
-          confirmText: '修改',
-          cancelText: '确定',
-          success: (res) => {
-            if (res.confirm) {
-              this.editFavoriteGroup();
-            }
-          }
-        });
-      }, 2000);
-    } else {
-      // 已经收藏，直接更新状态
-      this.setData({ isFavorited: true });
-      wx.showToast({
-        title: '已在自选列表中',
-        icon: 'none'
-      });
-    }
-  },
-
-  // 从收藏中移除
-  removeFromFavorites: function() {
-    const { currentStock } = this.data;
-    
-    // 获取现有收藏
-    let favorites = wx.getStorageSync('favorites') || [];
-    
-    // 移除该股票
-    favorites = favorites.filter(item => item.code !== currentStock.code);
-    
-    // 保存到本地存储
-    wx.setStorageSync('favorites', favorites);
-    
-    // 更新状态
-    this.setData({ isFavorited: false });
-    
-    // 显示成功消息
-    wx.showToast({
-      title: '已从自选移除',
-      icon: 'success'
-    });
-  },
-
-  // 编辑收藏分组
-  editFavoriteGroup: function() {
-    const { currentStock } = this.data;
-    
-    // 获取现有分组
-    let groups = wx.getStorageSync('favoriteGroups') || ['全部', '沪深', '港股', '美股'];
-    
-    wx.showActionSheet({
-      itemList: groups,
-      success: (res) => {
-        const selectedGroup = groups[res.tapIndex];
-        
-        // 获取现有收藏
-        let favorites = wx.getStorageSync('favorites') || [];
-        
-        // 更新分组信息
-        const stockIndex = favorites.findIndex(item => item.code === currentStock.code);
-        if (stockIndex !== -1) {
-          favorites[stockIndex].group = selectedGroup;
-          wx.setStorageSync('favorites', favorites);
-          
-          wx.showToast({
-            title: `已添加到${selectedGroup}分组`,
-            icon: 'success'
-          });
-        }
-      }
-    });
-  },
-
   // 检查收藏状态
   checkFavoriteStatus: function() {
     const { currentStock } = this.data;
+    if (!currentStock.code) return;
     
-    // 获取现有收藏
-    const favorites = wx.getStorageSync('favorites') || [];
+    // 获取现有收藏 (统一使用 INQUIRY_FAVORITES_V1)
+    const favoritesMap = wx.getStorageSync(FAVORITES_STORAGE_KEY) || {};
     
     // 检查是否已收藏
-    const isFavorited = favorites.some(item => item.code === currentStock.code);
+    const isFavorited = !!favoritesMap[currentStock.code];
     
     this.setData({ isFavorited });
+  },
+
+  // 切换收藏状态
+  toggleFavorite: function() {
+    const { currentStock, isFavorited } = this.data;
+    if (!currentStock.code) return;
+
+    const favoritesMap = wx.getStorageSync(FAVORITES_STORAGE_KEY) || {};
+    
+    if (!isFavorited) {
+      // 添加收藏
+      favoritesMap[currentStock.code] = { 
+        groupId: 'holding', // 默认分到持仓
+        name: currentStock.name,
+        code: currentStock.code,
+        price: currentStock.price,
+        changePercent: currentStock.changePercent,
+        addedTime: Date.now()
+      };
+      wx.showToast({ title: '已添加到自选', icon: 'success' });
+    } else {
+      // 移除收藏
+      delete favoritesMap[currentStock.code];
+      wx.showToast({ title: '已从自选移除', icon: 'success' });
+    }
+    
+    wx.setStorageSync(FAVORITES_STORAGE_KEY, favoritesMap);
+    this.setData({ isFavorited: !isFavorited });
+    
+    // 同步更新旧的 'favorites' key 以保持兼容
+    this.syncToOldFavorites(favoritesMap);
+  },
+
+  // 同步到旧的数组格式存储，保持向下兼容
+  syncToOldFavorites: function(map) {
+    const list = Object.keys(map).map(id => ({
+      id,
+      ...map[id]
+    }));
+    wx.setStorageSync('favorites', list);
   },
 
   // === 新增交互方法 ===
@@ -1885,11 +2053,23 @@ Page({
     if (tab !== '自选' && this.data.isEditing) {
       this.cancelEditing();
     }
+
+    // 如果切换到个股Tab，加载热门个股
+    if (tab === '个股') {
+      this.loadHotStocks();
+    }
+
+    // 如果切换到指数Tab，加载指数数据
+    if (tab === '指数') {
+      this.loadIndexData();
+    }
+
+    // 如果切换到ETFTab，加载ETF数据
+    if (tab === 'ETF') {
+      this.loadEtfData();
+    }
   },
   onSubFilterChange(e) {
     this.setData({ subFilter: e.currentTarget.dataset.filter });
-  },
-  onTermChange(e) {
-    this.setData({ selectedTerm: e.currentTarget.dataset.term });
   }
 });
