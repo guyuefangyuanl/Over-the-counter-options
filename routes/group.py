@@ -63,14 +63,36 @@ def get_groups():
     try:
         creator_id = get_current_user_id()
         model = get_model()
+        
+        # 记录请求
+        current_app.logger.info(f"获取分组列表请求: user={creator_id}")
+        
         if not model.db and not model.cloud_client:
-            return flask_success_response(data=[], message="数据库未连接，返回空分组列表")
+            current_app.logger.warning("数据库连接均不可用（本地和云端），返回空分组列表")
+            return flask_success_response(data=[], message="数据库未连接，返回空数据")
             
         groups = model.get_groups(creator_id)
         
-        return flask_success_response(data=groups, message="获取成功")
+        # 检查是否因为集合不存在导致的空列表，提供更明确的消息
+        message = "获取成功"
+        if not groups:
+            # 如果没有数据，可能是真的没数据，也可能是集合不存在
+            # 模型层已经处理了异常并返回空列表，这里可以根据日志判断
+            current_app.logger.info(f"用户 {creator_id} 的分组列表为空")
+        
+        return flask_success_response(data=groups, message=message)
     except Exception as e:
-        return flask_error_response(str(e), 500)
+        import traceback
+        error_msg = str(e)
+        full_traceback = traceback.format_exc()
+        current_app.logger.error(f"获取分组列表接口异常: {error_msg}")
+        current_app.logger.error(full_traceback)
+        # 临时将 traceback 返回给前端以便调试
+        return flask_error_response(
+            message=f"接口调用失败: {error_msg}",
+            code=500,
+            data={"traceback": full_traceback}
+        )
 
 @group_bp.route('/groups/<group_id>', methods=['PUT'])
 def update_group(group_id):

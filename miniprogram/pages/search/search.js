@@ -232,24 +232,27 @@ Page({
   // 点击搜索结果
   onResultTap: function (e) {
     const item = e.currentTarget.dataset.item;
+    const app = getApp();
     
-    // 无论是从询价页还是报价页过来的搜索，都跳转到报价详情
-    if (this.data.fromInquiry || this.data.source === 'quotes') {
-      const url = `/pages/quotes/quotes?stockCode=${item.code}&stockName=${item.name}&source=${this.data.source || 'search'}`;
-      wx.navigateTo({
-        url,
-        success: () => {
-          console.log('[跳转] 报价页成功:', url);
-        },
-        fail: (err) => {
-          console.error('[跳转] 报价页失败:', err);
-          wx.showToast({ title: '跳转失败', icon: 'none' });
-        }
-      });
-    } else {
-      console.log('点击搜索结果:', item);
-      // 默认也跳转到报价页
-      wx.navigateTo({ url: `/pages/quotes/quotes?stockCode=${item.code}&stockName=${item.name}` });
-    }
+    // 设置全局参数，跳转到报价页面
+    app.globalData.pendingQuoteParams = {
+      code: item.code,
+      name: item.name,
+      price: item.price,
+      changePercent: item.changePercent,
+      source: this.data.source || 'search'
+    };
+
+    // 报价页是 tabBar 页面，必须使用 switchTab
+    wx.switchTab({
+      url: '/pages/quotes/quotes',
+      success: () => {
+        console.log('[跳转] 报价页成功');
+      },
+      fail: (err) => {
+        console.error('[跳转] 报价页失败:', err);
+        wx.showToast({ title: '跳转失败', icon: 'none' });
+      }
+    });
   },
 });

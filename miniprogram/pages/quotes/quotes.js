@@ -171,11 +171,58 @@ Page({
     });
 
     console.log('个股期权报价页面加载', options);
+    this.handleNavigationParams(options);
     
+    // 检查收藏状态
+    this.checkFavoriteStatus();
+    
+    // 初始化数据
+    this.loadWatchlist();
+    this.loadHotStocks();
+    this.loadIndexData();
+    this.loadEtfData();
+    this.loadGroups({ silent: true });
+    
+    // 初始化期权报价系统
+    this.initPricingSystem();
+  },
+
+  onShow: function() {
+    // 适配自定义 tabBar
+    if (typeof this.getTabBar === 'function' && this.getTabBar()) {
+      this.getTabBar().setData({
+        selected: 1 // 报价页在 tabBar 中的索引
+      })
+    }
+
+    // 检查是否有全局跳转参数
+    const app = getApp();
+    if (app.globalData.pendingQuoteParams) {
+      console.log('处理全局跳转参数', app.globalData.pendingQuoteParams);
+      this.handleNavigationParams(app.globalData.pendingQuoteParams);
+      app.globalData.pendingQuoteParams = null; // 处理完清空
+    }
+
+    // 页面显示时刷新数据
+    if (this.pricingSystem) {
+      this.refreshPricing();
+    }
+    
+    // 加载自选列表
+    this.loadWatchlist();
+    this.loadGroups({ silent: true });
+    
+    // 重新检查收藏状态
+    this.checkFavoriteStatus();
+  },
+
+  handleNavigationParams: function(options) {
+    if (!options) return;
+
     // 如果有传入的股票信息，使用传入的股票
-    if (options && options.stock) {
+    if (options.stock) {
       try {
-        const stockInfo = JSON.parse(decodeURIComponent(options.stock));
+        const stockInfo = typeof options.stock === 'string' ? JSON.parse(decodeURIComponent(options.stock)) : options.stock;
         this.setData({
           currentTab: '个股',
           currentStock: {
@@ -191,36 +238,31 @@ Page({
         console.error('解析股票信息失败:', e);
       }
     } else {
-      const sc = (options && (options.stockCode || options.code));
-      const sn = (options && (options.stockName || options.name));
+      const sc = (options.stockCode || options.code);
+      const sn = (options.stockName || options.name);
       if (sc) {
         const code = this.normalizeParam(sc);
         const name = this.normalizeParam(sn) || '平安银行';
-        const price = Number((Math.random() * 100 + 10).toFixed(2));
-        const changePercent = Number((Math.random() * 4 - 2).toFixed(2));
+        const price = options.price || Number((Math.random() * 100 + 10).toFixed(2));
+        const changePercent = options.changePercent || Number((Math.random() * 4 - 2).toFixed(2));
+        const change = Number((price * changePercent / 100).toFixed(2));
+        
         this.setData({
           currentTab: '个股',
           currentStock: {
             code,
             name,
             price,
-            change: Number((price * changePercent / 100).toFixed(2)),
+            change,
             changePercent,
             displayText: `${price}  ${changePercent >= 0 ? '+' : ''}${changePercent}%`
           }
         });
+        
+        // 如果是从搜索跳转，重新加载报价
+        this.loadOptionQuotes();
       }
     }
-    
-    // 检查收藏状态
-    this.checkFavoriteStatus();
-    
-    // 初始化数据
-    this.loadWatchlist();
-    this.loadHotStocks();
-    this.loadIndexData();
-    this.loadEtfData();
-    this.loadGroups({ silent: true });
   },
 
   // 加载 ETF 数据
@@ -409,7 +451,14 @@ Page({
 
   // 跳转到工作台
   goToWorkspace: function() {
-    wx.switchTab({ url: '/pages/workspace/workspace' });
+    // 检查 workspace 是否在 tabBar 中，不在的话使用 navigateTo
+    wx.navigateTo({ 
+      url: '/pages/workspace/workspace',
+      fail: (err) => {
+        console.log('navigateTo workspace failed, trying switchTab', err);
+        wx.switchTab({ url: '/pages/workspace/workspace' });
+      }
+    });
   },
 
   normalizeParam: function(v) {
@@ -440,6 +489,8 @@ Page({
     this.loadOptionQuotes();
   },
 
+  // 移除冗余的 onShow 定义
+  /*
   onShow: function () {
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
       this.getTabBar().setData({
@@ -458,6 +509,7 @@ Page({
     // 重新检查收藏状态
     this.checkFavoriteStatus();
   },
+  */
 
   // 加载自选列表数据
   loadWatchlist: function() {
@@ -2054,9 +2106,9 @@ Page({
       this.cancelEditing();
     }
 
-    // 如果切换到个股Tab，加载热门个股
+    // 如果切换到个股Tab，加载报价数据（矩阵模式）
     if (tab === '个股') {
-      this.loadHotStocks();
+      this.loadOptionQuotes();
     }
 
     // 如果切换到指数Tab，加载指数数据

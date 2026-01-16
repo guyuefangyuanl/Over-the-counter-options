@@ -181,12 +181,12 @@ class CloudDbClient:
             f"verify_ssl={verify_ssl}"
         )
 
-        if raw_env_id is None:
-            raise CloudDbConfigError("缺少环境变量 WX_CLOUD_ENV")
+        if raw_env_id is None or "your_" in env_id:
+            raise CloudDbConfigError("缺少或未配置环境变量 WX_CLOUD_ENV")
         if not env_id:
             raise CloudDbConfigError("环境变量 WX_CLOUD_ENV 为空")
-        if raw_appid is None or raw_secret is None:
-            raise CloudDbConfigError("缺少环境变量 WX_APPID/WX_SECRET")
+        if raw_appid is None or raw_secret is None or "your_" in appid or "your_" in secret:
+            raise CloudDbConfigError("缺少或未配置环境变量 WX_APPID/WX_SECRET")
         if not appid or not secret:
             raise CloudDbConfigError("环境变量 WX_APPID/WX_SECRET 为空")
 
@@ -216,7 +216,8 @@ class CloudDbClient:
                     continue
             return out
         except CloudDbRequestError as e:
-            if "[ResourceNotFound]" in str(e):
+            err_msg = str(e)
+            if "[ResourceNotFound]" in err_msg or "Db or Table not exist" in err_msg or "集合不存在" in err_msg:
                 logger.warning(f"云数据库查询失败: 集合不存在 ({e})")
                 return []
             logger.error(f"云数据库查询异常: {e}, query={query}")
@@ -238,7 +239,8 @@ class CloudDbClient:
                 logger.warning(f"云数据库统计值转换失败: {e}, val={count_val}")
                 return 0
         except CloudDbRequestError as e:
-            if "[ResourceNotFound]" in str(e):
+            err_msg = str(e)
+            if "[ResourceNotFound]" in err_msg or "Db or Table not exist" in err_msg or "集合不存在" in err_msg:
                 logger.warning(f"云数据库统计失败: 集合不存在 ({e})")
                 return 0
             logger.error(f"云数据库统计查询异常: {e}, query={final_query}")

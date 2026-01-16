@@ -46,6 +46,11 @@ class InquiryModel:
             inquiries = []
             for item in cursor:
                 item["_id"] = str(item["_id"])
+                # 转换 datetime 为字符串
+                if "createdAt" in item and hasattr(item["createdAt"], "isoformat"):
+                    item["createdAt"] = item["createdAt"].isoformat()
+                if "updatedAt" in item and hasattr(item["updatedAt"], "isoformat"):
+                    item["updatedAt"] = item["updatedAt"].isoformat()
                 inquiries.append(item)
             return inquiries
         except Exception as e:

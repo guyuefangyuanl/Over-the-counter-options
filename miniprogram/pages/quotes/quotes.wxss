@@ -1057,8 +1057,8 @@
 }
 
 .rank-tag {
-  background-color: #ffe8d6;
-  color: #ff9500;
+  background-color: #eaf4fe;
+  color: #409eff;
   font-size: 24rpx;
   padding: 4rpx 16rpx;
   border-radius: 20rpx;
@@ -1067,7 +1067,7 @@
 
 .update-time {
   font-size: 24rpx;
-  color: #ff9500;
+  color: #999999;
   flex: 1;
 }
 
@@ -1242,12 +1242,7 @@
 }
 
 .badge-a2 {
-  background-color: #ffd700;
-  color: #333;
-  font-size: 20rpx;
-  font-weight: bold;
-  padding: 2rpx 8rpx;
-  border-radius: 4rpx;
+  display: none;
 }
 
 .change-info {
@@ -1369,15 +1364,7 @@
 }
 
 .tool-badge-top {
-  position: absolute;
-  top: -12rpx;
-  right: -8rpx;
-  background-color: #ffd700;
-  color: #333;
-  font-size: 16rpx;
-  font-weight: bold;
-  padding: 2rpx 6rpx;
-  border-radius: 4rpx;
+  display: none;
 }
 
 /* 5. 矩阵表格样式 */
@@ -1463,18 +1450,5 @@
 }
 
 .cell-badge {
-  position: absolute;
-  top: 10rpx;
-  right: 10rpx;
-  background-color: #ffd700;
-  color: #333;
-  font-size: 16rpx;
-  font-weight: bold;
-  width: 24rpx;
-  height: 24rpx;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2;
+  display: none;
 }

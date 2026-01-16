@@ -47,7 +47,11 @@ const request = (url, method, data, options = {}) => {
           'X-User-ID': getUserId()
         },
         success: (res) => {
+          console.log(`[API] ${method} ${url} status=${res.statusCode}`);
           const payload = res.data;
+          if (res.statusCode >= 500) {
+            console.error(`[API Error] ${url} Payload:`, payload);
+          }
           if (res.statusCode >= 200 && res.statusCode < 300) {
             if (payload && payload.success === false) {
               reject({ ...(payload || {}), statusCode: res.statusCode });

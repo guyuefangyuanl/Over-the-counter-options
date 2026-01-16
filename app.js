@@ -1200,9 +1200,9 @@ app.get('*', (req, res, next) => {
 app.use(notFoundHandler)
 app.use(errorHandler)
 
-const portRaw = process.env.PORT || '5002'
+const portRaw = process.env.PORT || '5000'
 const port = Number.parseInt(String(portRaw), 10)
-const listenPort = Number.isFinite(port) && port > 0 ? port : 5002
+const listenPort = Number.isFinite(port) && port > 0 ? port : 5000
 
 app.listen(listenPort, () => {
   console.log(`✅ Node API Server running at http://127.0.0.1:${listenPort}`)

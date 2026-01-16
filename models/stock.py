@@ -321,7 +321,8 @@ class StockModel:
         """
         try:
             if self.collection is not None:
-                return self.collection.find_one({"stock_code": stock_code}, {"_id": 0})
+                item = self.collection.find_one({"stock_code": stock_code}, {"_id": 0})
+                return self._ensure_datetime_strings(item) if item else None
             
             self._load_file_db()
             with self._cache_lock:
@@ -350,7 +351,9 @@ class StockModel:
                     .skip(skip)
                     .limit(limit)
                 )
-                return list(cursor)
+                results = list(cursor)
+                # 确保日期被转换为字符串
+                return [self._ensure_datetime_strings(item) for item in results]
 
             self._load_file_db()
             with self._cache_lock:

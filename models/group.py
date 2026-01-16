@@ -53,38 +53,74 @@ class GroupModel:
         """
         获取分组列表
         """
-        if self._is_cloud():
-            where_clause = ""
-            if creator_id:
-                where_clause = f'.where({{creator_id: "{creator_id}"}})'
-            
-            query = f'db.collection("{self.collection_name}"){where_clause}.orderBy("created_at", "desc").get()'
-            groups = self.cloud_client.query(query)
-            for g in groups:
-                if "_id" in g:
-                    g["id"] = str(g["_id"])
-                    # del g["_id"] # Keep _id for now as some logic might expect it
-            return groups
-        else:
-            if not self.collection:
-                return []
-            query = {}
-            if creator_id:
-                query["creator_id"] = creator_id
+        try:
+            if self._is_cloud():
+                if not self.cloud_client:
+                    logger.warning("云数据库客户端未初始化，返回空列表")
+                    return []
+                    
+                where_clause = ""
+                if creator_id:
+                    # 使用 json.dumps 确保 creator_id 被正确转义
+                    safe_id = json.dumps(str(creator_id))
+                    where_clause = f'.where({{creator_id: {safe_id}}})'
                 
-            groups = list(self.collection.find(query).sort("created_at", -1))
-            for g in groups:
-                g["id"] = str(g["_id"])
-                del g["_id"]
-            return groups
+                query = f'db.collection("{self.collection_name}"){where_clause}.orderBy("created_at", "desc").get()'
+                try:
+                    groups = self.cloud_client.query(query)
+                except Exception as query_err:
+                    logger.error(f"云数据库查询执行失败: {query_err}")
+                    # 如果是集合不存在，cloud_client.query 内部已经处理并返回了 []
+                    # 这里的 catch 是为了处理其他未预见的异常
+                    return []
+
+                if not isinstance(groups, list):
+                    logger.warning(f"云数据库返回数据非列表格式: {type(groups)}")
+                    return []
+                    
+                for g in groups:
+                    if "_id" in g:
+                        g["id"] = str(g["_id"])
+                return groups
+            else:
+                if not self.collection:
+                    logger.warning("本地数据库连接不可用")
+                    return []
+                query = {}
+                if creator_id:
+                    query["creator_id"] = creator_id
+                    
+                groups = list(self.collection.find(query).sort("created_at", -1))
+                for g in groups:
+                    g["id"] = str(g["_id"])
+                    if "_id" in g:
+                        del g["_id"]
+                    # 转换 datetime 对象为字符串，避免 JSON 序列化失败
+                    for key in ["created_at", "updated_at"]:
+                        if key in g and hasattr(g[key], "isoformat"):
+                            g[key] = g[key].isoformat()
+                    
+                    # 处理成员中的日期
+                    if "members" in g and isinstance(g["members"], list):
+                        for m in g["members"]:
+                            if "added_at" in m and hasattr(m["added_at"], "isoformat"):
+                                m["added_at"] = m["added_at"].isoformat()
+                return groups
+        except Exception as e:
+            logger.error(f"获取分组列表全局异常: {e}", exc_info=True)
+            return []
 
     def get_group_by_id(self, group_id):
         if self._is_cloud():
-            query = f'db.collection("{self.collection_name}").doc("{group_id}").get()'
+            # 使用 where 代替 doc 以确保查询安全，或者确保 group_id 被正确转义
+            # doc() 接受字符串 ID，但如果 ID 格式不正确可能会报错
+            safe_id = json.dumps(str(group_id))
+            query = f'db.collection("{self.collection_name}").doc({safe_id}).get()'
             groups = self.cloud_client.query(query)
-            if groups:
+            if groups and isinstance(groups, list):
                 g = groups[0]
-                g["id"] = str(g["_id"])
+                if "_id" in g:
+                    g["id"] = str(g["_id"])
                 return g
             return None
         else:
@@ -95,7 +131,16 @@ class GroupModel:
                 if group:
                     group["id"] = str(group["_id"])
                     del group["_id"]
-                return group
+                    # 转换 datetime 对象为字符串
+                    for key in ["created_at", "updated_at"]:
+                        if key in group and hasattr(group[key], "isoformat"):
+                            group[key] = group[key].isoformat()
+                    if "members" in group and isinstance(group["members"], list):
+                        for m in group["members"]:
+                            if "added_at" in m and hasattr(m["added_at"], "isoformat"):
+                                m["added_at"] = m["added_at"].isoformat()
+                    return group
+                return None
             except Exception:
                 return None
 

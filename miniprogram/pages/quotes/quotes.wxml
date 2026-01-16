@@ -20,81 +20,97 @@
   <!-- 内容滚动区域 -->
   <scroll-view scroll-y class="content-scroll" style="padding-top: {{statusBarHeight + navBarHeight}}px;">
     
-    <!-- 1. 个股列表展示 (匹配设计图) -->
-    <view class="stock-list-view" wx:if="{{currentTab === '个股'}}">
-      <!-- 次级导航 -->
-      <view class="sub-nav-bar">
-        <view class="sub-nav-item active">全部</view>
-        <!-- 38 菜单图标已移除 -->
-      </view>
-
-      <!-- 搜索框 -->
-      <view class="search-bar">
-        <view class="search-input-box" bindtap="onSearchStock">
-          <text class="search-icon">🔍</text>
-          <text class="search-placeholder">搜索标的</text>
-        </view>
-      </view>
-
-      <!-- 场外横幅 -->
-      <view class="otc-banner">
-        <text class="otc-label">场外</text>
-        <view class="rank-tag">龙虎榜</view>
-        <text class="update-time">{{updateTime}}</text>
-        <view class="arrow-right">></view>
-      </view>
-
-      <!-- 筛选栏 -->
-      <view class="list-filter-bar">
-        <view class="filter-group">
-          <text class="filter-label">期限</text>
-          <view class="chip-group">
-            <view wx:for="{{terms}}" wx:key="*this" 
-                  class="chip {{selectedTerm === item ? 'active' : ''}}" 
-                  bindtap="onTermChange" data-term="{{item}}">{{item}}</view>
+    <!-- 1. 个股详情展示 (矩阵模式) -->
+    <view class="stock-detail-view" wx:if="{{currentTab === '个股'}}">
+      <!-- 股票信息卡片 -->
+      <view class="stock-info-card">
+        <view class="stock-left-info">
+          <view class="stock-name-row">
+            <text class="stock-name">{{currentStock.name}}</text>
+            <text class="stock-code">{{currentStock.code}}</text>
+          </view>
+          <view class="stock-price-row">
+            <text class="price {{currentStock.changePercent >= 0 ? 'up' : 'down'}}">{{currentStock.price}}</text>
+            <text class="change-info {{currentStock.changePercent >= 0 ? 'up' : 'down'}}">{{currentStock.changePercent >= 0 ? '+' : ''}}{{currentStock.changePercent}}%</text>
           </view>
         </view>
-        <view class="filter-group">
-          <view class="dropdown-trigger" bindtap="toggleTraderPicker">
-            <text class="trigger-text">交易商</text>
-            <text class="trigger-arrow {{showTraderPicker ? 'up' : 'down'}}">^</text>
+        <view class="stock-right-actions">
+          <view class="heart-icon {{isFavorited ? 'active' : ''}}" bindtap="toggleFavorite"></view>
+        </view>
+      </view>
+    
+      <!-- 搜索和客服 -->
+      <view class="filter-dropdown-bar">
+        <view class="filter-item" bindtap="onSearchStock">
+          <view class="dropdown-trigger">
+            <text class="trigger-text">搜索标的</text>
+            <text class="search-icon">🔍</text>
           </view>
-          <!-- 交易商选择弹窗 -->
-          <view class="trader-dropdown" wx:if="{{showTraderPicker}}">
-            <view wx:for="{{traders}}" wx:key="code" 
-                  class="trader-option {{selectedTraderCode === item.code ? 'active' : ''}}" 
-                  bindtap="onTraderChange" data-code="{{item.code}}" data-name="{{item.name}}">
-              {{item.name}}
+        </view>
+        <view class="filter-item" bindtap="contactService">
+          <view class="dropdown-trigger">
+            <text class="trigger-text">联系客服</text>
+            <text class="cs-icon">💬</text>
+          </view>
+        </view>
+      </view>
+    
+      <!-- 报价日和交易商筛选 -->
+      <view class="filter-dropdown-bar" style="border-top: none; padding-top: 0;">
+        <view class="filter-item">
+          <text class="filter-label">报价日</text>
+          <view class="dropdown-trigger" bindtap="showDatePicker">
+            <text class="trigger-text">{{selectedQuoteDate}}</text>
+            <text class="trigger-arrow">▼</text>
+          </view>
+        </view>
+        <view class="filter-item">
+          <text class="filter-label">交易商</text>
+          <view class="dropdown-trigger" bindtap="showTraderPicker">
+            <text class="trigger-text">{{selectedTrader}}</text>
+            <text class="trigger-arrow">▼</text>
+          </view>
+        </view>
+      </view>
+    
+      <!-- 矩阵内容区 -->
+      <view class="matrix-container-outer">
+        <view class="biz-tools-bar">
+          <view class="biz-tabs-flat">
+            <view class="biz-tab-item {{bizType === 'vanilla' ? 'active' : ''}}" bindtap="onBizTypeChange" data-type="vanilla">香草</view>
+            <view class="biz-tab-item {{bizType === 'snowball' ? 'active' : ''}}" bindtap="onBizTypeChange" data-type="snowball">雪球</view>
+          </view>
+          <view class="tools-group">
+            <view class="tool-icon-btn" bindtap="goToCalculator">
+              <view class="tool-btn-border">计算器</view>
+            </view>
+            <view class="tool-icon-btn" bindtap="goToWorkspace">
+              <view class="tool-btn-border">工作台</view>
             </view>
           </view>
         </view>
-      </view>
-
-      <!-- 数据表格 -->
-      <view class="data-table">
-        <view class="table-header">
-          <view class="th col-name">标的|代码</view>
-          <view class="th col-change">涨跌幅 <text class="sort-icon">⇅</text></view>
-          <view class="th col-val">平值 <text class="sort-icon">⇅</text></view>
-          <view class="th col-val">虚值105 <text class="sort-icon">⇅</text></view>
-          <view class="th col-val">虚值110 <text class="sort-icon">⇅</text></view>
-        </view>
-        <view class="table-body">
-          <view class="table-row" wx:for="{{hotStocks}}" wx:key="code" bindtap="onViewDetail" data-item="{{item}}">
-            <view class="td col-name">
-              <text class="stock-name">{{item.name}}</text>
-              <text class="stock-code">{{item.code}}</text>
+    
+        <scroll-view class="matrix-scroll-area" scroll-x scroll-y>
+          <view class="matrix-table">
+            <!-- 表头 -->
+            <view class="matrix-tr thead">
+              <view class="matrix-th sticky-col">结构/期限</view>
+              <view class="matrix-th" wx:for="{{matrixColumns}}" wx:key="*this">{{item}}</view>
             </view>
-            <view class="td col-change {{item.changePercent >= 0 ? 'up' : 'down'}}">
-              {{item.changePercent >= 0 ? '+' : ''}}{{item.changePercent}}%
+            <!-- 表体 -->
+            <view class="matrix-tr" wx:for="{{matrixData}}" wx:key="strike" wx:for-item="row">
+              <view class="matrix-td sticky-col">{{row.strike}}</view>
+              <view class="matrix-td {{cell.value === '--' ? 'empty' : 'blue'}}" 
+                    wx:for="{{row.values}}" wx:key="term" wx:for-item="cell"
+                    bindtap="onCellTap" data-strike="{{row.strike}}" data-term="{{cell.term}}">
+                <text class="cell-val-text">{{cell.value}}</text>
+                <view class="cell-badge" wx:if="{{cell.badge}}">{{cell.badge}}</view>
+              </view>
             </view>
-            <view class="td col-val text-gray">{{item.atm}}%</view>
-            <view class="td col-val text-gray">{{item.otm105}}%</view>
-            <view class="td col-val text-gray">{{item.otm110}}%</view>
           </view>
-        </view>
+        </scroll-view>
       </view>
-
+    
       <!-- 加载状态 -->
       <view class="loading-container" wx:if="{{loading}}">
         <view class="loading-spinner"></view>

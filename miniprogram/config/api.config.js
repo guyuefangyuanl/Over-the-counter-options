@@ -11,7 +11,7 @@
 // 开发环境配置
 const DEV_CONFIG = {
   // 后端 API 服务地址（根据实际启动的服务调整）
-  // Node.js 后端在 5002，Flask 后端在 5000
+  // 推荐配置：Flask 后端在 5002，Node.js 后端在 5000
   apiBaseUrl: 'http://localhost:5002/api/v1',
   
   // 云端环境（生产/测试）

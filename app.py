@@ -9,16 +9,30 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 import akshare as ak
 from services.cloud_db import CloudDbClient, CloudDbConfigError
+from flask.json.provider import DefaultJSONProvider
+from bson import ObjectId
+from datetime import datetime
+
+class CustomJSONProvider(DefaultJSONProvider):
+    def default(self, obj):
+        if isinstance(obj, ObjectId):
+            return str(obj)
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 # 配置日志
+log_file = os.path.join(os.path.dirname(__file__), 'server.log')
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler()
+        logging.StreamHandler(),
+        logging.FileHandler(log_file, encoding='utf-8')
     ]
 )
 logger = logging.getLogger(__name__)
+logger.info(f"日志将同时写入到: {log_file}")
 
 # 加载环境变量
 env_dir = os.path.dirname(__file__)
@@ -67,11 +81,12 @@ def init_db():
         return None
 
 def resolve_port() -> int:
-    raw = os.getenv('PORT') or os.getenv('FLASK_PORT') or '5000'
+    # 优先使用 FLASK_PORT，以区分 Node.js 后端的 PORT
+    raw = os.getenv('FLASK_PORT') or os.getenv('PORT') or '5002'
     try:
         port = int(raw)
     except Exception:
-        port = 5000
+        port = 5002
 
     if NODE_ENV == 'development' and 0 < port < 1024 and os.getenv("ALLOW_PRIVILEGED_PORT") != "1":
         return 5000
@@ -87,6 +102,7 @@ def create_app() -> Flask:
     from routes.group import group_bp
 
     flask_app = Flask(__name__)
+    flask_app.json = CustomJSONProvider(flask_app)
     flask_app.config["NODE_ENV"] = NODE_ENV
     flask_app.db = init_db()
     
@@ -152,6 +168,17 @@ def create_app() -> Flask:
     flask_app.register_blueprint(stock_bp, url_prefix='/api/v1/stock')
     flask_app.register_blueprint(admin_bp, url_prefix='/api/v1/admin')
     flask_app.register_blueprint(group_bp, url_prefix='/api/v1')
+    
+    @flask_app.before_request
+    def log_request_info():
+        logger.info(f">>> Request: {request.method} {request.url}")
+        if request.headers.get('X-User-ID'):
+            logger.info(f"User ID: {request.headers.get('X-User-ID')}")
+
+    @flask_app.after_request
+    def log_response_info(response):
+        logger.info(f"<<< Response: {response.status}")
+        return response
 
     # 启动后台任务
     if os.getenv("SKIP_SCHEDULER") != "1":
@@ -189,7 +216,9 @@ def create_app() -> Flask:
 
     @flask_app.errorhandler(500)
     def internal_error(error):
-        logger.error(f"服务器错误: {str(error)}")
+        import traceback
+        logger.error(f"服务器 500 错误: {str(error)}")
+        logger.error(traceback.format_exc())
         return flask_error_response(
             "服务器内部错误" if NODE_ENV == 'production' else str(error),
             code=500,
@@ -197,7 +226,9 @@ def create_app() -> Flask:
 
     @flask_app.errorhandler(Exception)
     def handle_exception(error):
+        import traceback
         logger.error(f"未处理的异常: {str(error)}")
+        logger.error(traceback.format_exc())
         return flask_error_response(
             "服务器错误" if NODE_ENV == 'production' else str(error),
             code=500,

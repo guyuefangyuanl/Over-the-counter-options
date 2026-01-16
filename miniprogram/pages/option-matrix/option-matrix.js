@@ -206,8 +206,15 @@ Page({
     
     if (!quoteDetail) return;
     
-    wx.navigateTo({
-      url: `/pages/quotes/quotes?underlying=${quoteDetail.underlying}&strike=${quoteDetail.strikeType}&period=${quoteDetail.period}`
+    const app = getApp();
+    app.globalData.pendingQuoteParams = {
+      underlying: quoteDetail.underlying,
+      strike: quoteDetail.strikeType,
+      period: quoteDetail.period
+    };
+
+    wx.switchTab({
+      url: '/pages/quotes/quotes'
     });
   },
 
