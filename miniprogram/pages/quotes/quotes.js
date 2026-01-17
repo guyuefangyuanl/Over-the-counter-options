@@ -430,16 +430,24 @@ Page({
   // 点击矩阵单元格
   onCellTap: function(e) {
     const { strike, term } = e.currentTarget.dataset;
-    const { currentStock } = this.data;
+    const { currentStock, matrixData, selectedTrader, selectedTraderCode } = this.data;
     
-    wx.showActionSheet({
-      itemList: [`下单 ${currentStock.name} ${strike} ${term}`, '查看分时图', '分析盈亏'],
-      success: (res) => {
-        if (res.tapIndex === 0) {
-           wx.navigateTo({
-             url: `/pages/order/order?stock=${encodeURIComponent(JSON.stringify(currentStock))}&strike=${strike}&term=${term}`
-           });
-        }
+    // 从矩阵数据中查找费率
+    const row = matrixData.find(r => r.strike === strike);
+    const cell = row ? row.values.find(v => v.term === term) : null;
+    const premiumPercent = cell ? cell.value.replace('%', '') : '';
+
+    this.setData({
+      showOrderModal: true,
+      orderForm: {
+        direction: '买入',
+        traderCode: selectedTraderCode,
+        traderName: selectedTrader,
+        underlying: `${currentStock.name} ${currentStock.code}`,
+        structure: `${strike} - ${term}`,
+        premiumPercent: premiumPercent,
+        notional: 100,
+        buyPrice: ''
       }
     });
   },
@@ -1842,17 +1850,24 @@ Page({
 
   // 根据弹窗表单生成转发文本
   generateOrderTextFromForm: function(form) {
+    const { currentStock } = this.data;
     const time = new Date().toLocaleString('zh-CN');
     const buyPriceText = form.buyPrice ? `${form.buyPrice}元` : '市价';
+    const premiumAmount = (Number(form.notional) * Number(form.premiumPercent) / 100).toFixed(2);
+    
     const text = `【场外期权下单】
-方向：${form.direction}
-交易商：${form.traderCode} (${form.traderName})
 标的资产：${form.underlying}
+当前价格：${currentStock.price}元 (${currentStock.changePercent}%)
+方向：${form.direction}
+交易商：${form.traderName}
 结构期限：${form.structure}
 期权费率：${form.premiumPercent}%
+预计期权费：${premiumAmount}万元
 名义本金：${form.notional}万元
 买入价格：${buyPriceText}
-时间：${time}`;
+询价时间：${time}
+
+注：以上报价仅供参考，具体以交易商确认为准。`;
     return text;
   },
 
@@ -2003,6 +2018,22 @@ Page({
           title: '文本已复制',
           icon: 'success'
         });
+      }
+    });
+  },
+
+  // 从表单复制订单文本
+  copyOrderTextFromForm: function() {
+    const orderText = this.generateOrderTextFromForm(this.data.orderForm);
+    
+    wx.setClipboardData({
+      data: orderText,
+      success: () => {
+        wx.showToast({
+          title: '下单文本已复制',
+          icon: 'success'
+        });
+        this.setData({ showOrderModal: false });
       }
     });
   },

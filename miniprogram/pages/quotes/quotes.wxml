@@ -521,4 +521,77 @@
       </view>
     </view>
   </view>
+
+  <!-- 下单弹窗 -->
+  <view class="modal-mask {{showOrderModal ? 'fade-in' : ''}}" wx:if="{{showOrderModal}}" bindtap="closeOrderModal" catchtouchmove="preventTouchMove">
+    <view class="order-modal-container" catchtap="stopBubble">
+      <view class="modal-header">
+        <text class="modal-title">下单</text>
+        <view class="modal-close" bindtap="closeOrderModal">×</view>
+      </view>
+      
+      <scroll-view scroll-y class="modal-content">
+        <view class="order-form">
+          <view class="form-item">
+            <text class="form-label">方向<text class="required">*</text></text>
+            <picker bindchange="changeDirection" value="{{orderForm.direction === '买入' ? 0 : 1}}" range="{{['买入', '卖出']}}">
+              <view class="form-select">
+                <text>{{orderForm.direction}}</text>
+                <text class="arrow">▼</text>
+              </view>
+            </picker>
+          </view>
+          
+          <view class="form-item">
+            <text class="form-label">交易商</text>
+            <view class="form-value">{{orderForm.traderName || 'ZJGJ'}}</view>
+          </view>
+          
+          <view class="form-item">
+            <text class="form-label">标的资产</text>
+            <view class="form-value">{{orderForm.underlying}}</view>
+          </view>
+          
+          <view class="form-item">
+            <text class="form-label">结构期限</text>
+            <view class="form-value">{{orderForm.structure}}</view>
+          </view>
+          
+          <view class="form-item">
+            <text class="form-label">期权费率</text>
+            <view class="form-input-wrap">
+              <input type="digit" class="form-input" value="{{orderForm.premiumPercent}}" bindinput="updateOrderField" data-field="premiumPercent" />
+              <text class="input-unit">%</text>
+            </view>
+          </view>
+          
+          <view class="form-item">
+            <text class="form-label">名义本金<text class="required">*</text></text>
+            <view class="form-input-wrap">
+              <input type="digit" class="form-input" value="{{orderForm.notional}}" bindinput="updateOrderField" data-field="notional" />
+              <text class="input-unit">万元</text>
+            </view>
+          </view>
+          
+          <view class="form-item">
+            <text class="form-label">买入价格<text class="required">*</text></text>
+            <view class="form-input-wrap">
+              <input type="digit" class="form-input" value="{{orderForm.buyPrice}}" placeholder="不输入默认为市价" bindinput="updateOrderField" data-field="buyPrice" />
+              <text class="input-unit">元</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+      
+      <view class="modal-footer order-footer">
+        <button class="modal-btn cancel-btn" bindtap="closeOrderModal">取消</button>
+        <button class="modal-btn forward-btn" bindtap="confirmForwardText">转发文本</button>
+        <button class="modal-btn copy-btn" bindtap="copyOrderTextFromForm">复制文本</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 转发文本预览（画板，隐藏） -->
+  <canvas type="2d" id="forwardCanvas2d" style="width: 600px; height: 800px; position: fixed; left: -1000px; top: -1000px;"></canvas>
+  <canvas canvas-id="forwardCanvas" style="width: 600px; height: 800px; position: fixed; left: -1000px; top: -1000px;"></canvas>
 </view>
