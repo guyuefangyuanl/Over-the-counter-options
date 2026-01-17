@@ -12,12 +12,31 @@ Page({
     // 询价表单数据
     inquiryForm: {
       selectedProduct: null,
-      quantity: '',
+      optionType: 'call',       // call, put
+      structure: 'vanilla',    // vanilla, snowball, etc.
+      term: '1M',              // 1M, 3M, 6M, etc.
+      notionalAmount: '',      // 名义本金 (万元)
+      strikePrice: '100',      // 行权价 (%)
+      selectedDealers: ['CICC'], // 选中的交易商
       contactName: '',
       contactPhone: '',
       contactEmail: '',
       notes: ''
     },
+
+    // 选项列表
+    structureOptions: [
+      { text: '香草 (Vanilla)', value: 'vanilla' },
+      { text: '雪球 (Snowball)', value: 'snowball' },
+      { text: '凤凰 (Phoenix)', value: 'phoenix' },
+    ],
+    termOptions: [
+      { text: '1个月 (1M)', value: '1M' },
+      { text: '3个月 (3M)', value: '3M' },
+      { text: '6个月 (6M)', value: '6M' },
+      { text: '1年 (1Y)', value: '1Y' },
+      { text: '自定义', value: 'custom' },
+    ],
     
     // 表单验证错误
     formErrors: {},
@@ -103,6 +122,7 @@ Page({
     showDeleteGroupDialog: false,  // 删除确认弹窗
     deleteMigrationCount: 0,       // 需要迁移的自选数量
     availableTargetGroups: [],     // 可用于迁移的目标分组
+    deleteRemoveFavorites: false,  // 删除分组时是否同步移出自选
     
     // 添加自选弹窗相关状态
     showAddFavoritesPopup: false,  // 是否显示添加自选弹窗
@@ -166,23 +186,23 @@ Page({
   fetchQuoteList() {
     const db = wx.cloud.database();
     // 从云数据库 'quotes' 集合获取数据
-    db.collection('quotes').limit(20).get().then(res => {
+    db.collection('quotes').orderBy('updateTime', 'desc').limit(50).get().then(res => {
       // 数据处理：添加一些前端需要的辅助字段
       const list = res.data.map((item, index) => ({
         ...item,
         id: item._id || index, // 确保有id字段
-        type: 'stock', // 默认为股票类型
-        group: 'all',  // 默认分组
-        term: '1M',    // 默认期限
-        structure: 'vanilla', // 默认结构
-        rates: { '100': item.price || 0 } // 模拟报价结构
+        type: item.type || 'stock', 
+        group: item.group || 'all',
+        term: item.term || '1M',
+        structure: item.structure || 'vanilla',
+        rates: item.rates || { '100': item.price || 0 }
       }));
       
       this.setData({ _fullQuoteList: list });
       this.filterQuoteList();
       console.log('云数据库获取行情成功', list);
     }).catch(err => {
-      console.error('云数据库获取失败', err);
+      console.error('云数据库获取行情失败', err);
       wx.showToast({ title: '行情加载失败', icon: 'none' });
     });
   },
@@ -210,14 +230,18 @@ Page({
 
   // 加载自定义分组
   loadCustomGroups() {
-    try {
+    const db = wx.cloud.database();
+    db.collection('groups').get().then(res => {
+      this.setData({ customGroups: res.data });
+      this.computeGroupCounts();
+    }).catch(err => {
+      console.error('从云数据库加载自定义分组失败', err);
+      // 备选方案：尝试从本地存储加载
       const groups = wx.getStorageSync(CUSTOM_GROUPS_STORAGE_KEY);
       if (groups) {
         this.setData({ customGroups: groups });
       }
-    } catch (e) {
-      console.error('加载自定义分组失败', e);
-    }
+    });
   },
 
   // 保存自定义分组
@@ -426,7 +450,12 @@ Page({
       showInquiryForm: false,
       inquiryForm: {
         selectedProduct: null,
-        quantity: '',
+        optionType: 'call',
+        structure: 'vanilla',
+        term: '1M',
+        notionalAmount: '',
+        strikePrice: '100',
+        selectedDealers: ['CICC'],
         contactName: '',
         contactPhone: '',
         contactEmail: '',
@@ -454,6 +483,20 @@ Page({
     this.submitInquiry();
   },
 
+  // 询价单参数变更回调
+  onOptionTypeChange(e) {
+    this.setData({ 'inquiryForm.optionType': e.detail });
+  },
+  onStructureChange(e) {
+    this.setData({ 'inquiryForm.structure': e.detail });
+  },
+  onTermChange(e) {
+    this.setData({ 'inquiryForm.term': e.detail });
+  },
+  onDealersChange(e) {
+    this.setData({ 'inquiryForm.selectedDealers': e.detail });
+  },
+
   // 提交询价
   submitInquiry() {
     // 表单验证
@@ -461,10 +504,13 @@ Page({
     const { inquiryForm } = this.data;
     
     if (!inquiryForm.selectedProduct) {
-      errors.selectedProduct = '请选择产品';
+      errors.selectedProduct = '请选择标的';
     }
-    if (!inquiryForm.quantity) {
-      errors.quantity = '请输入数量';
+    if (!inquiryForm.notionalAmount) {
+      errors.notionalAmount = '请输入名义本金';
+    }
+    if (!inquiryForm.strikePrice) {
+      errors.strikePrice = '请输入行权价';
     }
     if (!inquiryForm.contactName) {
       errors.contactName = '请输入联系人';
@@ -475,23 +521,33 @@ Page({
     
     if (Object.keys(errors).length > 0) {
       this.setData({ formErrors: errors });
+      wx.showToast({ title: '请完善信息', icon: 'none' });
       return;
     }
     
     this.setData({ isSubmitting: true });
     
-    // 提交到云数据库 'inquires' 集合
+    // 构造提交数据
+    const submitData = {
+      ...inquiryForm,
+      productName: inquiryForm.selectedProduct.name,
+      productCode: inquiryForm.selectedProduct.code,
+      createTime: new Date().toISOString(),
+      status: 'pending'
+    };
+    
+    // 提交到云数据库 'inquiries' 集合
     const db = wx.cloud.database();
-    db.collection('inquires').add({
+    db.collection('inquiries').add({
       data: {
-        ...inquiryForm,
+        ...submitData,
         createTime: db.serverDate(),
-        status: 'pending'
+        updateTime: db.serverDate(),
+        userId: '{openid}' 
       }
     }).then(res => {
       wx.showToast({ title: '询价提交成功', icon: 'success' });
       this.hideInquiryForm();
-      console.log('询价提交成功', res._id);
     }).catch(err => {
       console.error('提交询价失败', err);
       wx.showToast({ title: '提交失败，请重试', icon: 'none' });
@@ -607,11 +663,19 @@ Page({
     
     this.setData({ newGroupLoading: true });
     
-    // 模拟新建分组
-    setTimeout(() => {
+    const db = wx.cloud.database();
+    const newGroupName = this.data.newGroupName.trim();
+    
+    db.collection('groups').add({
+      data: {
+        name: newGroupName,
+        createTime: db.serverDate(),
+        updateTime: db.serverDate()
+      }
+    }).then(res => {
       const newGroup = {
-        id: 'group' + Date.now(),
-        name: this.data.newGroupName.trim()
+        id: res._id,
+        name: newGroupName
       };
       
       const customGroups = [...this.data.customGroups, newGroup];
@@ -621,10 +685,13 @@ Page({
         newGroupLoading: false
       });
       
-      this.saveCustomGroups(); // 保存到本地存储
-      
       wx.showToast({ title: '新建分组成功', icon: 'none' });
-    }, 500);
+      this.computeGroupCounts();
+    }).catch(err => {
+      console.error('新建分组失败', err);
+      wx.showToast({ title: '创建失败', icon: 'none' });
+      this.setData({ newGroupLoading: false });
+    });
   },
 
   // 切换编辑模式
@@ -678,20 +745,32 @@ Page({
   confirmRenameGroup() {
     if (!this.data.canConfirmRename) return;
     
-    const customGroups = this.data.customGroups.map(g => 
-      g.id === this.data.editingGroupId 
-        ? { ...g, name: this.data.editingGroupName.trim() }
-        : g
-    );
+    const db = wx.cloud.database();
+    const groupId = this.data.editingGroupId;
+    const newName = this.data.editingGroupName.trim();
     
-    this.setData({ 
-      customGroups,
-      showRenameGroupDialog: false
+    db.collection('groups').doc(groupId).update({
+      data: {
+        name: newName,
+        updateTime: db.serverDate()
+      }
+    }).then(() => {
+      const customGroups = this.data.customGroups.map(g => 
+        g.id === groupId || g._id === groupId 
+          ? { ...g, name: newName }
+          : g
+      );
+      
+      this.setData({ 
+        customGroups,
+        showRenameGroupDialog: false
+      });
+      
+      wx.showToast({ title: '重命名成功', icon: 'none' });
+    }).catch(err => {
+      console.error('重命名分组失败', err);
+      wx.showToast({ title: '重命名失败', icon: 'none' });
     });
-    
-    this.saveCustomGroups(); // 保存到本地存储
-
-    wx.showToast({ title: '重命名成功', icon: 'none' });
   },
 
   // 打开删除分组弹窗
@@ -712,6 +791,7 @@ Page({
     this.setData({
       showDeleteGroupDialog: true,
       editingGroupId: id,
+      deleteRemoveFavorites: false,
       deleteMigrationCount: migrationCount,
       availableTargetGroups,
       selectedTargetGroupId: availableTargetGroups.length > 0 ? availableTargetGroups[0].id : null
@@ -720,7 +800,11 @@ Page({
 
   // 关闭删除分组弹窗
   closeDeleteGroupDialog() {
-    this.setData({ showDeleteGroupDialog: false });
+    this.setData({ showDeleteGroupDialog: false, deleteRemoveFavorites: false });
+  },
+
+  toggleDeleteRemoveFavorites() {
+    this.setData({ deleteRemoveFavorites: !this.data.deleteRemoveFavorites });
   },
 
   // 选择迁移目标分组
@@ -733,41 +817,49 @@ Page({
 
   // 确认删除分组
   confirmDeleteGroup() {
-    const { editingGroupId, deleteMigrationCount, availableTargetGroups, selectedTargetGroupId, favoritesById } = this.data;
-    
-    let updatedFavorites = { ...favoritesById };
-    
-    // 如果需要迁移
-    if (deleteMigrationCount > 0 && availableTargetGroups.length > 0) {
-      const targetGroupId = selectedTargetGroupId;
+    const { editingGroupId, favoritesById } = this.data;
+    const removeFavorites = this.data.deleteRemoveFavorites === true;
+    const db = wx.cloud.database();
+
+    db.collection('groups').doc(editingGroupId).remove().then(() => {
+      let updatedFavorites = { ...favoritesById };
+
       Object.keys(updatedFavorites).forEach(id => {
-        if ((updatedFavorites[id].groupId || 'all') === editingGroupId) {
-          updatedFavorites[id].groupId = targetGroupId;
-        }
-      });
-    } else {
-      // 直接删除该分组的自选
-      Object.keys(updatedFavorites).forEach(id => {
-        if ((updatedFavorites[id].groupId || 'all') === editingGroupId) {
+        const fav = updatedFavorites[id];
+        if ((fav && (fav.groupId || 'all')) !== editingGroupId) return;
+
+        if (removeFavorites) {
           delete updatedFavorites[id];
+          return;
         }
+
+        const next = { ...fav };
+        if ('groupId' in next) {
+          delete next.groupId;
+        }
+        updatedFavorites[id] = next;
       });
-    }
-    
-    // 删除分组
-    const customGroups = this.data.customGroups.filter(g => g.id !== editingGroupId);
-    
-    this.setData({ 
-      customGroups,
-      favoritesById: updatedFavorites,
-      showDeleteGroupDialog: false
+      
+      // 删除分组
+      const customGroups = this.data.customGroups.filter(g => (g.id || g._id) !== editingGroupId);
+      const nextActiveSubTab = this.data.activeSubTab === editingGroupId ? 'all' : this.data.activeSubTab;
+      
+      this.setData({ 
+        customGroups,
+        favoritesById: updatedFavorites,
+        showDeleteGroupDialog: false,
+        deleteRemoveFavorites: false,
+        activeSubTab: nextActiveSubTab
+      }, () => {
+        this.saveFavorites();
+        this.filterQuoteList();
+        this.computeGroupCounts();
+        wx.showToast({ title: '删除成功', icon: 'none' });
+      });
+    }).catch(err => {
+      console.error('删除分组失败', err);
+      wx.showToast({ title: '删除失败', icon: 'none' });
     });
-    
-    this.saveFavorites();
-    this.saveCustomGroups(); // 保存到本地存储
-    this.filterQuoteList();
-    this.computeGroupCounts();
-    wx.showToast({ title: '删除成功', icon: 'none' });
   },
 
   openEditGroups() {

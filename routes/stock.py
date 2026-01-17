@@ -5,7 +5,7 @@
 """
 
 from flask import Blueprint, request, current_app, jsonify
-from utils.response import success_response, error_response, paginated_response
+from backend_utils.response import success_response, error_response, paginated_response
 from services.stock_service import StockService
 from models.stock import StockModel
 from pymongo.errors import PyMongoError
@@ -66,10 +66,6 @@ def get_realtime_data(symbol):
         
         # 获取数据库实例并保存数据
         db = current_app.db
-        if db is None:
-            logger.error("数据库连接未初始化")
-            return jsonify(error_response("数据库连接未初始化", 500)), 500
-            
         stock_model = StockModel(db)
         
         # 保存数据到数据库
@@ -274,10 +270,6 @@ def get_stock_list():
         
         # 获取数据库实例
         db = current_app.db
-        if db is None:
-            logger.error("数据库连接未初始化")
-            return jsonify(error_response("数据库连接未初始化", 500)), 500
-            
         stock_model = StockModel(db)
         
         # 获取股票列表

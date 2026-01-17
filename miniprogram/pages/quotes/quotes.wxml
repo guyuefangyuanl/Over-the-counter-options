@@ -20,103 +20,578 @@
   <!-- 内容滚动区域 -->
   <scroll-view scroll-y class="content-scroll" style="padding-top: {{statusBarHeight + navBarHeight}}px;">
     
-    <!-- 2. 次级筛选栏 -->
-    <view class="sub-filter-bar">
-      <view class="sub-filters">
-        <view class="sub-filter-item {{subFilter === '全部' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="全部">全部</view>
-        <view class="sub-filter-item {{subFilter === '持仓' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="持仓">持仓</view>
-        <view class="sub-filter-item {{subFilter === '沪深' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="沪深">沪深</view>
-        <view class="sub-filter-item {{subFilter === '指数' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="指数">指数</view>
-      </view>
-      <view class="filter-right">
-         <view class="vanilla-tag">
-            <text>香草看涨</text>
-         </view>
-         <view class="data-info">
-            <text class="info-label">数据说明</text>
-            <view class="info-icon">?</view>
-         </view>
-      </view>
-    </view>
-
-    <!-- 3. 搜索框 -->
-    <view class="search-bar">
-      <view class="search-input-box" bindtap="onSearchStock">
-        <text class="search-icon">🔍</text>
-        <text class="search-placeholder">搜索标的</text>
-      </view>
-    </view>
-
-    <!-- 4. 期限和报价商 -->
-    <view class="term-trader-bar">
-      <view class="term-selector">
-        <view class="term-item {{selectedTerm === '1M' ? 'active' : ''}}" bindtap="onTermChange" data-term="1M">1M</view>
-        <view class="term-item {{selectedTerm === '2M' ? 'active' : ''}}" bindtap="onTermChange" data-term="2M">2M</view>
-        <view class="term-item {{selectedTerm === '3M' ? 'active' : ''}}" bindtap="onTermChange" data-term="3M">3M</view>
-        <view class="term-item {{selectedTerm === '6M' ? 'active' : ''}}" bindtap="onTermChange" data-term="6M">6M</view>
-      </view>
-      <view class="trader-selector-wrapper">
-        <dropdown-select 
-          options="{{traders}}" 
-          value="{{selectedTraderCode}}" 
-          label-key="name" 
-          value-key="code"
-          placeholder="报价商"
-          bind:change="onTraderChangeFromComponent" />
-      </view>
-    </view>
-
-    <!-- 5. 数据表格 -->
-    <view class="data-table">
-      <view class="table-header">
-        <view class="th col-check" wx:if="{{isEditing}}"></view>
-        <view class="th col-name">标的|代码</view>
-        <view class="th col-change">涨跌幅 <text class="sort-icon">⇅</text></view>
-        <view class="th col-val">平值 <text class="sort-icon">⇅</text></view>
-        <view class="th col-val">虚值105 <text class="sort-icon">⇅</text></view>
-        <view class="th col-val">虚值110 <text class="sort-icon">⇅</text></view>
-      </view>
-      <view class="table-body">
-        <view class="table-row" wx:for="{{watchlist}}" wx:key="code" bindtap="onViewDetail" data-item="{{item}}">
-          <view class="td col-check" wx:if="{{isEditing}}">
-             <!-- 简单复选框样式 -->
-             <view class="checkbox {{utils.includes(selectedForEdit, item.code) ? 'checked' : ''}}"></view>
+    <!-- 1. 个股详情展示 (矩阵模式) -->
+    <view class="stock-detail-view" wx:if="{{currentTab === '个股'}}">
+      <!-- 股票信息卡片 -->
+      <view class="stock-info-card">
+        <view class="stock-left-info">
+          <view class="stock-name-row">
+            <text class="stock-name">{{currentStock.name}}</text>
+            <text class="stock-code">{{currentStock.code}}</text>
           </view>
-          <view class="td col-name">
-            <text class="stock-name">{{item.name}}</text>
-            <text class="stock-code">{{item.code}}</text>
+          <view class="stock-price-row">
+            <text class="price {{currentStock.changePercent >= 0 ? 'up' : 'down'}}">{{currentStock.price}}</text>
+            <text class="change-info {{currentStock.changePercent >= 0 ? 'up' : 'down'}}">{{currentStock.changePercent >= 0 ? '+' : ''}}{{currentStock.changePercent}}%</text>
           </view>
-          <view class="td col-change {{item.changePercent >= 0 ? 'up' : 'down'}}">
-            {{item.changePercent >= 0 ? '+' : ''}}{{item.changePercent}}%
-          </view>
-          <view class="td col-val text-blue">{{item.atm}}%</view>
-          <view class="td col-val text-blue">{{item.otm105}}%</view>
-          <view class="td col-val text-blue">{{item.otm110}}%</view>
+        </view>
+        <view class="stock-right-actions">
+          <view class="heart-icon {{isFavorited ? 'active' : ''}}" bindtap="toggleFavorite"></view>
         </view>
       </view>
+    
+      <!-- 搜索和客服 -->
+      <view class="filter-dropdown-bar">
+        <view class="filter-item" bindtap="onSearchStock">
+          <view class="dropdown-trigger">
+            <text class="trigger-text">搜索标的</text>
+            <text class="search-icon">🔍</text>
+          </view>
+        </view>
+        <view class="filter-item" bindtap="contactService">
+          <view class="dropdown-trigger">
+            <text class="trigger-text">联系客服</text>
+            <text class="cs-icon">💬</text>
+          </view>
+        </view>
+      </view>
+    
+      <!-- 报价日和交易商筛选 -->
+      <view class="filter-dropdown-bar" style="border-top: none; padding-top: 0;">
+        <view class="filter-item">
+          <text class="filter-label">报价日</text>
+          <view class="dropdown-trigger" bindtap="showDatePicker">
+            <text class="trigger-text">{{selectedQuoteDate}}</text>
+            <text class="trigger-arrow">▼</text>
+          </view>
+        </view>
+        <view class="filter-item">
+          <text class="filter-label">交易商</text>
+          <view class="dropdown-trigger" bindtap="showTraderPicker">
+            <text class="trigger-text">{{selectedTrader}}</text>
+            <text class="trigger-arrow">▼</text>
+          </view>
+        </view>
+      </view>
+    
+      <!-- 矩阵内容区 -->
+      <view class="matrix-container-outer">
+        <view class="biz-tools-bar">
+          <view class="biz-tabs-flat">
+            <view class="biz-tab-item {{bizType === 'vanilla' ? 'active' : ''}}" bindtap="onBizTypeChange" data-type="vanilla">香草</view>
+            <view class="biz-tab-item {{bizType === 'snowball' ? 'active' : ''}}" bindtap="onBizTypeChange" data-type="snowball">雪球</view>
+          </view>
+          <view class="tools-group">
+            <view class="tool-icon-btn" bindtap="goToCalculator">
+              <view class="tool-btn-border">计算器</view>
+            </view>
+            <view class="tool-icon-btn" bindtap="goToWorkspace">
+              <view class="tool-btn-border">工作台</view>
+            </view>
+          </view>
+        </view>
+    
+        <scroll-view class="matrix-scroll-area" scroll-x scroll-y>
+          <view class="matrix-table">
+            <!-- 表头 -->
+            <view class="matrix-tr thead">
+              <view class="matrix-th sticky-col">结构/期限</view>
+              <view class="matrix-th" wx:for="{{matrixColumns}}" wx:key="*this">{{item}}</view>
+            </view>
+            <!-- 表体 -->
+            <view class="matrix-tr" wx:for="{{matrixData}}" wx:key="strike" wx:for-item="row">
+              <view class="matrix-td sticky-col">{{row.strike}}</view>
+              <view class="matrix-td {{cell.value === '--' ? 'empty' : 'blue'}}" 
+                    wx:for="{{row.values}}" wx:key="term" wx:for-item="cell"
+                    bindtap="onCellTap" data-strike="{{row.strike}}" data-term="{{cell.term}}">
+                <text class="cell-val-text">{{cell.value}}</text>
+                <view class="cell-badge" wx:if="{{cell.badge}}">{{cell.badge}}</view>
+              </view>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+    
+      <!-- 加载状态 -->
+      <view class="loading-container" wx:if="{{loading}}">
+        <view class="loading-spinner"></view>
+        <text>数据加载中...</text>
+      </view>
     </view>
 
-    <!-- 6. 底部按钮 -->
-    <view class="bottom-btns" wx:if="{{!isEditing}}">
-      <view class="btn-outline blue" bindtap="goToSearchStock">
-        <text class="plus">+</text>添加自选
+    <!-- 2. 指数列表展示 (匹配设计图) -->
+    <view class="index-list-view" wx:if="{{currentTab === '指数'}}">
+      <!-- 次级导航 -->
+      <view class="sub-nav-bar">
+        <view class="sub-nav-item active">全部</view>
       </view>
-      <view class="btn-outline gray" bindtap="onEditFavorites">
-        编辑自选
+
+      <!-- 搜索框 -->
+      <view class="search-bar">
+        <view class="search-input-box" bindtap="onSearchStock">
+          <text class="search-icon">🔍</text>
+          <text class="search-placeholder">搜索标的</text>
+        </view>
+      </view>
+
+      <!-- 横幅 -->
+      <view class="otc-banner">
+        <view class="otc-tag index-tag">沪深指数</view>
+        <text class="update-time">{{indexUpdate}}</text>
+      </view>
+
+      <!-- 指数卡片 -->
+      <view class="index-cards-container">
+        <view class="index-card" wx:for="{{topIndices}}" wx:key="name">
+          <view class="index-name">{{item.name}}</view>
+          <view class="index-price {{item.changePercent >= 0 ? 'up' : 'down'}}">{{item.price}}</view>
+          <view class="index-change {{item.changePercent >= 0 ? 'up' : 'down'}}">{{item.changePercent >= 0 ? '+' : ''}}{{item.changePercent}}%</view>
+        </view>
+      </view>
+
+      <!-- 筛选栏 -->
+      <view class="list-filter-bar">
+        <view class="filter-group">
+          <text class="filter-label">期限</text>
+          <view class="chip-group">
+            <view wx:for="{{terms}}" wx:key="*this" 
+                  class="chip {{selectedTerm === item ? 'active' : ''}}" 
+                  bindtap="onTermChange" data-term="{{item}}">{{item}}</view>
+          </view>
+        </view>
+        <view class="filter-group">
+          <view class="dropdown-trigger" bindtap="toggleTraderPicker">
+            <text class="trigger-text">交易商</text>
+            <text class="trigger-arrow {{showTraderPicker ? 'up' : 'down'}}">^</text>
+          </view>
+          <!-- 交易商选择弹窗 -->
+          <view class="trader-dropdown" wx:if="{{showTraderPicker}}">
+            <view wx:for="{{traders}}" wx:key="code" 
+                  class="trader-option {{selectedTraderCode === item.code ? 'active' : ''}}" 
+                  bindtap="onTraderChange" data-code="{{item.code}}" data-name="{{item.name}}">
+              {{item.name}}
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 数据表格 -->
+      <view class="data-table">
+        <view class="table-header">
+          <view class="th col-name">标的|代码</view>
+          <view class="th col-change">涨跌幅 <text class="sort-icon">⇅</text></view>
+          <view class="th col-val">平值 <text class="sort-icon">⇅</text></view>
+          <view class="th col-val">虚值105 <text class="sort-icon">⇅</text></view>
+          <view class="th col-val">虚值110 <text class="sort-icon">⇅</text></view>
+        </view>
+        <view class="table-body">
+          <view class="table-row" wx:for="{{indexQuotes}}" wx:key="code" bindtap="onViewDetail" data-item="{{item}}">
+            <view class="td col-name">
+              <text class="stock-name">{{item.name}}</text>
+              <text class="stock-code">{{item.code}}</text>
+            </view>
+            <view class="td col-change {{item.changePercent >= 0 ? 'up' : 'down'}}">
+              {{item.changePercent >= 0 ? '+' : ''}}{{item.changePercent}}%
+            </view>
+            <view class="td col-val text-gray">{{item.atm}}%</view>
+            <view class="td col-val text-gray">{{item.otm105}}%</view>
+            <view class="td col-val text-gray">{{item.otm110}}%</view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 加载状态 -->
+      <view class="loading-container" wx:if="{{loading}}">
+        <view class="loading-spinner"></view>
+        <text>数据加载中...</text>
       </view>
     </view>
-    
-    <!-- 编辑模式底部按钮 -->
-    <view class="bottom-btns" wx:if="{{isEditing}}">
-      <view class="btn-outline gray" bindtap="cancelEditing">
-        取消
+
+    <!-- 3. ETF列表展示 (匹配设计图) -->
+    <view class="etf-list-view" wx:if="{{currentTab === 'ETF'}}">
+      <!-- 次级导航 -->
+      <view class="sub-nav-bar">
+        <view class="sub-nav-item active">全部</view>
       </view>
-      <view class="btn-outline blue" bindtap="deleteSelectedFavorites">
-        删除选中
+
+      <!-- 搜索框 -->
+      <view class="search-bar">
+        <view class="search-input-box" bindtap="onSearchStock">
+          <text class="search-icon">🔍</text>
+          <text class="search-placeholder">搜索标的</text>
+        </view>
+      </view>
+
+      <!-- 横幅 -->
+      <view class="otc-banner">
+        <view class="otc-tag etf-tag">精选ETF</view>
+        <text class="update-time">{{etfUpdate}}</text>
+      </view>
+
+      <!-- 筛选栏 -->
+      <view class="list-filter-bar">
+        <view class="filter-group">
+          <text class="filter-label">期限</text>
+          <view class="chip-group">
+            <view wx:for="{{terms}}" wx:key="*this" 
+                  class="chip {{selectedTerm === item ? 'active' : ''}}" 
+                  bindtap="onTermChange" data-term="{{item}}">{{item}}</view>
+          </view>
+        </view>
+        <view class="filter-group">
+          <view class="dropdown-trigger" bindtap="toggleTraderPicker">
+            <text class="trigger-text">交易商</text>
+            <text class="trigger-arrow {{showTraderPicker ? 'up' : 'down'}}">^</text>
+          </view>
+          <!-- 交易商选择弹窗 -->
+          <view class="trader-dropdown" wx:if="{{showTraderPicker}}">
+            <view wx:for="{{traders}}" wx:key="code" 
+                  class="trader-option {{selectedTraderCode === item.code ? 'active' : ''}}" 
+                  bindtap="onTraderChange" data-code="{{item.code}}" data-name="{{item.name}}">
+              {{item.name}}
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 数据表格 -->
+      <view class="data-table">
+        <view class="table-header">
+          <view class="th col-name">标的|代码</view>
+          <view class="th col-change">涨跌幅 <text class="sort-icon">⇅</text></view>
+          <view class="th col-val">平值 <text class="sort-icon">⇅</text></view>
+          <view class="th col-val">虚值105 <text class="sort-icon">⇅</text></view>
+          <view class="th col-val">虚值110 <text class="sort-icon">⇅</text></view>
+        </view>
+        <view class="table-body">
+          <view class="table-row" wx:for="{{etfQuotes}}" wx:key="code" bindtap="onViewDetail" data-item="{{item}}">
+            <view class="td col-name">
+              <text class="stock-name">{{item.name}}</text>
+              <text class="stock-code">{{item.code}}</text>
+            </view>
+            <view class="td col-change {{item.changePercent >= 0 ? 'up' : 'down'}}">
+              {{item.changePercent >= 0 ? '+' : ''}}{{item.changePercent}}%
+            </view>
+            <view class="td col-val text-gray">{{item.atm}}%</view>
+            <view class="td col-val text-gray">{{item.otm105}}%</view>
+            <view class="td col-val text-gray">{{item.otm110}}%</view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 加载状态 -->
+      <view class="loading-container" wx:if="{{loading}}">
+        <view class="loading-spinner"></view>
+        <text>数据加载中...</text>
       </view>
     </view>
+
+    <!-- 6. 原有的自选/列表筛选逻辑 (仅在自选模式下显示) -->
+    <block wx:if="{{currentTab === '自选'}}">
+      <!-- 原有的次级筛选栏 -->
+      <view class="sub-filter-bar">
+        <view class="sub-filters" style="position: relative; left: 11rpx; top: -77rpx; flex: 1; min-width: 0; display: flex; box-sizing: border-box">
+          <view class="sub-filter-item {{subFilter === '全部' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="全部">全部</view>
+          <view class="sub-filter-item {{subFilter === '持仓' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="持仓">持仓</view>
+          <view class="sub-filter-item {{subFilter === '沪深' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="沪深">沪深</view>
+          <view class="sub-filter-item {{subFilter === '指数' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="指数">指数</view>
+          <scroll-view
+            class="top-groups {{topGroupAnimationClass}}"
+            scroll-x
+            show-scrollbar="{{false}}"
+            wx:if="{{topGroups.length > 0}}"
+          >
+            <view class="top-groups-inner">
+              <view
+                class="sub-filter-item top-group-item {{activeGroupId === item.id ? 'active' : ''}}"
+                wx:for="{{topGroups}}"
+                wx:key="id"
+                bindtap="onSwitchGroup"
+                data-id="{{item.id}}"
+                hover-class="top-group-item-hover"
+                hover-stay-time="80"
+              >
+                <text class="top-group-name">{{item.name}}</text>
+                <text class="top-group-count-inline">({{groupCountsById[item.id] || 0}})</text>
+              </view>
+            </view>
+          </scroll-view>
+          <view class="top-group-skeleton" wx:if="{{loadingGroups}}">
+            <view class="top-group-skeleton-chip"></view>
+          </view>
+        </view>
+        <view class="filter-right-area">
+          <view class="group-func-btn" bindtap="onGroupClick" aria-label="分组功能" role="button">
+             <view class="group-icon-svg">
+                <view class="svg-line"></view>
+                <view class="svg-line"></view>
+                <view class="svg-line"></view>
+             </view>
+          </view>
+          <view class="filter-right-row">
+             <view class="vanilla-tag" style="position: relative; left: -425rpx; top: -6rpx; width: 119rpx; display: block; box-sizing: border-box; height: 51rpx">
+                <text>香草看涨</text>
+             </view>
+             <view class="data-info" bindtap="showDataInfo">
+                <text class="info-label" style="position: relative; left: -29rpx; top: 9rpx; height: 44rpx; display: block; box-sizing: border-box">数据说明</text>
+                <view class="info-icon">?</view>
+             </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 搜索框 -->
+      <view class="search-bar">
+        <view class="search-input-box" bindtap="onSearchStock">
+          <text class="search-icon">🔍</text>
+          <text class="search-placeholder">搜索标的</text>
+        </view>
+      </view>
+
+      <!-- 数据表格 -->
+      <view class="data-table">
+        <view class="table-header">
+          <view class="th col-check" wx:if="{{isEditing}}"></view>
+          <view class="th col-name">标的|代码</view>
+          <view class="th col-change">涨跌幅 <text class="sort-icon">⇅</text></view>
+          <view class="th col-val">平值 <text class="sort-icon">⇅</text></view>
+          <view class="th col-val">虚值105 <text class="sort-icon">⇅</text></view>
+          <view class="th col-val">虚值110 <text class="sort-icon">⇅</text></view>
+        </view>
+        <view class="table-body">
+          <block wx:if="{{currentTab === '自选'}}">
+            <view class="table-row" wx:for="{{watchlist}}" wx:key="code" bindtap="onViewDetail" data-item="{{item}}">
+              <view class="td col-check" wx:if="{{isEditing}}">
+                <view class="checkbox {{utils.includes(selectedForEdit, item.code) ? 'checked' : ''}}"></view>
+              </view>
+              <view class="td col-name">
+                <text class="stock-name">{{item.name}}</text>
+                <text class="stock-code">{{item.code}}</text>
+              </view>
+              <view class="td col-change {{item.changePercent >= 0 ? 'up' : 'down'}}">
+                {{item.changePercent >= 0 ? '+' : ''}}{{item.changePercent}}%
+              </view>
+              <view class="td col-val text-blue">{{item.atm}}%</view>
+              <view class="td col-val text-blue">{{item.otm105}}%</view>
+              <view class="td col-val text-blue">{{item.otm110}}%</view>
+            </view>
+          </block>
+          <block wx:else>
+            <view class="table-row" wx:for="{{optionQuotes}}" wx:key="id" bindtap="openOrderModal" data-quote="{{item}}">
+              <view class="td col-name">
+                <text class="option-type">{{item.optionType}}</text>
+                <text class="option-term">{{item.expiryTerm}}</text>
+              </view>
+              <view class="td col-change">
+                <text class="strike">{{item.strikePrice}}</text>
+              </view>
+              <view class="td col-val text-blue">{{item.premiumPercent}}%</view>
+              <view class="td col-val text-blue">{{item.delta || '--'}}</view>
+              <view class="td col-val text-blue">{{item.gamma || '--'}}</view>
+            </view>
+          </block>
+        </view>
+      </view>
+
+      <!-- 底部按钮 -->
+      <view class="bottom-btns" wx:if="{{!isEditing}}">
+        <view class="btn-outline blue" bindtap="goToSearchStock">
+          <text class="plus">+</text>添加自选
+        </view>
+        <view class="btn-outline gray" bindtap="onEditFavorites">
+          编辑自选
+        </view>
+      </view>
+      
+      <view class="bottom-btns" wx:if="{{isEditing}}">
+        <view class="btn-outline gray" bindtap="cancelEditing">
+          取消
+        </view>
+        <view class="btn-outline blue" bindtap="deleteSelectedFavorites">
+          删除选中
+        </view>
+      </view>
+    </block>
 
     <!-- 底部垫高，防止被TabBar遮挡 -->
     <view style="height: 120rpx;"></view>
   </scroll-view>
+
+  <!-- 数据说明弹窗 -->
+  <view class="modal-mask {{modalAnimationClass}}" wx:if="{{showDataModal}}" bindtap="hideDataInfo" catchtouchmove="preventTouchMove">
+    <view class="modal-container" catchtap="stopBubble">
+      <view class="modal-header">
+        <text class="modal-title">数据说明</text>
+        <view class="modal-close" bindtap="hideDataInfo">×</view>
+      </view>
+      <scroll-view scroll-y class="modal-content">
+        <view class="data-info-text">
+          <view class="info-item">1. 香草看涨期权费率百分比费率，即期权费除以名义本金的比值。例如：费率为5%，则买入香草看涨期权100万的名义本金，付出期权费为5万元。</view>
+          <view class="info-item">2. 费率为参考费率，与交易台报价或成交价可能有区别。</view>
+        </view>
+      </scroll-view>
+      <view class="modal-footer">
+        <button class="confirm-btn" bindtap="hideDataInfo">我知道了</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 分组管理半屏弹窗 -->
+  <view class="half-screen-mask {{showGroupManagePopup ? 'show' : ''}}" bindtap="closeGroupManagePopup">
+    <view class="half-screen-container {{showGroupManagePopup ? 'show' : ''}}" catchtap="stopBubble">
+      <view class="hs-header">
+        <text class="hs-title">分组管理</text>
+        <view class="hs-close" bindtap="closeGroupManagePopup">×</view>
+      </view>
+      
+      <scroll-view scroll-y class="hs-content">
+        <!-- 系统分组 -->
+        <view class="group-section-title">系统分组</view>
+        <view class="group-list">
+          <view class="group-item {{activeGroupId === item.id ? 'active' : ''}}" 
+                wx:for="{{systemGroups}}" wx:key="id" 
+                bindtap="onSwitchGroup" data-id="{{item.id}}">
+            <text class="group-name">{{item.name}}</text>
+            <text class="group-count">{{groupCountsById[item.id] || 0}}</text>
+          </view>
+        </view>
+        
+        <!-- 自定义分组 -->
+        <view class="group-section-header">
+          <text class="group-section-title">自定义分组</text>
+          <view class="add-group-btn" bindtap="onShowNewGroupDialog">+ 新建分组</view>
+        </view>
+        
+        <view class="group-list custom">
+          <view class="group-item-custom" wx:for="{{customGroups}}" wx:key="id">
+             <view class="group-info-area" bindtap="onSwitchGroup" data-id="{{item.id}}">
+                <text class="group-name {{activeGroupId === item.id ? 'active-text' : ''}}">{{item.name}}</text>
+                <text class="group-count">{{groupCountsById[item.id] || 0}}</text>
+             </view>
+             <view class="group-actions">
+                <view class="action-btn more {{item._protected ? 'disabled' : ''}}" catchtap="onOpenGroupActions" data-id="{{item.id}}" data-name="{{item.name}}" data-protected="{{item._protected}}" aria-label="分组操作" role="button">⋯</view>
+             </view>
+          </view>
+          
+          <view class="empty-tip" wx:if="{{customGroups.length === 0}}">
+            暂无自定义分组
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <!-- 新建分组弹窗 -->
+  <view class="dialog-mask" wx:if="{{showNewGroupDialog}}">
+    <view class="dialog-box">
+      <view class="dialog-title">新建分组</view>
+      <input class="dialog-input" placeholder="请输入分组名称" value="{{newGroupName}}" bindinput="onNewGroupNameInput" maxlength="10" focus="{{showNewGroupDialog}}" />
+      <view class="error-text">{{newGroupError}}</view>
+      <view class="dialog-btns">
+        <view class="d-btn cancel" bindtap="onCloseNewGroupDialog">取消</view>
+        <view class="d-btn confirm {{canConfirmNewGroup ? '' : 'disabled'}}" bindtap="onConfirmNewGroup">确定</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 重命名分组弹窗 -->
+  <view class="dialog-mask" wx:if="{{showRenameGroupDialog}}">
+    <view class="dialog-box">
+      <view class="dialog-title">重命名分组</view>
+      <input class="dialog-input" placeholder="请输入新名称" value="{{editingGroupName}}" bindinput="onRenameGroupNameInput" maxlength="10" focus="{{showRenameGroupDialog}}" />
+      <view class="error-text">{{renameGroupError}}</view>
+      <view class="dialog-btns">
+        <view class="d-btn cancel" bindtap="onCloseRenameGroupDialog">取消</view>
+        <view class="d-btn confirm {{canConfirmRenameGroup ? '' : 'disabled'}}" bindtap="onConfirmRenameGroup">确定</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 删除分组确认弹窗 -->
+  <view class="dialog-mask" wx:if="{{showDeleteGroupDialog}}">
+    <view class="dialog-box">
+      <view class="dialog-title">确认删除分组</view>
+      <view class="delete-dialog-desc">您确定要删除该分组吗？</view>
+      <view class="delete-dialog-checkbox-row" bindtap="onToggleDeleteRemoveFavorites">
+        <view class="delete-checkbox {{deleteRemoveFavorites ? 'checked' : ''}}"></view>
+        <view class="delete-checkbox-text">同时将分组内产品移出自选列表</view>
+      </view>
+      <view class="dialog-btns">
+        <view class="d-btn cancel" bindtap="onCancelDeleteGroupDialog">取消</view>
+        <view class="d-btn danger" bindtap="onConfirmDeleteGroupDialog">确认</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 下单弹窗 -->
+  <view class="modal-mask {{showOrderModal ? 'fade-in' : ''}}" wx:if="{{showOrderModal}}" bindtap="closeOrderModal" catchtouchmove="preventTouchMove">
+    <view class="order-modal-container" catchtap="stopBubble">
+      <view class="modal-header">
+        <text class="modal-title">下单</text>
+        <view class="modal-close" bindtap="closeOrderModal">×</view>
+      </view>
+      
+      <scroll-view scroll-y class="modal-content">
+        <view class="order-form">
+          <view class="form-item">
+            <text class="form-label">方向<text class="required">*</text></text>
+            <picker bindchange="changeDirection" value="{{orderForm.direction === '买入' ? 0 : 1}}" range="{{['买入', '卖出']}}">
+              <view class="form-select">
+                <text>{{orderForm.direction}}</text>
+                <text class="arrow">▼</text>
+              </view>
+            </picker>
+          </view>
+          
+          <view class="form-item">
+            <text class="form-label">交易商</text>
+            <view class="form-value">{{orderForm.traderName || 'ZJGJ'}}</view>
+          </view>
+          
+          <view class="form-item">
+            <text class="form-label">标的资产</text>
+            <view class="form-value">{{orderForm.underlying}}</view>
+          </view>
+          
+          <view class="form-item">
+            <text class="form-label">结构期限</text>
+            <view class="form-value">{{orderForm.structure}}</view>
+          </view>
+          
+          <view class="form-item">
+            <text class="form-label">期权费率</text>
+            <view class="form-input-wrap">
+              <input type="digit" class="form-input" value="{{orderForm.premiumPercent}}" bindinput="updateOrderField" data-field="premiumPercent" />
+              <text class="input-unit">%</text>
+            </view>
+          </view>
+          
+          <view class="form-item">
+            <text class="form-label">名义本金<text class="required">*</text></text>
+            <view class="form-input-wrap">
+              <input type="digit" class="form-input" value="{{orderForm.notional}}" bindinput="updateOrderField" data-field="notional" />
+              <text class="input-unit">万元</text>
+            </view>
+          </view>
+          
+          <view class="form-item">
+            <text class="form-label">买入价格<text class="required">*</text></text>
+            <view class="form-input-wrap">
+              <input type="digit" class="form-input" value="{{orderForm.buyPrice}}" placeholder="不输入默认为市价" bindinput="updateOrderField" data-field="buyPrice" />
+              <text class="input-unit">元</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+      
+      <view class="modal-footer order-footer">
+        <button class="modal-btn cancel-btn" bindtap="closeOrderModal">取消</button>
+        <button class="modal-btn forward-btn" bindtap="confirmForwardText">转发文本</button>
+        <button class="modal-btn copy-btn" bindtap="copyOrderTextFromForm">复制文本</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 转发文本预览（画板，隐藏） -->
+  <canvas type="2d" id="forwardCanvas2d" style="width: 600px; height: 800px; position: fixed; left: -1000px; top: -1000px;"></canvas>
+  <canvas canvas-id="forwardCanvas" style="width: 600px; height: 800px; position: fixed; left: -1000px; top: -1000px;"></canvas>
 </view>

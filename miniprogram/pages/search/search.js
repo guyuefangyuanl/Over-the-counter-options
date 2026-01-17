@@ -22,21 +22,29 @@ const fetchSuggestions = (query) => {
 
 // 模拟异步获取搜索结果
 const fetchResults = (query) => {
-  console.log(`Fetching results for: ${query}`);
-  return new Promise(resolve => {
-    setTimeout(() => {
-      if (query) {
-        resolve([
-          { id: 101, title: `关于“${query}”的个股期权`, description: '提供多种到期日和行权价，满足不同策略需求。' },
-          { id: 102, title: `“${query}”指数期权`, description: '挂钩主流指数，有效对冲市场风险。' },
-          { id: 103, title: `“${query}”ETF期权`, description: '兼具灵活性与成本效益，适合波段操作。' },
-          { id: 104, title: `“${query}”相关资讯`, description: '最新市场动态与专家解读，助您把握先机。' },
-        ]);
-      } else {
-        resolve([]);
-      }
-    }, 500); // 模拟网络延迟
-  });
+  console.log(`[搜索] 开始查询: ${query}`);
+  const db = wx.cloud.database();
+  const _ = db.command;
+  
+  // 支持代码、名称、拼音首字母 (假设数据库中有 pinyin 字段，如果没有则只搜代码和名称)
+  return db.collection('quotes')
+    .where(_.or([
+      { code: db.RegExp({ regexp: query, options: 'i' }) },
+      { name: db.RegExp({ regexp: query, options: 'i' }) },
+      { pinyin: db.RegExp({ regexp: query, options: 'i' }) }
+    ]))
+    .limit(20)
+    .get()
+    .then(res => {
+      return res.data.map(item => ({
+        id: item._id,
+        name: item.name,
+        code: item.code,
+        price: item.price,
+        changePercent: item.changePercent,
+        type: item.type || 'stock'
+      }));
+    });
 };
 
 Page({
@@ -131,7 +139,9 @@ Page({
 
   // 执行搜索
   executeSearch: function (query) {
+    if (!query) return;
     try { wx.vibrateShort({ type: 'light' }); } catch (_) {}
+    
     this.setData({
       inputValue: query,
       isLoading: true,
@@ -140,57 +150,41 @@ Page({
       showResults: true,
       isNoResult: false,
     });
+    
     this.saveHistory(query);
     const start = Date.now();
+    
     fetchResults(query).then(results => {
-      // 如果是从询价页面过来的，修改搜索结果为股票标的
-      if (this.data.fromInquiry) {
-        const q = String(query).trim();
-        const stockResults = [
-          { 
-            id: 1, 
-            title: `${q} (600519)`, 
-            description: '贵州茅台 - 白酒行业龙头',
-            code: '600519',
-            name: q,
-            type: 'stock'
-          },
-          { 
-            id: 2, 
-            title: `${q} (000858)`, 
-            description: '五粮液 - 知名白酒品牌',
-            code: '000858',
-            name: q,
-            type: 'stock'
-          },
-          { 
-            id: 3, 
-            title: `${q} (002304)`, 
-            description: '洋河股份 - 白酒行业',
-            code: '002304',
-            name: q,
-            type: 'stock'
-          }
-        ];
-        this.setData({
-          results: stockResults,
-          isLoading: false,
-          isNoResult: stockResults.length === 0,
-        });
-      } else {
-        this.setData({
-          results,
-          isLoading: false,
-          isNoResult: results.length === 0,
-        });
-      }
+      this.setData({
+        results,
+        isLoading: false,
+        isNoResult: results.length === 0,
+      });
       const duration = Date.now() - start;
-      console.log(`[搜索] 完成，耗时 ${duration}ms，结果数: ${this.data.results.length}`);
+      console.log(`[搜索] 完成，耗时 ${duration}ms，结果数: ${results.length}`);
     }).catch(err => {
       console.error('[搜索] 失败：', err);
       this.setData({ isLoading: false, isNoResult: true });
       wx.showToast({ title: '搜索失败，请重试', icon: 'none' });
     });
+  },
+
+  // 快速查询
+  onQuickQuery: function (e) {
+    const type = e.currentTarget.dataset.type;
+    console.log('[快速查询] 类型:', type);
+    
+    // 根据类型设置预设搜索词或直接跳转
+    let query = '';
+    switch(type) {
+      case 'otc': query = '场外个股'; break;
+      case 'vanilla': query = '香草'; break;
+      case 'exchange': query = '场内期权'; break;
+    }
+    
+    if (query) {
+      this.executeSearch(query);
+    }
   },
 
   // 防抖获取建议
@@ -238,25 +232,27 @@ Page({
   // 点击搜索结果
   onResultTap: function (e) {
     const item = e.currentTarget.dataset.item;
+    const app = getApp();
     
-    // 如果是从询价页面过来的，跳转到期权报价页面
-    if (this.data.fromInquiry) {
-      // 跳转到期权报价页面，传递股票信息
-      const url = `/pages/quotes/quotes?stockCode=${item.code}&stockName=${item.name}&source=inquiry`;
-      wx.navigateTo({
-        url,
-        success: () => {
-          console.log('[跳转] 报价页成功:', url);
-        },
-        fail: (err) => {
-          console.error('[跳转] 报价页失败，尝试备用详情页:', err);
-          const fallback = `/pages/quotes/detail/detail?id=${item.id || 1}`;
-          wx.navigateTo({ url: fallback, fail: (e2) => console.error('[跳转] 备用详情页失败:', e2) });
-        }
-      });
-    } else {
-      // 原有的搜索结果处理逻辑
-      console.log('点击搜索结果:', item);
-    }
+    // 设置全局参数，跳转到报价页面
+    app.globalData.pendingQuoteParams = {
+      code: item.code,
+      name: item.name,
+      price: item.price,
+      changePercent: item.changePercent,
+      source: this.data.source || 'search'
+    };
+
+    // 报价页是 tabBar 页面，必须使用 switchTab
+    wx.switchTab({
+      url: '/pages/quotes/quotes',
+      success: () => {
+        console.log('[跳转] 报价页成功');
+      },
+      fail: (err) => {
+        console.error('[跳转] 报价页失败:', err);
+        wx.showToast({ title: '跳转失败', icon: 'none' });
+      }
+    });
   },
 });

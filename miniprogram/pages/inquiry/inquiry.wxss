@@ -92,6 +92,23 @@
   border-bottom:    1rpx solid var(--border-color);
 }
 
+.tabs-header-row {
+  display: flex;
+  align-items: center;
+  padding-right: 20rpx;
+}
+
+.search-entry-btn {
+  width: 70rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f7fa;
+  border-radius: 12rpx;
+  margin-left: 10rpx;
+}
+
 /* 主Tab - 增强可读性和对比度 */
 .primary-tabs {
   display:      flex;
@@ -786,6 +803,10 @@
   margin-top:      28rpx;
 }
 
+.delete-dialog-actions {
+  justify-content: space-between;
+}
+
 /* 编辑模式样式 */
 .edit-mode {
   position:      relative;
@@ -822,6 +843,45 @@
   font-size:  28rpx;
   color:      #606266;
   line-height: 1.5;
+}
+
+.delete-checkbox-row {
+  display: flex;
+  align-items: center;
+  margin: 8rpx 0 24rpx;
+}
+
+.delete-checkbox {
+  width: 32rpx;
+  height: 32rpx;
+  border: 2rpx solid #ccc;
+  border-radius: 6rpx;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.delete-checkbox.checked {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+  position: relative;
+}
+
+.delete-checkbox.checked::after {
+  content: '';
+  position: absolute;
+  top: 6rpx;
+  left: 8rpx;
+  width: 14rpx;
+  height: 8rpx;
+  border-left: 4rpx solid #fff;
+  border-bottom: 4rpx solid #fff;
+  transform: rotate(-45deg);
+}
+
+.delete-checkbox-text {
+  margin-left: 16rpx;
+  font-size: 26rpx;
+  color: #303133;
 }
 
 .picker-view {

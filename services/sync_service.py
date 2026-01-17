@@ -1,0 +1,425 @@
+import os
+import time
+import hashlib
+from typing import Any, Dict, List, Optional, Sequence
+
+from services.cloud_db import CloudDbClient, CloudDbConfigError, CloudDbRequestError
+from services.sina_crawler import crawl_quotes, get_all_stock_codes
+
+
+def _utc_now_iso() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _parse_codes(value: Any) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        out: List[str] = []
+        for x in value:
+            if x is None:
+                continue
+            s = str(x).strip()
+            if s:
+                out.append(s)
+        return out
+    raw = str(value).strip()
+    if not raw:
+        return []
+    parts = [p.strip() for p in raw.replace(";", ",").replace(" ", ",").split(",")]
+    return [p for p in parts if p]
+
+
+def _default_codes_from_env() -> List[str]:
+    raw = os.getenv("SINA_DEFAULT_CODES") or os.getenv("DEFAULT_QUOTE_CODES") or ""
+    codes = _parse_codes(raw)
+    if codes:
+        return codes
+    return ["600519", "000001"]
+
+
+def _build_quote_doc(item: Dict[str, Any], *, source: str) -> Dict[str, Any]:
+    stock_code = str(item.get("stock_code") or "").strip()
+    out: Dict[str, Any] = dict(item)
+    out["stock_code"] = stock_code
+    out["code"] = stock_code
+    out["updateSource"] = source
+    out["updated_at"] = out.get("updated_at") or _utc_now_iso()
+    out.setdefault("name", "")
+    return out
+
+
+def _shard_codes(codes: Sequence[str], *, shard_index: int, shard_count: int) -> List[str]:
+    if shard_count <= 1:
+        return list(codes)
+    si = int(shard_index)
+    sc = int(shard_count)
+    if si < 0 or sc < 1 or si >= sc:
+        return list(codes)
+
+    selected: List[str] = []
+    for c in codes:
+        s = str(c).strip()
+        if not s:
+            continue
+        h = hashlib.md5(s.encode("utf-8")).hexdigest()
+        if (int(h, 16) % sc) == si:
+            selected.append(s)
+    return selected
+
+
+def sync_quotes(
+    *,
+    codes: Optional[Sequence[str]] = None,
+    requested_by: Optional[str] = None,
+    source: str = "crawler_sina",
+    timeout: float = 8.0,
+    max_workers: Optional[int] = None,
+    shard_index: Optional[int] = None,
+    shard_count: Optional[int] = None,
+) -> Dict[str, Any]:
+    started_at = time.time()
+    cloud = None
+    try:
+        cloud = CloudDbClient.from_env()
+    except CloudDbConfigError:
+        import logging
+        logging.getLogger(__name__).warning("微信云数据库配置未就绪，将尝试同步到本地 Mock 存储")
+
+    target_codes = list(codes) if codes else _default_codes_from_env()
+
+    if shard_index is None and shard_count is None:
+        raw_si = os.getenv("SINA_SHARD_INDEX") or ""
+        raw_sc = os.getenv("SINA_SHARD_COUNT") or ""
+        if raw_si.strip() and raw_sc.strip():
+            try:
+                shard_index = int(raw_si)
+                shard_count = int(raw_sc)
+            except Exception:
+                shard_index = None
+                shard_count = None
+    if shard_index is not None and shard_count is not None:
+        target_codes = _shard_codes(target_codes, shard_index=int(shard_index), shard_count=int(shard_count))
+
+    def _load_int_env(name: str, default: int) -> int:
+        raw = os.getenv(name) or ""
+        if not raw.strip():
+            return int(default)
+        try:
+            return int(raw)
+        except Exception:
+            return int(default)
+
+    crawl_retries = max(0, _load_int_env("SINA_FETCH_RETRIES", 3))
+    crawl_chunk_size = _load_int_env("SINA_FETCH_CHUNK_SIZE", 50)
+    if crawl_chunk_size < 1:
+        crawl_chunk_size = 1
+    if crawl_chunk_size > 200:
+        crawl_chunk_size = 200
+
+    crawl_max_workers_raw = os.getenv("SINA_FETCH_MAX_WORKERS") or ""
+    crawl_max_workers: Optional[int] = None
+    if crawl_max_workers_raw.strip():
+        try:
+            crawl_max_workers = int(crawl_max_workers_raw)
+        except Exception:
+            crawl_max_workers = None
+
+    if max_workers is not None:
+        crawl_max_workers = int(max_workers)
+
+    crawl_t0 = time.time()
+    items, crawl_errors = crawl_quotes(
+        target_codes,
+        timeout=timeout,
+        retries=crawl_retries,
+        chunk_size=crawl_chunk_size,
+        max_workers=crawl_max_workers,
+    )
+    crawl_ms = int((time.time() - crawl_t0) * 1000)
+
+    now_iso = _utc_now_iso()
+    docs: List[Dict[str, Any]] = []
+    for it in items:
+        doc = _build_quote_doc(it, source=source)
+        doc["updated_at"] = now_iso
+        docs.append(doc)
+
+    processed = 0
+    upsert_errors: List[Dict[str, Any]] = []
+    upsert_ms = 0
+
+    if cloud:
+        try:
+            upsert_t0 = time.time()
+            processed, upsert_errors = cloud.batch_upsert(
+                collection="quotes",
+                unique_key="stock_code",
+                items=docs,
+                chunk_size=_load_int_env("WX_DB_UPSERT_CHUNK_SIZE", 50),
+                max_workers=max_workers,
+            )
+            upsert_ms = int((time.time() - upsert_t0) * 1000)
+        except CloudDbRequestError as e:
+            upsert_errors.append({"code": "CLOUD_DB_WRITE_FAILED", "message": str(e)})
+            upsert_ms = 0
+    else:
+        # 回退到本地 Mock 存储
+        try:
+            from sina_quotes import SinaQuote, upsert_quotes_to_mock_db
+            quotes_objs = []
+            for d in docs:
+                # 转换回 SinaQuote 对象以便复用现有逻辑
+                q = SinaQuote(
+                    stock_code=d.get("stock_code"),
+                    name=d.get("name"),
+                    price=d.get("price"),
+                    change_percent=d.get("changePercent"),
+                    open=d.get("open"),
+                    high=d.get("high"),
+                    low=d.get("low"),
+                    pre_close=d.get("pre_close"),
+                    volume=d.get("volume"),
+                    amount=d.get("amount"),
+                    updated_at=d.get("updated_at")
+                )
+                quotes_objs.append(q)
+            
+            mock_db_path = os.getenv("FILE_DB_PATH", "mock_db.json")
+            upsert_quotes_to_mock_db(quotes_objs, file_path=mock_db_path)
+            processed = len(quotes_objs)
+            logger.info(f"成功同步 {processed} 条行情到本地 Mock 存储: {mock_db_path}")
+        except Exception as e:
+            upsert_errors.append({"code": "MOCK_DB_WRITE_FAILED", "message": str(e)})
+
+    duration_ms = int((time.time() - started_at) * 1000)
+    errors = list(crawl_errors) + list(upsert_errors)
+
+    if cloud:
+        try:
+            cloud.add(
+                collection="sync_logs",
+                data={
+                    "type": "sync_quotes",
+                    "source": source,
+                    "requested_by": requested_by or "",
+                    "codes": target_codes,
+                    "fetched": len(items),
+                    "processed": processed,
+                    "crawlMs": crawl_ms,
+                    "upsertMs": upsert_ms,
+                    "crawlErrorCount": len(crawl_errors),
+                    "upsertErrorCount": len(upsert_errors),
+                    "shardIndex": int(shard_index) if shard_index is not None else None,
+                    "shardCount": int(shard_count) if shard_count is not None else None,
+                    "errorCount": len(errors),
+                    "errors": errors[:50],
+                    "durationMs": duration_ms,
+                    "created_at": now_iso,
+                },
+            )
+        except Exception:
+            pass
+
+    return {
+        "success": len(errors) == 0,
+        "processed": processed,
+        "fetched": len(items),
+        "codes": target_codes,
+        "errors": errors,
+        "durationMs": duration_ms,
+        "crawlMs": crawl_ms,
+        "upsertMs": upsert_ms,
+        "crawlErrorCount": len(crawl_errors),
+        "upsertErrorCount": len(upsert_errors),
+        "shardIndex": int(shard_index) if shard_index is not None else None,
+        "shardCount": int(shard_count) if shard_count is not None else None,
+    }
+
+
+def sync_all_quotes(
+    *,
+    requested_by: Optional[str] = None,
+    source: str = "crawler_sina_all",
+    timeout: float = 15.0,
+    max_workers: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    抓取并同步所有股票的行情数据
+    """
+    codes = get_all_stock_codes()
+    if not codes:
+        return {
+            "success": False,
+            "message": "未能获取到股票代码列表",
+            "processed": 0,
+        }
+
+    return sync_quotes(
+        codes=codes,
+        requested_by=requested_by,
+        source=source,
+        timeout=timeout,
+        max_workers=max_workers,
+    )
+
+
+def upsert_quotes_from_file(
+    *,
+    items: Sequence[Dict[str, Any]],
+    requested_by: Optional[str] = None,
+    source: str = "file_upload",
+) -> Dict[str, Any]:
+    started_at = time.time()
+    try:
+        cloud = CloudDbClient.from_env()
+    except CloudDbConfigError as e:
+        return {
+            "success": False,
+            "message": str(e),
+            "processed": 0,
+            "errors": [{"code": "CLOUD_DB_NOT_CONFIGURED", "message": str(e)}],
+        }
+
+    now_iso = _utc_now_iso()
+    docs: List[Dict[str, Any]] = []
+    for it in items:
+        doc = _build_quote_doc(it, source=source)
+        doc["updated_at"] = now_iso
+        docs.append(doc)
+
+    processed = 0
+    errors: List[Dict[str, Any]] = []
+    try:
+        processed, upsert_errors = cloud.batch_upsert(
+            collection="quotes",
+            unique_key="stock_code",
+            items=docs,
+            chunk_size=50,
+        )
+        errors.extend(upsert_errors)
+    except Exception as e:
+        errors.append({"code": "CLOUD_DB_WRITE_FAILED", "message": str(e)})
+
+    duration_ms = int((time.time() - started_at) * 1000)
+
+    try:
+        cloud.add(
+            collection="sync_logs",
+            data={
+                "type": "upload_quotes",
+                "source": source,
+                "requested_by": requested_by or "",
+                "count": len(items),
+                "processed": processed,
+                "errorCount": len(errors),
+                "errors": errors[:50],
+                "durationMs": duration_ms,
+                "created_at": now_iso,
+            },
+        )
+    except Exception:
+        pass
+
+    return {
+        "success": len(errors) == 0,
+        "processed": processed,
+        "count": len(items),
+        "errors": errors,
+        "durationMs": duration_ms,
+    }
+
+
+def delete_quotes(*, codes: Optional[Sequence[str]] = None) -> Dict[str, Any]:
+    started_at = time.time()
+    cloud = None
+    try:
+        cloud = CloudDbClient.from_env()
+    except CloudDbConfigError:
+        pass
+
+    try:
+        import json
+        if cloud:
+            if codes:
+                target_codes = _parse_codes(codes)
+                if not target_codes:
+                    return {"success": True, "deleted": 0, "durationMs": int((time.time() - started_at) * 1000)}
+                total_deleted = 0
+                for batch in [target_codes[i : i + 500] for i in range(0, len(target_codes), 500)]:
+                    where_js = "{" + f'stock_code: db.command.in({json.dumps(batch, ensure_ascii=False)})' + "}"
+                    deleted = cloud.delete_where(collection="quotes", where_js=where_js)
+                    total_deleted += int(deleted or 0)
+                return {
+                    "success": True,
+                    "deleted": total_deleted,
+                    "durationMs": int((time.time() - started_at) * 1000),
+                }
+
+            total_to_delete = 0
+            try:
+                total_to_delete = cloud.count('db.collection("quotes").count()')
+            except Exception:
+                pass
+
+            total_deleted = 0
+            # 使用更快的迭代删除
+            for attempt in range(1000):
+                rows = cloud.query('db.collection("quotes").field({_id: true}).limit(500).get()')
+                if not rows:
+                    return {
+                        "success": True,
+                        "deleted": total_deleted,
+                        "total": total_to_delete,
+                        "durationMs": int((time.time() - started_at) * 1000),
+                    }
+
+                batch_ids = [str(r.get("_id")).strip() for r in rows if isinstance(r, dict) and r.get("_id")]
+                batch_ids = list(dict.fromkeys(batch_ids))
+                
+                if not batch_ids:
+                    break
+
+                where_js = "{" + f'_id: db.command.in({json.dumps(batch_ids, ensure_ascii=False)})' + "}"
+                deleted = cloud.delete_where(collection="quotes", where_js=where_js)
+                n = int(deleted or 0)
+                total_deleted += n
+                
+                # 如果删除不动了，尝试更小批次或停止
+                if n <= 0:
+                    if attempt > 5: break
+                    continue
+                
+                # 记录进度到会话负载（如果可以获取到 upload_id）
+                # 这里暂不实现，因为 delete_quotes 接口目前没传任务 ID
+
+            return {
+                "success": total_deleted >= total_to_delete or total_deleted > 0,
+                "deleted": total_deleted,
+                "total": total_to_delete,
+                "durationMs": int((time.time() - started_at) * 1000),
+                "message": "全量删除完成" if total_deleted >= total_to_delete else "部分删除完成"
+            }
+        else:
+            # 回退到本地存储删除
+            from models.stock import StockModel
+            from flask import current_app
+            
+            db = None
+            try:
+                db = getattr(current_app, 'db', None)
+            except Exception:
+                pass
+                
+            model = StockModel(db)
+            target_codes = _parse_codes(codes) if codes else None
+            deleted = model.delete_stock_data(target_codes)
+            
+            return {
+                "success": True,
+                "deleted": deleted,
+                "durationMs": int((time.time() - started_at) * 1000),
+                "message": "已从本地存储删除记录"
+            }
+    except Exception as e:
+        return {"success": False, "message": str(e), "durationMs": int((time.time() - started_at) * 1000)}

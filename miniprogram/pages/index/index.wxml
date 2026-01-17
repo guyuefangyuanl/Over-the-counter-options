@@ -1,4 +1,4 @@
-<view class="container">
+<view class="container" style="position: relative; left: 0rpx; top: -178rpx">
   <!-- 加载状态 -->
   <view class="loading-container" wx:if="{{loading}}">
     <view class="loading-spinner"></view>

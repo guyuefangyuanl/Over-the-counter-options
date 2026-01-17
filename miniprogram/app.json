@@ -73,21 +73,5 @@
     "downloadFile": 10000
   },
   "debug": false,
-  "sitemapLocation": "sitemap.json",
-  "preloadRule": {
-    "pages/index/index": {
-      "network": "all",
-      "packages": [
-        "pages/quotes/quotes",
-        "pages/profile/profile",
-        "pages/login/login"
-      ]
-    },
-    "pages/profile/profile": {
-      "network": "all",
-      "packages": [
-        "pages/login/login"
-      ]
-    }
-  }
+  "sitemapLocation": "sitemap.json"
 }

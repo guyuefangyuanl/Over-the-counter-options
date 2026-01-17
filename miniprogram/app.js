@@ -13,6 +13,8 @@ App({
     performanceOptimizer: null,
     storageManager: null,
     uiEnhancer: null,
+    // 报价页跳转参数
+    pendingQuoteParams: null,
     // 性能监控
     performance: {
       startTime: Date.now(),

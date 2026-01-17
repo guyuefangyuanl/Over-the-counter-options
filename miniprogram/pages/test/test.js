@@ -1,4 +1,6 @@
 // pages/test/test.js
+const { getApiUrl } = require('../../config/api.config.js');
+
 Page({
   data: {
     result: ''
@@ -10,7 +12,7 @@ Page({
 
   testConnection: function() {
     wx.request({
-      url: 'http://localhost:3001/api/test',
+      url: getApiUrl('/test'),
       method: 'GET',
       success: (res) => {
         console.log('连接测试成功:', res);

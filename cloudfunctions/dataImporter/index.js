@@ -63,7 +63,80 @@ function buildDefaultFieldMap(headers) {
   return resolved
 }
 
+function parseComplexMatrixRows(sheetData) {
+  if (!sheetData || sheetData.length < 5) return []
+  
+  // 表头处理：第 0, 1, 3 行为关键维度
+  const row0 = [...(sheetData[0] || [])]
+  const row1 = [...(sheetData[1] || [])]
+  const row3 = [...(sheetData[3] || [])]
+  
+  // 填充合并单元格（Group 和 Term）
+  for (let j = 1; j < row0.length; j++) {
+    if (row0[j] === undefined || row0[j] === null || row0[j] === '') {
+      row0[j] = row0[j - 1]
+    }
+  }
+  for (let j = 1; j < row1.length; j++) {
+    if (row1[j] === undefined || row1[j] === null || row1[j] === '') {
+      row1[j] = row1[j - 1]
+    }
+  }
+
+  const docs = []
+  const rows = sheetData.slice(4) // 数据从第 5 行开始
+
+  for (const row of rows) {
+    const rawCode = row[0]
+    const code = normalizeCode(rawCode)
+    if (!code) continue
+    
+    const name = normalizeString(row[1])
+
+    // 从第 3 列开始遍历报价单元格
+    for (let colIdx = 2; colIdx < row.length; colIdx++) {
+      let val = row[colIdx]
+      if (val === undefined || val === null || val === '' || val === '-') continue
+      
+      const numVal = parseFloat(val)
+      if (isNaN(numVal)) continue
+
+      const type = normalizeString(row0[colIdx])
+      const term = normalizeString(row1[colIdx])
+      const trader = normalizeString(row3[colIdx])
+
+      // 排除非交易商列
+      if (!trader || ['代码', '证券简称', 'nan', 'NaN'].includes(trader)) continue
+
+      // 构造唯一 ID，确保不同交易商、期限、类型的报价共存
+      // 格式：opt_{股票代码}_{类型}_{期限}_{交易商}
+      const safeTrader = trader.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '')
+      const safeTerm = term.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '')
+      const docId = `opt_${code}_${type}_${safeTerm}_${safeTrader}`
+
+      docs.push({
+        _id: docId,
+        code: docId, // 这里 code 作为唯一标识
+        stock_code: code,
+        name: name,
+        type: type,
+        term: term,
+        trader: trader,
+        rates: numVal,
+        updateSource: 'file_upload'
+      })
+    }
+  }
+  return docs
+}
+
 function parseRowsFromSheet(sheetData, options) {
+  // 启发式判断：如果前几行包含矩阵特征，使用矩阵解析器
+  const headerContent = JSON.stringify(sheetData.slice(0, 5))
+  if (headerContent.includes('普通香草') || headerContent.includes('证券简称')) {
+    return parseComplexMatrixRows(sheetData)
+  }
+
   const headers = sheetData[0] || []
   const rows = sheetData.slice(1)
   const map = options && options.fieldMap ? options.fieldMap : buildDefaultFieldMap(headers)
@@ -119,7 +192,10 @@ async function upsertQuotes(docs, existingIdMap, options) {
       'term',
       'structure',
       'dealers',
+      'trader',
       'rates',
+      'rate',
+      'stock_code',
       'strike',
       'expiry',
       'underlying',

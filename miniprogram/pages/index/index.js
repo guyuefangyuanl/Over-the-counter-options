@@ -224,6 +224,39 @@ Page({
 
   safeNavigate(url) {
     if (this.data.isNavigating) return;
+    
+    // 提取路径和参数
+    const path = url.split('?')[0];
+    const queryStr = url.split('?')[1] || '';
+    
+    // 判断是否是 tabBar 页面
+    const tabBarPages = [
+      '/pages/index/index',
+      '/pages/quotes/quotes',
+      '/pages/account/account',
+      '/pages/profile/profile'
+    ];
+    
+    const isTabBar = tabBarPages.some(p => path.endsWith(p));
+
+    if (isTabBar) {
+      // 如果有参数，存入全局变量
+      if (queryStr) {
+        const params = {};
+        queryStr.split('&').forEach(pair => {
+          const [key, value] = pair.split('=');
+          if (key) params[key] = decodeURIComponent(value || '');
+        });
+        app.globalData.pendingQuoteParams = params;
+      }
+      
+      wx.switchTab({
+        url: path,
+        success: () => { this.setData({ isNavigating: false, selectedResultCode: null }); }
+      });
+      return;
+    }
+
     this.setData({ isNavigating: true });
     wx.navigateTo({
       url,

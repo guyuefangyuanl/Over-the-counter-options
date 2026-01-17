@@ -1,5 +1,6 @@
 // API 工具类
-const BASE_URL = 'http://localhost:5000/api';
+const { getBaseUrl: getConfigBaseUrl } = require('../config/api.config.js');
+let BASE_URL = getConfigBaseUrl();
 const performanceOptimizer = require('./performance-optimizer.js').getInstance();
 
 // API响应缓存
@@ -33,8 +34,8 @@ const ENV = 'development'; // 可以从配置文件读取
 // API基础URL配置
 const API_CONFIG = {
   development: {
-    nodeBase: 'http://localhost:5000/api', // 已切换至 Flask
-    flaskBase: 'http://localhost:5000/api'
+    nodeBase: getConfigBaseUrl(), // 使用配置中心的地址
+    flaskBase: getConfigBaseUrl() // 使用配置中心的地址
   },
   production: {
     nodeBase: 'https://api.yourdomain.com/api/v1',
@@ -636,10 +637,10 @@ function setBaseUrl(baseUrl) {
 }
 
 /**
- * 获取基础URL
+ * 获取当前基础URL
  * @returns {string} 基础URL
  */
-function getBaseUrl() {
+function getCurrentBaseUrl() {
   return BASE_URL;
 }
 
@@ -678,7 +679,7 @@ module.exports = {
   clearApiCache,
   getCacheStats,
   setBaseUrl,
-  getBaseUrl,
+  getBaseUrl: getCurrentBaseUrl,
   configureRetry,
   configureConcurrency
 };

@@ -9,8 +9,12 @@
 
     <!-- 2. Tab导航容器 -->
     <view class="tabs-container">
-      
-      <primary-tabs active="{{activePrimaryTab}}" bind:change="switchPrimaryTabFromComponent" />
+      <view class="tabs-header-row">
+        <primary-tabs active="{{activePrimaryTab}}" bind:change="switchPrimaryTabFromComponent" style="flex: 1;" />
+        <view class="search-entry-btn" bindtap="openSearchPage">
+          <icon type="search" size="18" color="#666"></icon>
+        </view>
+      </view>
       
       <!-- 子Tab (自选时显示) -->
       <view class="sub-tabs" wx:if="{{activePrimaryTab === 'self'}}">
@@ -133,21 +137,17 @@
              position="center" 
              bind:close="closeDeleteGroupDialog">
     <view class="new-group-dialog delete-dialog">
-      <view class="dialog-title">删除分组</view>
+      <view class="dialog-title">确认删除分组</view>
       <view class="delete-content">
-        <text wx:if="{{deleteMigrationCount > 0}}">该分组下有{{deleteMigrationCount}}个自选，请选择迁移目标：</text>
-        <text wx:else>确认删除该分组？</text>
+        <text>您确定要删除该分组吗？</text>
       </view>
-      <dropdown-select wx:if="{{deleteMigrationCount > 0 && availableTargetGroups.length > 0}}" 
-              value="{{selectedTargetGroupId}}" 
-              options="{{availableTargetGroups}}" 
-              label-key="name"
-              value-key="id"
-              placeholder="请选择目标分组"
-              bind:change="onTargetGroupChange" />
-      <view class="dialog-actions">
+      <view class="delete-checkbox-row" bindtap="toggleDeleteRemoveFavorites">
+        <view class="delete-checkbox {{deleteRemoveFavorites ? 'checked' : ''}}"></view>
+        <text class="delete-checkbox-text">同时将分组内产品移出自选列表</text>
+      </view>
+      <view class="dialog-actions delete-dialog-actions">
         <van-button size="small" type="default" bind:click="closeDeleteGroupDialog">取消</van-button>
-        <van-button size="small" type="danger" bind:click="confirmDeleteGroup">删除</van-button>
+        <van-button size="small" type="danger" bind:click="confirmDeleteGroup">确认</van-button>
       </view>
     </view>
   </van-popup>
@@ -244,26 +244,68 @@
         
         <!-- 产品信息 -->
         <view class="form-section">
-          <view class="section-title">产品信息</view>
+          <view class="section-title">标的信息</view>
           <view class="product-info" wx:if="{{inquiryForm.selectedProduct}}">
             <view class="product-name">{{inquiryForm.selectedProduct.name}}</view>
             <view class="product-code">{{inquiryForm.selectedProduct.code}}</view>
-            <view class="product-rate">平值费率: {{inquiryForm.selectedProduct.rates['100']}}%</view>
           </view>
         </view>
 
-        <!-- 数量输入 -->
+        <!-- 期权参数设置 -->
         <view class="form-section">
-          <view class="section-title">询价数量</view>
+          <view class="section-title">期权参数</view>
+          
+          <view class="form-item-label">期权类型</view>
+          <van-radio-group value="{{inquiryForm.optionType}}" bind:change="onOptionTypeChange" direction="horizontal" class="form-radio-group">
+            <van-radio name="call">看涨 (Call)</van-radio>
+            <van-radio name="put">看跌 (Put)</van-radio>
+          </van-radio-group>
+
+          <view class="form-item-label">期权结构</view>
+          <van-dropdown-menu active-color="#1989fa">
+            <van-dropdown-item value="{{inquiryForm.structure}}" options="{{structureOptions}}" bind:change="onStructureChange" />
+          </van-dropdown-menu>
+
+          <view class="form-item-label">期权期限</view>
+          <van-dropdown-menu active-color="#1989fa">
+            <van-dropdown-item value="{{inquiryForm.term}}" options="{{termOptions}}" bind:change="onTermChange" />
+          </van-dropdown-menu>
+        </view>
+
+        <!-- 金额与价格 -->
+        <view class="form-section">
+          <view class="section-title">交易金额与价格</view>
+          
           <van-field
-            value="{{inquiryForm.quantity}}"
-            placeholder="请输入数量"
+            label="名义本金"
+            value="{{inquiryForm.notionalAmount}}"
+            placeholder="请输入名义本金"
             type="number"
-            data-field="quantity"
+            use-button-slot
+            data-field="notionalAmount"
             bind:change="onFormInput"
-            error-message="{{formErrors.quantity || ''}}"
-            required
-          />
+            error-message="{{formErrors.notionalAmount}}"
+          >
+            <view slot="button" class="field-unit">万元</view>
+          </van-field>
+
+          <van-field
+            label="行权价"
+            value="{{inquiryForm.strikePrice}}"
+            placeholder="如: 100"
+            type="digit"
+            use-button-slot
+            data-field="strikePrice"
+            bind:change="onFormInput"
+            error-message="{{formErrors.strikePrice}}"
+          >
+            <view slot="button" class="field-unit">%</view>
+          </van-field>
+
+          <view class="form-item-label">首选交易商</view>
+          <van-checkbox-group value="{{inquiryForm.selectedDealers}}" bind:change="onDealersChange" direction="horizontal">
+            <van-checkbox wx:for="{{allDealers}}" wx:key="id" name="{{item.id}}" shape="square">{{item.name}}</van-checkbox>
+          </van-checkbox-group>
         </view>
 
         <!-- 联系信息 -->

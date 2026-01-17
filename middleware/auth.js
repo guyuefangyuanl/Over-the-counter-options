@@ -6,8 +6,12 @@ const path = require('path');
 const dbPath = path.join(__dirname, '../wechat.db');
 const db = new Database(dbPath);
 
-// JWT密钥（在生产环境中应该使用环境变量）
-const JWT_SECRET = process.env.JWT_SECRET || 'option_trading_secret_key';
+// JWT密钥
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.warn('⚠️ 警告: JWT_SECRET 环境变量未设置，将使用不安全的备用密钥');
+}
+const SAFE_JWT_SECRET = JWT_SECRET || 'option_trading_secret_key_backup';
 
 /**
  * 生成JWT token
@@ -20,7 +24,7 @@ function generateToken(user) {
       userId: user.id,
       openid: user.openid
     },
-    JWT_SECRET,
+    SAFE_JWT_SECRET,
     { expiresIn: '24h' } // 24小时过期
   );
 }
@@ -44,7 +48,7 @@ function authenticateToken(req, res, next) {
 
   try {
     // 验证token
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, SAFE_JWT_SECRET);
     
     // 查询用户
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(decoded.userId);
