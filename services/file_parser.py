@@ -90,6 +90,14 @@ def _parse_complex_matrix(df: pd.DataFrame) -> List[Dict[str, Any]]:
             # 提取维度信息
             group_type = str(header_rows.iloc[0, col_idx]).strip()
             term_str = str(header_rows.iloc[1, col_idx]).strip()
+            
+            # 归一化期限格式
+            term_map = {
+                "1个月": "1M", "2个月": "2M", "3个月": "3M", "6个月": "6M", "12个月": "12M", "1年": "12M",
+                "2周": "2W", "1周": "1W", "1M": "1M", "2M": "2M", "3M": "3M", "6M": "6M", "12M": "12M", "2W": "2W"
+            }
+            normalized_term = term_map.get(term_str, term_str)
+
             trader = str(header_rows.iloc[3, col_idx]).strip()
 
             # 过滤掉非数据列（如某些文件中可能在中间插入了代码列）
@@ -99,7 +107,7 @@ def _parse_complex_matrix(df: pd.DataFrame) -> List[Dict[str, Any]]:
             # 构造唯一 ID，确保不同交易商、期限、类型的报价共存
             # 格式：opt_{股票代码}_{类型}_{期限}_{交易商}
             safe_trader = re.sub(r"[^a-zA-Z0-9\u4e00-\u9fa5]", "", trader)
-            safe_term = re.sub(r"[^a-zA-Z0-9\u4e00-\u9fa5]", "", term_str)
+            safe_term = re.sub(r"[^a-zA-Z0-9\u4e00-\u9fa5]", "", normalized_term)
             doc_id = f"opt_{code}_{group_type}_{safe_term}_{safe_trader}"
 
             # 构造标准化对象
@@ -108,7 +116,7 @@ def _parse_complex_matrix(df: pd.DataFrame) -> List[Dict[str, Any]]:
                 "code": doc_id,
                 "name": name,
                 "type": group_type,
-                "term": term_str,
+                "term": normalized_term,
                 "trader": trader,
                 "rate": val,
                 "updateSource": "file_upload",
@@ -119,11 +127,30 @@ def _parse_complex_matrix(df: pd.DataFrame) -> List[Dict[str, Any]]:
     return items
 
 
-def parse_quotes_file(*, filename: str, content: bytes) -> List[Dict[str, Any]]:
+def parse_quotes_file(*, filename: str, content: bytes, sheet_name: Optional[str] = None) -> List[Dict[str, Any]]:
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     if ext in ("xlsx", "xls"):
         # 读取时不指定 header，以便我们手动处理多级表头
-        df = pd.read_excel(io.BytesIO(content), header=None)
+        if sheet_name:
+            df = pd.read_excel(io.BytesIO(content), header=None, sheet_name=sheet_name)
+        else:
+            # 如果没有指定 sheet_name，我们先尝试寻找包含 "个股" 和 "香草" 的 sheet
+            excel_file = pd.ExcelFile(io.BytesIO(content))
+            target_sheet = None
+            for s in excel_file.sheet_names:
+                if "个股" in s and "香草" in s:
+                    target_sheet = s
+                    break
+            if not target_sheet:
+                for s in excel_file.sheet_names:
+                    if "个股" in s or "香草" in s:
+                        target_sheet = s
+                        break
+            
+            if target_sheet:
+                df = pd.read_excel(io.BytesIO(content), header=None, sheet_name=target_sheet)
+            else:
+                df = pd.read_excel(io.BytesIO(content), header=None)
     elif ext == "csv":
         df = pd.read_csv(io.BytesIO(content), header=None)
     else:
@@ -134,20 +161,45 @@ def parse_quotes_file(*, filename: str, content: bytes) -> List[Dict[str, Any]]:
 
     # 启发式判断：如果前几行包含 "普通香草" 或 "代码" 在 Row 3，说明是复杂矩阵
     is_matrix = False
-    first_few_rows_str = str(df.iloc[:5].values)
-    if "普通香草" in first_few_rows_str or "证券简称" in first_few_rows_str:
+    # 增加搜索范围到前 20 行
+    first_few_rows_df = df.iloc[:20]
+    first_few_rows_str = str(first_few_rows_df.values)
+    
+    matrix_keywords = ["普通香草", "证券简称", "标的简称", "行权价", "参与率", "期限", "交易商", "香草报价"]
+    if any(kw in first_few_rows_str for kw in matrix_keywords):
         is_matrix = True
+        
+    # 如果 sheet 名包含香草且没有明确判定为非矩阵，也尝试矩阵解析
+    if not is_matrix and sheet_name and ("香草" in sheet_name or "矩阵" in sheet_name):
+        if any(kw in first_few_rows_str for kw in ["代码", "简称", "名称", "证券"]):
+            is_matrix = True
 
     if is_matrix:
+        # 寻找矩阵表头的起始行（包含 "证券简称" 或 "代码" 的行通常是第 4 行表头的末尾）
+        # 我们假设 "证券简称" 所在的行是 row 4 (index 3) 或者附近
+        matrix_header_start = 0
+        for i in range(min(10, len(df))):
+            row_str = str(df.iloc[i].values)
+            if "证券简称" in row_str or "标的简称" in row_str:
+                # 矩阵格式通常：
+                # 0: 类型 (香草)
+                # 1: 期限 (1M)
+                # 2: 挂钩 (价格) -> 这一行可能没有，或者是交易商
+                # 3: 交易商
+                # 所以 证券简称 所在的通常是第 4 行 (index 3)
+                matrix_header_start = max(0, i - 3)
+                break
+        
+        if matrix_header_start > 0:
+            df = df.iloc[matrix_header_start:].reset_index(drop=True)
+            
         return _parse_complex_matrix(df)
 
-    # 否则按原有扁平逻辑处理（但需要重新处理 df 及其 header）
-    df.columns = df.iloc[0]
-    df = df[1:].reset_index(drop=True)
-    
+    # 否则按原有扁平逻辑处理
+    # 寻找表头行
     column_mapping = {
-        "stock_code": ["代码", "股票代码", "Code", "证券代码", "A股代码", "code", "stock_code", "指数代码", "合约编码"],
-        "name": ["名称", "股票名称", "Name", "证券简称", "A股简称", "name", "指数简称", "合约简称"],
+        "stock_code": ["代码", "股票代码", "Code", "证券代码", "A股代码", "code", "stock_code", "指数代码", "合约编码", "标的代码"],
+        "name": ["名称", "股票名称", "Name", "证券简称", "A股简称", "name", "指数简称", "合约简称", "标的名称"],
         "price": ["现价", "最新价", "价格", "Price", "收盘价", "price", "今收", "今收盘价"],
         "changePercent": ["涨跌幅", "涨跌", "Change", "涨跌幅(%)", "changePercent"],
         "open": ["开盘", "open"],
@@ -158,12 +210,28 @@ def parse_quotes_file(*, filename: str, content: bytes) -> List[Dict[str, Any]]:
         "amount": ["成交额", "Amount", "金额", "amount"],
     }
 
+    header_idx = 0
+    found_stock_col = False
+    for i in range(min(20, len(df))):
+        row_vals = [str(v).strip().lower() for v in df.iloc[i].values if not pd.isna(v)]
+        # 检查该行是否包含 stock_code 的候选词
+        for val in row_vals:
+            if any(cand.lower() == val or cand.lower() in val for cand in column_mapping["stock_code"]):
+                header_idx = i
+                found_stock_col = True
+                break
+        if found_stock_col:
+            break
+            
+    df.columns = df.iloc[header_idx]
+    df = df[header_idx + 1:].reset_index(drop=True)
+    
     found_cols: Dict[str, Any] = {}
     cols = list(df.columns)
     for key, candidates in column_mapping.items():
         for col in cols:
-            col_str = str(col)
-            if any(cand == col_str or cand in col_str for cand in candidates):
+            col_str = str(col).strip().lower()
+            if any(cand.lower() == col_str or cand.lower() in col_str for cand in candidates):
                 found_cols[key] = col
                 break
 
@@ -222,8 +290,21 @@ def load_upload_session_payload(*, upload_id: str) -> Dict[str, Any]:
     if not safe_id:
         raise ValueError("upload_id 无效")
     path = os.path.join(_upload_cache_dir(), f"{safe_id}.json")
-    with open(path, "r", encoding="utf-8") as f:
-        payload = json.load(f)
+    
+    # 添加更强力的重试逻辑以应对超大文件的磁盘延迟
+    last_err = None
+    for i in range(8):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+            return payload # 成功则直接返回
+        except (json.JSONDecodeError, FileNotFoundError, PermissionError) as e:
+            last_err = e
+            time.sleep(0.2 * (i + 1))
+    
+    if last_err:
+        raise last_err
+    
     if not isinstance(payload, dict):
         return {"items": []}
     items = payload.get("items")
@@ -242,9 +323,21 @@ def save_upload_session_payload(*, upload_id: str, payload: Dict[str, Any]) -> N
     safe_id = re.sub(r"[^a-zA-Z0-9]", "", upload_id or "")
     if not safe_id:
         raise ValueError("upload_id 无效")
-    path = os.path.join(_upload_cache_dir(), f"{safe_id}.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False)
+    
+    base_dir = _upload_cache_dir()
+    final_path = os.path.join(base_dir, f"{safe_id}.json")
+    
+    # 使用临时文件实现原子化写入，防止读取冲突
+    fd, temp_path = tempfile.mkstemp(dir=base_dir, prefix=f"tmp_{safe_id}_", suffix=".json")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
+        # Windows 下 os.replace 是原子性的
+        os.replace(temp_path, final_path)
+    except Exception as e:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise e
 
 
 def load_upload_session(*, upload_id: str) -> List[Dict[str, Any]]:

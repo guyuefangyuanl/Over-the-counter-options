@@ -4,20 +4,37 @@ import { ReloadOutlined, EditOutlined, ExportOutlined, CheckCircleOutlined, Cloc
 import api, { getApiErrorMessage, type ApiResponse } from '../utils/api';
 import type { ColumnsType } from 'antd/es/table';
 import PageState from '../components/PageState';
+import { notificationManager } from '../utils/notification';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 
 interface Inquiry {
   _id: string;
   selectedProduct?: Product;
-  quantity: number;
+  productName?: string;
+  productCode?: string;
+  optionType?: string;
+  structure?: string;
+  term?: string;
+  notionalAmount?: number | string;
+  strikePrice?: number | string;
+  selectedDealers?: string[];
   contactName: string;
   phone: string;
   status: 'pending' | 'processing' | 'completed' | 'rejected';
   createdAt: string;
   remark?: string;
+  notes?: string;
+  history?: InquiryHistory[];
+}
+
+interface InquiryHistory {
+  status: string;
+  remark?: string;
+  operator?: string;
+  time: string;
 }
 
 interface Product {
@@ -76,6 +93,19 @@ const Inquiries: React.FC = () => {
         params: { page, pageSize, ...nextFilters },
       });
       if (res.success && res.data?.pagination && Array.isArray(res.data.items)) {
+        // 检查是否有新询价并通知 (仅在静默刷新且页码为1时)
+        if (silent && page === 1 && data.length > 0 && res.data.items.length > 0) {
+          const firstOld = data[0]._id;
+          const firstNew = res.data.items[0]._id;
+          if (firstOld !== firstNew) {
+            const newItem = res.data.items[0];
+            notificationManager.notifyNewInquiry(
+              newItem.contactName || '新客户',
+              newItem.productName || newItem.selectedProduct?.name || '未知产品'
+            );
+          }
+        }
+
         setData(res.data.items);
         setPagination({
           current: res.data.pagination.page,
@@ -252,46 +282,73 @@ const Inquiries: React.FC = () => {
   const columns: ColumnsType<Inquiry> = [
     {
       title: '产品信息',
-      dataIndex: 'selectedProduct',
       key: 'product',
-      render: (product) => (
+      width: 220,
+      render: (_, record) => (
         <div>
-          <div style={{ fontWeight: 'bold' }}>{product?.name} ({product?.code})</div>
-          <div style={{ fontSize: '12px', color: '#666' }}>{product?.structure} | {product?.term}</div>
+          <div style={{ fontWeight: 'bold' }}>
+            {record.productName || record.selectedProduct?.name} ({record.productCode || record.selectedProduct?.code})
+          </div>
+          <Space size={4} split={<Text type="secondary">|</Text>}>
+            <Text type="secondary">{record.optionType === 'call' ? '看涨' : record.optionType === 'put' ? '看跌' : record.optionType}</Text>
+            <Text type="secondary">{record.structure}</Text>
+            <Text type="secondary">{record.term}</Text>
+          </Space>
         </div>
       ),
     },
     {
-      title: '询价数量',
-      dataIndex: 'quantity',
-      key: 'quantity',
+      title: '询价要素',
+      key: 'elements',
+      width: 180,
+      render: (_, record) => (
+        <div>
+          <div>名义本金: <Text strong>{record.notionalAmount}</Text> 万</div>
+          <div>行权价: <Text strong>{record.strikePrice}%</Text></div>
+        </div>
+      ),
     },
     {
       title: '联系人',
-      dataIndex: 'contactName',
-      key: 'contactName',
-      render: (text, record) => (
+      key: 'contact',
+      width: 180,
+      render: (_, record) => (
         <div>
-          <div>{text}</div>
+          <div>{record.contactName}</div>
           <div style={{ fontSize: '12px', color: '#666' }}>{maskPhone(record.phone)}</div>
         </div>
       ),
     },
     {
+      title: '交易商',
+      dataIndex: 'selectedDealers',
+      key: 'dealers',
+      width: 150,
+      render: (dealers: string[]) => (
+        <Space size={2} wrap>
+          {Array.isArray(dealers) ? dealers.map(d => <Tag key={d} size="small">{d}</Tag>) : '-'}
+        </Space>
+      )
+    },
+    {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
+      width: 100,
       render: (status) => getStatusTag(status),
     },
     {
       title: '提交时间',
       dataIndex: 'createdAt',
       key: 'createdAt',
+      width: 180,
       render: (val) => new Date(val).toLocaleString(),
     },
     {
       title: '操作',
       key: 'action',
+      width: 100,
+      fixed: 'right',
       render: (_, record) => (
         <Button icon={<EditOutlined />} onClick={() => handleUpdateStatus(record)}>
           处理
@@ -434,8 +491,42 @@ const Inquiries: React.FC = () => {
         open={isModalVisible}
         onOk={handleModalOk}
         onCancel={() => setIsModalVisible(false)}
+        width={600}
       >
         <Form form={form} layout="vertical">
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item label="客户姓名">
+                <Input value={currentInquiry?.contactName} disabled />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="客户电话">
+                <Input value={currentInquiry?.phone} disabled />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item label="询价要素">
+            <div style={{ padding: '8px 12px', background: '#f5f5f5', borderRadius: 4 }}>
+              <Row gutter={16}>
+                <Col span={12}>产品: {currentInquiry?.productName || currentInquiry?.selectedProduct?.name}</Col>
+                <Col span={12}>代码: {currentInquiry?.productCode || currentInquiry?.selectedProduct?.code}</Col>
+              </Row>
+              <Row gutter={16} style={{ marginTop: 8 }}>
+                <Col span={8}>结构: {currentInquiry?.structure}</Col>
+                <Col span={8}>期限: {currentInquiry?.term}</Col>
+                <Col span={8}>方向: {currentInquiry?.optionType === 'call' ? '看涨' : currentInquiry?.optionType === 'put' ? '看跌' : currentInquiry?.optionType}</Col>
+              </Row>
+              <Row gutter={16} style={{ marginTop: 8 }}>
+                <Col span={12}>名义本金: {currentInquiry?.notionalAmount} 万</Col>
+                <Col span={12}>行权价: {currentInquiry?.strikePrice}%</Col>
+              </Row>
+              {currentInquiry?.notes && (
+                <div style={{ marginTop: 8 }}>备注: {currentInquiry.notes}</div>
+              )}
+            </div>
+          </Form.Item>
+          
           <Form.Item name="status" label="更新状态" rules={[{ required: true }]}>
             <Select>
               <Option value="pending">待处理</Option>
@@ -444,9 +535,28 @@ const Inquiries: React.FC = () => {
               <Option value="rejected">已拒绝</Option>
             </Select>
           </Form.Item>
-          <Form.Item name="remark" label="备注">
-            <Input.TextArea rows={4} placeholder="输入处理备注..." />
+          <Form.Item name="remark" label="处理备注">
+            <Input.TextArea rows={2} placeholder="输入处理结果或备注..." />
           </Form.Item>
+
+          {currentInquiry?.history && currentInquiry.history.length > 0 && (
+            <Form.Item label="处理历史">
+              <div style={{ maxHeight: 150, overflowY: 'auto', border: '1px solid #eee', padding: 8 }}>
+                {currentInquiry.history.map((h, i) => (
+                  <div key={i} style={{ fontSize: '12px', marginBottom: 8, borderBottom: '1px dashed #eee', paddingBottom: 4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Space>
+                        {getStatusTag(h.status)}
+                        <Text strong>{h.operator || '未知操作人'}</Text>
+                      </Space>
+                      <Text type="secondary">{new Date(h.time).toLocaleString()}</Text>
+                    </div>
+                    {h.remark && <div style={{ marginTop: 2 }}>备注: {h.remark}</div>}
+                  </div>
+                ))}
+              </div>
+            </Form.Item>
+          )}
         </Form>
       </Modal>
     </Card>

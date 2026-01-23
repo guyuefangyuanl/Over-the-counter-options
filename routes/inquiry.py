@@ -64,34 +64,6 @@ def admin_get_inquiries():
             
         inquiry_model = InquiryModel(db)
         
-        # 优先使用云数据库
-        cloud_db = getattr(current_app, 'cloud_db', None)
-        if cloud_db:
-            try:
-                # 构造云数据库查询语句
-                where_clause = {}
-                if status:
-                    where_clause["status"] = status
-                
-                # 微信云数据库查询使用 JS 语法
-                query_js = f"db.collection('inquiries').where({json.dumps(where_clause)}).orderBy('createdAt', 'desc').skip({(page - 1) * page_size}).limit({page_size}).get()"
-                cloud_data = cloud_db.query(query_js)
-                
-                # 获取总数
-                count_js = f"db.collection('inquiries').where({json.dumps(where_clause)}).count()"
-                total = cloud_db.count(count_js)
-                
-                if cloud_data:
-                    # 格式化日期，云数据库返回的可能是 ISO 字符串或特定格式
-                    return flask_paginated_response(
-                        data=cloud_data,
-                        page=page,
-                        per_page=page_size,
-                        total=total,
-                    )
-            except Exception as e:
-                logger.error(f"从云数据库获取询价列表失败，尝试回退到本地数据库: {e}")
-
         page = request.args.get('page', 1)
         page_size = request.args.get('pageSize', 20)
         try:
@@ -112,6 +84,44 @@ def admin_get_inquiries():
         keyword = request.args.get('keyword')
         start_date_raw = request.args.get('startDate')
         end_date_raw = request.args.get('endDate')
+        
+        # 优先使用云数据库
+        cloud_db = getattr(current_app, 'cloud_db', None)
+        if cloud_db:
+            try:
+                # 构造云数据库查询语句
+                where_clause = {}
+                if status:
+                    where_clause["status"] = status
+                
+                if isinstance(keyword, str) and keyword.strip() != "":
+                    kw = keyword.strip()
+                    # 云数据库模糊查询通常使用 db.RegExp
+                    where_clause["$or"] = [
+                        {"contactName": {"$regex": kw, "$options": "i"}},
+                        {"productName": {"$regex": kw, "$options": "i"}},
+                        {"productCode": {"$regex": kw, "$options": "i"}},
+                    ]
+                
+                # 微信云数据库查询使用 JS 语法
+                query_js = f"db.collection('inquiries').where({json.dumps(where_clause)}).orderBy('createdAt', 'desc').skip({(page - 1) * page_size}).limit({page_size}).get()"
+                cloud_data = cloud_db.query(query_js)
+                
+                # 获取总数
+                count_js = f"db.collection('inquiries').where({json.dumps(where_clause)}).count()"
+                total = cloud_db.count(count_js)
+                
+                if cloud_data:
+                    # 格式化日期，云数据库返回的可能是 ISO 字符串或特定格式
+                    return flask_paginated_response(
+                        data=cloud_data,
+                        page=page,
+                        per_page=page_size,
+                        total=total,
+                    )
+            except Exception as e:
+                logger.error(f"从云数据库获取询价列表失败，尝试回退到本地数据库: {e}")
+
 
         def parse_dt(raw: str, is_end: bool) -> datetime.datetime:
             raw = raw.strip()
@@ -188,28 +198,46 @@ def admin_update_inquiry_status(id):
             
         inquiry_model = InquiryModel(db)
         
+        # 获取当前操作人
+        operator = "system"
+        admin_payload = getattr(g, "admin", None)
+        if isinstance(admin_payload, dict):
+            operator = admin_payload.get("sub", "unknown")
+        
         # 同步更新云数据库
         cloud_db = getattr(current_app, 'cloud_db', None)
         cloud_success = False
         if cloud_db:
             try:
                 # 微信云数据库更新，假设集合名为 inquiries
-                update_data = {"status": status, "updateTime": datetime.datetime.utcnow().isoformat() + "Z"}
+                now_iso = datetime.datetime.utcnow().isoformat() + "Z"
+                update_data = {"status": status, "updateTime": now_iso}
                 if remark:
                     update_data["remark"] = remark
+                
+                # 云数据库也记录历史（简化版）
+                history_entry = {
+                    "status": status,
+                    "remark": remark,
+                    "operator": operator,
+                    "time": now_iso
+                }
                 
                 # 注意：云数据库中的 _id 通常是字符串
                 affected = cloud_db.update_where(
                     collection="inquiries",
                     where_js=f"{{_id: '{id}'}}",
-                    data=update_data
+                    data={
+                        **update_data,
+                        "$push": {"history": history_entry}
+                    }
                 )
                 cloud_success = affected > 0
                 logger.info(f"云数据库更新结果: {cloud_success}, id: {id}")
             except Exception as e:
                 logger.error(f"同步更新云数据库失败: {e}")
-
-        success = inquiry_model.update_status(id, status, remark)
+        
+        success = inquiry_model.update_status(id, status, remark, operator)
         
         if success or cloud_success:
             return flask_success_response(message="状态更新成功")
@@ -340,14 +368,26 @@ def export_inquiries():
             ws.cell(row=row_idx, column=5, value=inquiry.get('term', ''))
             ws.cell(row=row_idx, column=6, value=inquiry.get('notionalAmount', ''))
             ws.cell(row=row_idx, column=7, value=inquiry.get('strikePrice', ''))
-            ws.cell(row=row_idx, column=8, value=", ".join(inquiry.get('selectedDealers', [])))
+            ws.cell(row=row_idx, column=8, value=", ".join(inquiry.get('selectedDealers', [])) if isinstance(inquiry.get('selectedDealers'), list) else '')
             ws.cell(row=row_idx, column=9, value=inquiry.get('contactName', ''))
-            ws.cell(row=row_idx, column=10, value=inquiry.get('contactPhone', ''))
+            ws.cell(row=row_idx, column=10, value=inquiry.get('contactPhone', inquiry.get('phone', '')))
             ws.cell(row=row_idx, column=11, value=status_map.get(inquiry.get('status', ''), inquiry.get('status', '')))
             ws.cell(row=row_idx, column=12, value=inquiry.get('notes', inquiry.get('remark', '')))
+            
             created_at = inquiry.get('createdAt')
             if created_at:
-                ws.cell(row=row_idx, column=10, value=created_at.strftime('%Y-%m-%d %H:%M:%S') if hasattr(created_at, 'strftime') else str(created_at))
+                # 处理 datetime 对象或 ISO 字符串
+                formatted_time = ""
+                if hasattr(created_at, 'strftime'):
+                    formatted_time = created_at.strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    try:
+                        # 尝试解析 ISO 字符串
+                        dt = datetime.datetime.fromisoformat(str(created_at).replace('Z', '+00:00'))
+                        formatted_time = dt.strftime('%Y-%m-%d %H:%M:%S')
+                    except Exception:
+                        formatted_time = str(created_at)
+                ws.cell(row=row_idx, column=13, value=formatted_time)
         
         # 自动调整列宽
         for col in ws.columns:

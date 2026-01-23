@@ -156,9 +156,9 @@ def _fields_to_quote(fullcode: str, fields: Sequence[str]) -> Optional[SinaQuote
 def fetch_sina_quotes(
     codes: Sequence[str],
     *,
-    timeout: float = 8.0,
-    retries: int = 2,
-    chunk_size: int = 50,
+    timeout: float = 10.0,
+    retries: int = 3,
+    chunk_size: int = 200,
     max_workers: Optional[int] = None,
     session: Optional[requests.Session] = None,
 ) -> Tuple[List[SinaQuote], List[Dict[str, Any]]]:
@@ -194,12 +194,21 @@ def fetch_sina_quotes(
                 env_workers = None
         requested = max_workers if max_workers is not None else env_workers
         if requested is None:
-            requested = 4
+            requested = 16
         try:
             requested = int(requested)
         except Exception:
-            requested = 4
+            requested = 16
         return max(1, min(int(requested), len(batches)))
+
+    workers = _resolve_max_workers()
+    
+    # 共享 session 以提高性能 (连接池复用)
+    shared_session = session or requests.Session()
+    # 增加连接池大小以匹配并发度
+    adapter = requests.adapters.HTTPAdapter(pool_connections=workers, pool_maxsize=workers)
+    shared_session.mount("http://", adapter)
+    shared_session.mount("https://", adapter)
 
     def _fetch_batch(batch: List[str]) -> Tuple[List[SinaQuote], List[Dict[str, Any]]]:
         batch_quotes: List[SinaQuote] = []
@@ -208,14 +217,12 @@ def fetch_sina_quotes(
         query = ",".join(batch)
         url = f"{url_base}{query}"
 
-        sess_local = session or requests.Session()
-
         last_err: Optional[str] = None
         for attempt in range(max(0, retries) + 1):
             try:
                 if attempt == 0:
                     time.sleep(random.random() * 0.05)
-                resp = sess_local.get(url, headers=headers, timeout=timeout)
+                resp = shared_session.get(url, headers=headers, timeout=timeout)
                 resp.raise_for_status()
                 # 使用 gb18030 解码，比 gbk 更全面，减少乱码
                 raw_text = resp.content.decode("gb18030", errors="replace")
@@ -233,7 +240,6 @@ def fetch_sina_quotes(
         batch_errors.append({"code": "FETCH_FAILED", "message": last_err or "请求失败", "url": url})
         return batch_quotes, batch_errors
 
-    workers = _resolve_max_workers()
     if workers <= 1 or len(batches) <= 1:
         for batch in batches:
             bq, be = _fetch_batch(batch)
@@ -297,9 +303,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--codes", nargs="+")
     parser.add_argument("--all", action="store_true", help="抓取全量 A 股行情")
-    parser.add_argument("--timeout", type=float, default=8.0)
-    parser.add_argument("--retries", type=int, default=2)
-    parser.add_argument("--chunk-size", type=int, default=50)
+    parser.add_argument("--timeout", type=float, default=10.0)
+    parser.add_argument("--retries", type=int, default=3)
+    parser.add_argument("--chunk-size", type=int, default=200)
     parser.add_argument("--update-mock-db", action="store_true")
     parser.add_argument("--mock-db-path", default=os.getenv("FILE_DB_PATH", "mock_db.json"))
     args = parser.parse_args(list(argv) if argv is not None else None)
@@ -312,7 +318,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             df = ak.stock_zh_a_spot_em()
             if not df.empty:
                 target_codes = df["代码"].tolist()
-                # 记录代码到名称的映射，作为新浪解析乱码时的回退
                 for _, row in df.iterrows():
                     code_name_map[str(row["代码"])] = str(row["名称"])
         except Exception as e:
@@ -330,12 +335,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         chunk_size=args.chunk_size,
     )
 
-    # 修复可能存在的乱码名称
     final_quotes = []
     for q in quotes:
-        # 如果名称包含乱码（通过检测是否包含特殊字符或利用 akshare 映射回退）
         if q.stock_code in code_name_map:
-            # 重新创建一个带有正确名称的对象
             new_q = SinaQuote(
                 stock_code=q.stock_code,
                 name=code_name_map[q.stock_code],

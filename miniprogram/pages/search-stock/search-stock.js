@@ -94,39 +94,23 @@ Page({
     const stock = e.currentTarget.dataset.item;
     console.log('选择股票:', stock);
 
-    // 构造股票信息对象
-    const stockInfo = {
-      code: stock.code,
-      name: stock.name,
-      price: stock.price,
-      change: stock.change,
-      changePercent: stock.changePercent,
-      market: stock.code.startsWith('6') ? 'SH' : 'SZ',
-      addedTime: new Date().toISOString()
-    };
+    // 跳转到详细报价页面
+    const stockCode = stock.code;
+    const name = encodeURIComponent(stock.name);
+    const price = stock.price;
+    const change = stock.change;
+    const changePercent = stock.changePercent;
 
-    // 添加到自选列表（本地存储）
-    let favorites = wx.getStorageSync('favorites') || [];
-    const exists = favorites.some(item => item.code === stockInfo.code);
-    
-    if (!exists) {
-      favorites.push(stockInfo);
-      wx.setStorageSync('favorites', favorites);
-      wx.showToast({
-        title: '已添加到自选',
-        icon: 'success'
-      });
-    } else {
-      wx.showToast({
-        title: '已在自选列表中',
-        icon: 'none'
-      });
-    }
-
-    // 延迟返回，让用户看到提示
-    setTimeout(() => {
-      wx.navigateBack();
-    }, 1000);
+    wx.navigateTo({
+      url: `/pages/stock-detail/stock-detail?code=${stockCode}&name=${name}&price=${price}&change=${change}&changePercent=${changePercent}`,
+      success: () => {
+        console.log('成功跳转到股票详情页');
+      },
+      fail: (err) => {
+        console.error('跳转失败:', err);
+        wx.showToast({ title: '跳转失败', icon: 'none' });
+      }
+    });
   },
 
   // 返回上一页

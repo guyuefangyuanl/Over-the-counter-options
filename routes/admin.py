@@ -185,6 +185,12 @@ def delete_quotes_api():
             "processing_started_at_ms": int(time.time() * 1000),
             "status": "processing",
             "deleted": 0,
+            "progress": {
+                "percent": 0,
+                "current": 0,
+                "total": 0,
+                "message": "正在准备清空任务...",
+            },
             "result": None,
         }
         save_upload_session_payload(upload_id=task_id, payload=session_payload)
@@ -194,7 +200,22 @@ def delete_quotes_api():
         def _run_job(delete_task_id: str):
             try:
                 started_at = time.time()
-                result = delete_quotes(codes=None)
+                
+                def _on_progress(p_data):
+                    try:
+                        p = load_upload_session_payload(upload_id=delete_task_id)
+                        p["deleted"] = p_data.get("deleted", 0)
+                        p["progress"] = {
+                            "percent": p_data.get("percent", 0),
+                            "current": p_data.get("deleted", 0),
+                            "total": p_data.get("total", 0),
+                            "message": f"正在删除: {p_data.get('deleted', 0)} / {p_data.get('total', 0)}",
+                        }
+                        save_upload_session_payload(upload_id=delete_task_id, payload=p)
+                    except Exception:
+                        pass
+
+                result = delete_quotes(codes=None, progress_callback=_on_progress)
                 duration_ms = int((time.time() - started_at) * 1000)
 
                 try:
@@ -281,7 +302,7 @@ def delete_quotes_task_status(task_id: str):
             return flask_error_response("删除失败", 500)
 
         return flask_success_response(
-            data={"status": "processing", "taskId": safe_task_id, "deleted": deleted},
+            data={"status": "processing", "taskId": safe_task_id, "deleted": deleted, "progress": session_payload.get("progress")},
             message="清空进行中，请稍后刷新",
             code=202,
         )
@@ -566,6 +587,7 @@ def upload_quotes_preview():
 @require_roles("admin", "editor")
 def upload_quotes_confirm():
     from services.file_parser import load_upload_session_payload, save_upload_session_payload
+    from services.sync_service import upsert_quotes_from_file
     import time
     import threading
 
@@ -581,63 +603,259 @@ def upload_quotes_confirm():
 
     try:
         status = session_payload.get("status")
+        progress = session_payload.get("progress")
         existing_result = session_payload.get("result")
 
+        # 如果已经处理完成或正在处理
         if status == "processed" and isinstance(existing_result, dict):
-            if existing_result.get("success"):
-                return flask_success_response(
-                    data={
-                        "status": "processed",
-                        "processed": existing_result.get("processed", 0),
-                        "durationMs": existing_result.get("durationMs", 0),
-                    },
-                    message="入库完成",
-                )
-            return flask_error_response("入库失败", 500, data=existing_result)
-
-        if status == "failed" and isinstance(existing_result, dict):
-            return flask_error_response("入库失败", 500, data=existing_result)
-
+            return flask_success_response(data={"status": "processed", "result": existing_result})
+        
         if status == "processing":
-            return flask_success_response(
-                data={"status": "processing"},
-                message="入库进行中，请稍后刷新",
-                code=202,
-            )
+            return flask_success_response(data={"status": "processing", "progress": progress}, code=202)
 
-        items = session_payload.get("items")
-        if not isinstance(items, list):
-            items = []
-
+        items = session_payload.get("items", [])
+        
+        # 优化：在启动线程前就从会话中移除 items，确保轮询接口响应迅速
+        if "items" in session_payload:
+            del session_payload["items"]
+        
+        # 更新状态为 processing
         session_payload["status"] = "processing"
-        session_payload["processing_started_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        session_payload["progress"] = {
+            "percent": 0,
+            "step": "cleaning",
+            "status": "processing",
+            "message": "正在清洗数据...",
+            "current": 0,
+            "total": len(items)
+        }
         save_upload_session_payload(upload_id=str(upload_id), payload=session_payload)
 
-        def _run_job(upload_id_value: str, items_value):
-            try:
-                result = upsert_quotes_from_file(items=items_value, requested_by="admin", source="file_upload")
-            except Exception as err:
-                result = {"success": False, "processed": 0, "errors": [{"message": str(err)}], "durationMs": 0}
+        def _run_job(uid: str, data_items):
+            def _on_progress(p_data):
+                try:
+                    # 再次确保不加载 items
+                    current_session = load_upload_session_payload(upload_id=uid)
+                    if "items" in current_session:
+                        del current_session["items"]
+                    
+                    current_session["progress"] = p_data
+                    # 根据 step 映射友好消息
+                    messages = {
+                        "cleaning": "正在清洗并验证数据...",
+                        "ingesting": "正在同步至云数据库...",
+                        "completed": "入库完成",
+                        "failed": "入库失败"
+                    }
+                    if not p_data.get("message"):
+                        current_session["progress"]["message"] = messages.get(p_data["step"], "处理中...")
+                    save_upload_session_payload(upload_id=uid, payload=current_session)
+                except Exception:
+                    pass
 
             try:
-                latest = load_upload_session_payload(upload_id=upload_id_value)
-                latest["status"] = "processed" if result.get("success") else "failed"
-                latest["processed_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                latest["result"] = result
-                save_upload_session_payload(upload_id=upload_id_value, payload=latest)
+                logger.info(f"开始执行入库任务: {uid}, 记录数: {len(data_items)}")
+                res = upsert_quotes_from_file(
+                    items=data_items, 
+                    requested_by="admin", 
+                    source="file_upload",
+                    progress_callback=_on_progress
+                )
+                logger.info(f"入库任务完成: {uid}, 成功: {res.get('processed')}, 失败: {len(res.get('errors', []))}")
+            except Exception as err:
+                logger.error(f"入库任务异常: {uid}, 错误: {err}")
+                res = {"success": False, "processed": 0, "errors": [{"message": str(err)}]}
+
+            try:
+                latest = load_upload_session_payload(upload_id=uid)
+                latest["status"] = "processed" if res.get("success") else "failed"
+                latest["result"] = res
+                save_upload_session_payload(upload_id=uid, payload=latest)
             except Exception:
                 pass
 
         threading.Thread(target=_run_job, args=(str(upload_id), items), daemon=True).start()
 
         return flask_success_response(
-            data={"status": "processing"},
-            message="已开始入库，请稍后刷新",
-            code=202,
+            data={"status": "processing", "progress": session_payload["progress"]},
+            message="已开始入库",
+            code=202
         )
     except Exception as e:
-        logger.error(f"文件确认入库失败: {e}")
-        return flask_error_response(f"入库失败: {str(e)}", 500)
+        return flask_error_response(f"确认入库失败: {str(e)}", 500)
+
+@admin_bp.route('/upload-quotes/bulk-local', methods=['POST'])
+@require_auth
+@require_roles("admin", "editor")
+def upload_quotes_bulk_local():
+    """管理后台：批量导入服务器本地指定的 8 个 Excel 文件"""
+    import threading
+    from services.file_parser import parse_quotes_file
+    from services.sync_service import upsert_quotes_from_file
+    
+    task_id = uuid.uuid4().hex
+    files = [
+        '中金国际 香草.xlsx', 
+        '中信中证资本期权报价表2024-11-19 香草.xlsx', 
+        '浙期实业-2024-11-19.xlsx', 
+        '银河德睿-2024-11-19.xlsx', 
+        '华泰长城报价2024-11-19.xlsx', 
+        '国君风险子-2024-11-19.xlsx', 
+        '永安资本 香草.xlsx', 
+        '中信中证资本期权报价表2024-11-19.xlsx'
+    ]
+    
+    session_payload = {
+        "type": "bulk_import_local",
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "status": "processing",
+        "progress": {
+            "percent": 0,
+            "message": "准备开始批量导入...",
+            "current": 0,
+            "total": len(files)
+        },
+        "result": None,
+    }
+    save_upload_session_payload(upload_id=task_id, payload=session_payload)
+
+    def _run_bulk_job(tid: str):
+        from concurrent.futures import ThreadPoolExecutor
+        workspace_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        total_processed = 0
+        all_errors = []
+        all_parsed_items = []
+        
+        # 1. 并行解析所有文件
+        def _process_one_file(filename):
+            file_path = os.path.join(workspace_root, filename)
+            if not os.path.exists(file_path):
+                return [], [{"file": filename, "message": "文件不存在"}]
+            try:
+                with open(file_path, 'rb') as f:
+                    content = f.read()
+                items = parse_quotes_file(filename=filename, content=content)
+                if not items:
+                    return [], [{"file": filename, "message": "未提取到有效数据"}]
+                return items, []
+            except Exception as e:
+                return [], [{"file": filename, "message": str(e)}]
+
+        try:
+            p = load_upload_session_payload(upload_id=tid)
+            p["progress"]["message"] = "正在并行解析 Excel 文件..."
+            save_upload_session_payload(upload_id=tid, payload=p)
+        except: pass
+
+        with ThreadPoolExecutor(max_workers=min(len(files), 8)) as executor:
+            results = list(executor.map(_process_one_file, files))
+        
+        for items, errs in results:
+            all_parsed_items.extend(items)
+            all_errors.extend(errs)
+
+        if not all_parsed_items:
+            # 更新最终状态
+            try:
+                p = load_upload_session_payload(upload_id=tid)
+                p["status"] = "processed"
+                p["progress"]["percent"] = 100
+                p["progress"]["message"] = "处理完成，但未发现有效数据"
+                p["result"] = {
+                    "success": len(all_errors) == 0,
+                    "processed": 0,
+                    "errors": all_errors
+                }
+                save_upload_session_payload(upload_id=tid, payload=p)
+            except: pass
+            return
+
+        # 2. 数据去重（基于 code），确保合并后的数据项唯一
+        # 使用字典按 code 去重，后出现的数据覆盖先出现的
+        deduped_map = {}
+        for it in all_parsed_items:
+            code = it.get("code")
+            if code:
+                deduped_map[code] = it
+        
+        final_items = list(deduped_map.values())
+        logger.info(f"批量导入：合并后共 {len(final_items)} 条待入库记录 (原始总计 {len(all_parsed_items)} 条)")
+
+        # 3. 单次批量入库
+        last_progress_update = 0
+        def _on_sub_progress(sub_p):
+            nonlocal last_progress_update
+            now = time.time()
+            # 限制进度更新频率，减少 session 文件 I/O (每 2 秒更新一次)
+            if now - last_progress_update < 2 and sub_p.get("status") != "completed":
+                return
+            
+            try:
+                last_progress_update = now
+                sp = load_upload_session_payload(upload_id=tid)
+                sub_msg = sub_p.get("message") or f"{sub_p.get('step')}: {sub_p.get('current')}/{sub_p.get('total')}"
+                sp["progress"]["message"] = f"正在入库: {sub_msg}"
+                sp["progress"]["percent"] = 20 + int(sub_p.get("percent", 0) * 0.8) # 假设入库占 80% 的进度
+                save_upload_session_payload(upload_id=tid, payload=sp)
+            except: pass
+
+        res = upsert_quotes_from_file(
+            items=final_items, 
+            requested_by="admin_bulk_api",
+            source="local_bulk_merged",
+            progress_callback=_on_sub_progress,
+            max_workers=128 # 进一步提升并行能力
+        )
+        
+        if res.get("success"):
+            total_processed = res.get("processed", 0)
+        else:
+            all_errors.extend(res.get("errors", []))
+
+        # 4. 完成后更新状态
+        try:
+            p = load_upload_session_payload(upload_id=tid)
+            p["status"] = "processed"
+            p["progress"]["current"] = len(files)
+            p["progress"]["percent"] = 100
+            p["progress"]["message"] = "批量导入完成"
+            p["result"] = {
+                "success": True,
+                "processed": total_processed,
+                "count": total_processed,
+                "valid": total_processed,
+                "invalid": 0,
+                "durationMs": 0,
+                "errors": all_errors
+            }
+            save_upload_session_payload(upload_id=tid, payload=p)
+        except: pass
+
+    threading.Thread(target=_run_bulk_job, args=(task_id,), daemon=True).start()
+
+    return flask_success_response(
+        data={"status": "processing", "uploadId": task_id},
+        message="批量导入任务已创建",
+        code=202
+    )
+
+@admin_bp.route('/upload-quotes/progress', methods=['GET'])
+@require_auth
+def upload_quotes_progress():
+    from services.file_parser import load_upload_session_payload
+    upload_id = request.args.get("uploadId")
+    if not upload_id:
+        return flask_error_response("缺少 uploadId", 400)
+    
+    try:
+        session = load_upload_session_payload(upload_id=str(upload_id))
+        return flask_success_response(data={
+            "status": session.get("status"),
+            "progress": session.get("progress"),
+            "result": session.get("result")
+        })
+    except Exception as e:
+        return flask_error_response(f"获取进度失败: {str(e)}", 404)
 
 
 @admin_bp.route('/upload-quotes', methods=['POST'])

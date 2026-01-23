@@ -4,6 +4,7 @@
     "pages/quotes/quotes",
     "pages/quotes/detail/detail",
     "pages/quotes/inquiry-complete",
+    "pages/stock-detail/stock-detail",
     "pages/calculator/calculator",
     "pages/profile/profile",
     "pages/login/login",

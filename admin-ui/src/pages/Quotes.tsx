@@ -1,5 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { App, Table, Button, Upload, Card, Space, Typography, Modal, type UploadProps } from 'antd';
+import {
+  App,
+  Table,
+  Button,
+  Upload,
+  Card,
+  Space,
+  Typography,
+  Modal,
+  type UploadProps,
+  Progress,
+  Statistic as AntdStatistic,
+  Descriptions,
+  Row,
+  Col,
+} from 'antd';
 import { UploadOutlined, ReloadOutlined, DeleteOutlined } from '@ant-design/icons';
 import api, { getApiErrorMessage, type ApiResponse } from '../utils/api';
 import type { ColumnsType } from 'antd/es/table';
@@ -45,10 +60,29 @@ type SyncResultPayload = {
   errors?: unknown[];
 };
 
+interface ProgressData {
+  percent: number;
+  step: 'cleaning' | 'ingesting' | 'completed' | 'failed';
+  message: string;
+  current: number;
+  total: number;
+  invalid?: number;
+  success?: number;
+  failed?: number;
+}
+
 type ConfirmUploadPayload = {
   status?: 'processing' | 'processed' | 'failed';
-  processed?: number;
-  durationMs?: number;
+  progress?: ProgressData;
+  result?: {
+    success: boolean;
+    processed: number;
+    valid: number;
+    invalid: number;
+    count: number;
+    durationMs: number;
+    errors?: any[];
+  };
 };
 
 type DeleteQuotesPayload = {
@@ -103,6 +137,9 @@ const Quotes: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCrawlingAll, setIsCrawlingAll] = useState(false);
   const crawlAbortRef = useRef<AbortController | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<ProgressData | null>(null);
+  const [deleteProgress, setDeleteProgress] = useState<ProgressData | null>(null);
+  const [uploadResult, setUploadResult] = useState<ConfirmUploadPayload['result'] | null>(null);
   const uploadPollTimerRef = useRef<number | null>(null);
   const deletePollTimerRef = useRef<number | null>(null);
 
@@ -218,6 +255,63 @@ const Quotes: React.FC = () => {
     },
   ];
 
+  const [isBulkImporting, setIsBulkImporting] = useState(false);
+
+  const handleBulkImportLocal = useCallback(async () => {
+    setIsBulkImporting(true);
+    setUploadProgress(null);
+    setUploadResult(null);
+    try {
+      const res = await api.post<ApiResponse<{ status: string; uploadId: string }>>('/admin/upload-quotes/bulk-local');
+      if (res.success && res.data?.uploadId) {
+        const uploadId = res.data.uploadId;
+        setUploadModalOpen(true);
+        setIsConfirmingUpload(true);
+        
+        if (uploadPollTimerRef.current !== null) {
+          window.clearInterval(uploadPollTimerRef.current);
+        }
+
+        uploadPollTimerRef.current = window.setInterval(async () => {
+          try {
+            const pollRes = await api.get<ApiResponse<ConfirmUploadPayload>>('/admin/upload-quotes/progress', {
+              params: { uploadId },
+            });
+            if (pollRes.success) {
+              const { status, progress, result } = pollRes.data;
+              setUploadProgress(progress || null);
+              if (status === 'processed' || status === 'failed') {
+                if (uploadPollTimerRef.current !== null) {
+                  window.clearInterval(uploadPollTimerRef.current);
+                  uploadPollTimerRef.current = null;
+                }
+                setIsConfirmingUpload(false);
+                setUploadResult(result || null);
+                if (status === 'processed') {
+                  message.success('批量导入完成');
+                  void fetchQuotes(pagination.current, pagination.pageSize);
+                } else {
+                  message.error('批量导入失败');
+                }
+              }
+            }
+          } catch (err) {
+            if (uploadPollTimerRef.current !== null) {
+              window.clearInterval(uploadPollTimerRef.current);
+              uploadPollTimerRef.current = null;
+            }
+            setIsConfirmingUpload(false);
+            message.error('获取进度失败');
+          }
+        }, 2000);
+      }
+    } catch (err) {
+      message.error(getApiErrorMessage(err, '启动批量导入失败'));
+    } finally {
+      setIsBulkImporting(false);
+    }
+  }, [fetchQuotes, message, pagination]);
+
   const handleDelete = useCallback(async (codes?: string[]) => {
     const isClearAll = !codes || codes.length === 0;
     const content = isClearAll 
@@ -244,8 +338,16 @@ const Quotes: React.FC = () => {
             const status = res.data?.status;
             if (status === 'processing' && res.data?.taskId) {
               const taskId = res.data.taskId;
-              message.loading({ content: res.message || '清空进行中…', key: 'delete-quotes', duration: 0 });
               
+              // 初始进度
+              setDeleteProgress({
+                percent: 0,
+                step: 'cleaning',
+                message: '正在准备清空...',
+                current: 0,
+                total: 0
+              });
+
               // 乐观更新：如果是清空所有，直接清空本地数据
               if (isClearAll) {
                 setData([]);
@@ -254,15 +356,29 @@ const Quotes: React.FC = () => {
 
               deletePollTimerRef.current = window.setInterval(async () => {
                 try {
-                  const pollRes = await api.get<ApiResponse<DeleteQuotesPayload>>(`/admin/quotes/delete-task/${taskId}`);
+                  const pollRes = await api.get<ApiResponse<DeleteQuotesPayload & { progress?: ProgressData }>>(`/admin/quotes/delete-task/${taskId}`);
                   if (!pollRes.success) {
                     message.error({ content: pollRes.message || '删除失败', key: 'delete-quotes' });
+                    setDeleteProgress(null);
                     if (deletePollTimerRef.current !== null) {
                       window.clearInterval(deletePollTimerRef.current);
                       deletePollTimerRef.current = null;
                     }
                     setIsDeleting(false);
                     return;
+                  }
+
+                  // 更新进度
+                  if (pollRes.data?.progress) {
+                    setDeleteProgress(pollRes.data.progress);
+                  } else if (pollRes.data?.deleted !== undefined) {
+                    setDeleteProgress(prev => ({
+                      percent: prev?.percent ?? 0,
+                      step: 'cleaning',
+                      message: `正在删除: ${pollRes.data?.deleted}`,
+                      current: pollRes.data?.deleted ?? 0,
+                      total: prev?.total ?? 0
+                    }));
                   }
 
                   const pollStatus = pollRes.data?.status;
@@ -270,39 +386,49 @@ const Quotes: React.FC = () => {
 
                   if (pollStatus === 'processed') {
                     const deleted = pollRes.data?.deleted ?? 0;
-                    message.success({ content: pollRes.message || `已清空：删除 ${deleted} 条`, key: 'delete-quotes' });
+                    setDeleteProgress({
+                      percent: 100,
+                      step: 'completed',
+                      message: `清空完成，共删除 ${deleted} 条记录`,
+                      current: deleted,
+                      total: deleted
+                    });
+                    
                     if (deletePollTimerRef.current !== null) {
                       window.clearInterval(deletePollTimerRef.current);
                       deletePollTimerRef.current = null;
                     }
-                    setSelectedRowKeys([]);
-                    setIsDeleting(false);
-                    void fetchQuotes(pagination.current, pagination.pageSize);
+                    
+                    setTimeout(() => {
+                      message.success({ content: pollRes.message || `已清空：删除 ${deleted} 条`, key: 'delete-quotes' });
+                      setDeleteProgress(null);
+                      setIsDeleting(false);
+                      setSelectedRowKeys([]);
+                      void fetchQuotes(1, pagination.pageSize);
+                    }, 1000);
                     return;
                   }
 
-                  message.error({ content: pollRes.message || '删除失败', key: 'delete-quotes' });
-                  if (deletePollTimerRef.current !== null) {
-                    window.clearInterval(deletePollTimerRef.current);
-                    deletePollTimerRef.current = null;
+                  if (pollStatus === 'failed') {
+                    message.error({ content: pollRes.message || '清空失败', key: 'delete-quotes' });
+                    setDeleteProgress(null);
+                    if (deletePollTimerRef.current !== null) {
+                      window.clearInterval(deletePollTimerRef.current);
+                      deletePollTimerRef.current = null;
+                    }
+                    setIsDeleting(false);
+                    return;
                   }
-                  setIsDeleting(false);
                 } catch (err) {
-                  message.error({ content: getApiErrorMessage(err, '删除失败'), key: 'delete-quotes' });
-                  if (deletePollTimerRef.current !== null) {
-                    window.clearInterval(deletePollTimerRef.current);
-                    deletePollTimerRef.current = null;
-                  }
-                  setIsDeleting(false);
+                  console.error('Polling error:', err);
                 }
-              }, 2000);
+              }, 1000);
               return;
             }
 
             const deletedCount = res.data?.deleted ?? 0;
             message.success(res.message || `成功删除 ${deletedCount} 条数据`);
             
-            // 乐观更新：从当前显示的数据中移除已删除的代码
             if (codes && codes.length > 0) {
               const codesSet = new Set(codes);
               setData(prev => prev.filter(item => !codesSet.has(item.stock_code)));
@@ -432,83 +558,71 @@ const Quotes: React.FC = () => {
       return;
     }
     setIsConfirmingUpload(true);
+    setUploadProgress(null);
+    setUploadResult(null);
+
     if (uploadPollTimerRef.current !== null) {
       window.clearInterval(uploadPollTimerRef.current);
       uploadPollTimerRef.current = null;
     }
+
     try {
       const uploadId = uploadPreview.uploadId;
       const res = await api.post<ApiResponse<ConfirmUploadPayload>>('/admin/upload-quotes/confirm', {
-        uploadId: uploadPreview.uploadId,
+        uploadId,
       });
+
       if (res.success) {
-        const status = res.data?.status;
-        if (status === 'processing') {
-          message.loading({ content: res.message || '入库进行中…', key: 'upload-confirm', duration: 0 });
+        if (res.data?.status === 'processing') {
+          setUploadProgress(res.data.progress || null);
+          
           uploadPollTimerRef.current = window.setInterval(async () => {
             try {
-              const pollRes = await api.post<ApiResponse<ConfirmUploadPayload>>('/admin/upload-quotes/confirm', {
-                uploadId,
+              const pollRes = await api.get<ApiResponse<ConfirmUploadPayload>>('/admin/upload-quotes/progress', {
+                params: { uploadId },
               });
+
               if (!pollRes.success) {
-                message.error({ content: pollRes.message || '入库失败', key: 'upload-confirm' });
+                throw new Error(pollRes.message || '获取进度失败');
+              }
+
+              const { status, progress, result } = pollRes.data;
+              setUploadProgress(progress || null);
+
+              if (status === 'processed' || status === 'failed') {
                 if (uploadPollTimerRef.current !== null) {
                   window.clearInterval(uploadPollTimerRef.current);
                   uploadPollTimerRef.current = null;
                 }
                 setIsConfirmingUpload(false);
-                return;
-              }
-
-              const pollStatus = pollRes.data?.status;
-              if (pollStatus === 'processing') return;
-
-              if (pollStatus === 'processed') {
-                const processed = pollRes.data?.processed ?? 0;
-                message.success({ content: pollRes.message || `入库完成：写入 ${processed} 条`, key: 'upload-confirm' });
-                if (uploadPollTimerRef.current !== null) {
-                  window.clearInterval(uploadPollTimerRef.current);
-                  uploadPollTimerRef.current = null;
+                setUploadResult(result || null);
+                
+                if (status === 'processed' && result?.success) {
+                  message.success('入库完成');
+                  void fetchQuotes(pagination.current, pagination.pageSize);
+                } else {
+                  message.error('入库失败');
                 }
-                setIsConfirmingUpload(false);
-                setUploadModalOpen(false);
-                setUploadPreview(null);
-                void fetchQuotes(pagination.current, pagination.pageSize);
-                return;
               }
-
-              message.error({ content: pollRes.message || '入库失败', key: 'upload-confirm' });
-              if (uploadPollTimerRef.current !== null) {
-                window.clearInterval(uploadPollTimerRef.current);
-                uploadPollTimerRef.current = null;
-              }
-              setIsConfirmingUpload(false);
             } catch (err) {
-              message.error({ content: getApiErrorMessage(err, '入库失败'), key: 'upload-confirm' });
               if (uploadPollTimerRef.current !== null) {
                 window.clearInterval(uploadPollTimerRef.current);
                 uploadPollTimerRef.current = null;
               }
               setIsConfirmingUpload(false);
+              message.error(getApiErrorMessage(err, '同步进度获取失败'));
             }
           }, 2000);
-          return;
+        } else if (res.data?.status === 'processed') {
+          setUploadResult(res.data.result || null);
+          setIsConfirmingUpload(false);
+          message.success('入库完成');
+          void fetchQuotes(pagination.current, pagination.pageSize);
         }
-
-        const processed = res.data?.processed ?? 0;
-        message.success({ content: res.message || `入库完成：写入 ${processed} 条`, key: 'upload-confirm' });
-        setUploadModalOpen(false);
-        setUploadPreview(null);
-        void fetchQuotes(pagination.current, pagination.pageSize);
-        return;
       }
-      message.error(res.message || '入库失败');
     } catch (err) {
-      message.error(getApiErrorMessage(err, '入库失败'));
-    } finally {
-      if (uploadPollTimerRef.current === null) {
-        setIsConfirmingUpload(false);
-      }
+      setIsConfirmingUpload(false);
+      message.error(getApiErrorMessage(err, '启动确认入库失败'));
     }
   }, [fetchQuotes, message, pagination, uploadPreview]);
 
@@ -586,6 +700,14 @@ const Quotes: React.FC = () => {
           >
             快速更新 (默认股票)
           </Button>
+          <Button 
+            icon={<UploadOutlined />} 
+            onClick={handleBulkImportLocal}
+            loading={isBulkImporting}
+            disabled={isBulkImporting}
+          >
+            批量录入本地数据
+          </Button>
           <Upload
             name="file"
             showUploadList={false}
@@ -629,7 +751,7 @@ const Quotes: React.FC = () => {
       </PageState>
 
       <Modal
-        title="文件预览"
+        title="文件确认入库"
         open={uploadModalOpen}
         onOk={confirmUpload}
         confirmLoading={isConfirmingUpload}
@@ -638,24 +760,80 @@ const Quotes: React.FC = () => {
             window.clearInterval(uploadPollTimerRef.current);
             uploadPollTimerRef.current = null;
             setIsConfirmingUpload(false);
-            message.open({ type: 'info', content: '已关闭窗口，后台仍在入库', key: 'upload-confirm', duration: 2 });
           }
           setUploadModalOpen(false);
           setUploadPreview(null);
+          setUploadProgress(null);
+          setUploadResult(null);
         }}
         okText="确认入库"
         cancelText="取消"
+        width={800}
+        okButtonProps={{ disabled: isConfirmingUpload }}
       >
-        <div style={{ marginBottom: 12 }}>
-          {uploadPreview ? `共识别 ${uploadPreview.total} 条，预览前 ${Math.min(uploadPreview.total, 20)} 条` : '暂无预览数据'}
-        </div>
-        <Table
-          size="small"
-          rowKey="_rowKey"
-          columns={columns}
-          dataSource={uploadPreview?.preview || []}
-          pagination={false}
-        />
+        {isConfirmingUpload ? (
+          <div style={{ padding: '20px 0' }}>
+            <Title level={5}>{uploadProgress?.message || '处理中...'}</Title>
+            <Progress 
+              percent={uploadProgress?.percent || 0} 
+              status={uploadProgress?.step === 'failed' ? 'exception' : 'active'}
+              strokeColor={{
+                '0%': '#108ee9',
+                '100%': '#87d068',
+              }}
+            />
+            <Row gutter={16} style={{ marginTop: 20 }}>
+              <Col span={6}>
+                <AntdStatistic title="总数" value={uploadProgress?.total || 0} />
+              </Col>
+              <Col span={6}>
+                <AntdStatistic title="已处理" value={uploadProgress?.current || 0} />
+              </Col>
+              <Col span={6}>
+                <AntdStatistic title="成功" value={uploadProgress?.success || 0} valueStyle={{ color: '#3f8600' }} />
+              </Col>
+              <Col span={6}>
+                <AntdStatistic title="清洗过滤" value={uploadProgress?.invalid || 0} valueStyle={{ color: '#cf1322' }} />
+              </Col>
+            </Row>
+          </div>
+        ) : uploadResult ? (
+          <div style={{ padding: '20px 0' }}>
+            <Descriptions title="处理结果报告" bordered column={2}>
+              <Descriptions.Item label="总提交记录">{uploadResult.count}</Descriptions.Item>
+              <Descriptions.Item label="清洗后有效">{uploadResult.valid}</Descriptions.Item>
+              <Descriptions.Item label="清洗过滤">{uploadResult.invalid}</Descriptions.Item>
+              <Descriptions.Item label="同步成功">{uploadResult.processed}</Descriptions.Item>
+              <Descriptions.Item label="同步失败">{uploadResult.count - uploadResult.processed - uploadResult.invalid}</Descriptions.Item>
+              <Descriptions.Item label="总耗时">{uploadResult.durationMs}ms</Descriptions.Item>
+            </Descriptions>
+            {uploadResult.errors && uploadResult.errors.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <Typography.Text type="danger">部分同步失败原因：</Typography.Text>
+                <ul>
+                  {uploadResult.errors.slice(0, 5).map((err, i) => (
+                    <li key={i}>{err.message || JSON.stringify(err)}</li>
+                  ))}
+                  {uploadResult.errors.length > 5 && <li>...等更多错误</li>}
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div style={{ marginBottom: 12 }}>
+              {uploadPreview ? `共识别 ${uploadPreview.total} 条，预览前 ${Math.min(uploadPreview.total, 20)} 条` : '暂无预览数据'}
+            </div>
+            <Table
+              size="small"
+              rowKey="_rowKey"
+              columns={columns}
+              dataSource={uploadPreview?.preview || []}
+              pagination={false}
+              scroll={{ y: 300 }}
+            />
+          </>
+        )}
       </Modal>
 
       <Modal
@@ -685,8 +863,39 @@ const Quotes: React.FC = () => {
           ]}
         />
       </Modal>
+
+      <Modal
+        title="正在处理清空任务"
+        open={!!deleteProgress}
+        footer={null}
+        closable={false}
+        maskClosable={false}
+        destroyOnClose
+      >
+        <div style={{ textAlign: 'center', padding: '20px 0' }}>
+          <Progress 
+            type="circle" 
+            percent={deleteProgress?.percent} 
+            status={deleteProgress?.step === 'failed' ? 'exception' : 'active'}
+          />
+          <div style={{ marginTop: 20 }}>
+            <Typography.Text strong style={{ fontSize: 16 }}>
+              {deleteProgress?.message}
+            </Typography.Text>
+          </div>
+          {deleteProgress?.total !== undefined && deleteProgress.total > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <Typography.Text type="secondary">
+                已删除: {deleteProgress.current} / 总计: {deleteProgress.total}
+              </Typography.Text>
+            </div>
+          )}
+        </div>
+      </Modal>
     </Card>
   );
 };
 
 export default Quotes;
+
+

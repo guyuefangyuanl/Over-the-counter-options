@@ -118,7 +118,20 @@ class CloudDbClient:
         self._env_id = env_id.strip()
         self._token_provider = token_provider
         self._timeout = timeout
-        self._session = session or requests.Session()
+        # 配置连接池大小以匹配并发工作线程数
+        if session is None:
+            from requests.adapters import HTTPAdapter
+            session = requests.Session()
+            max_workers = self._load_max_inflight()
+            adapter = HTTPAdapter(
+                pool_connections=max_workers,
+                pool_maxsize=max_workers,
+                max_retries=0,
+                pool_block=False
+            )
+            session.mount('https://', adapter)
+            session.mount('http://', adapter)
+        self._session = session
         self._verify = verify
         self._thread_local = threading.local()
         self._request_semaphore = threading.BoundedSemaphore(self._load_max_inflight())
@@ -128,11 +141,11 @@ class CloudDbClient:
     def _load_max_inflight() -> int:
         raw = os.getenv("WX_DB_MAX_INFLIGHT") or os.getenv("WX_CLOUD_MAX_INFLIGHT") or ""
         if not raw.strip():
-            return 16
+            return 64 # 提升默认并发数，以应对全量行情同步需求
         try:
             n = int(raw)
         except Exception:
-            return 16
+            return 64
         return max(1, n)
 
     @staticmethod
@@ -246,8 +259,13 @@ class CloudDbClient:
             logger.error(f"云数据库统计查询异常: {e}, query={final_query}")
             raise
 
-    def add(self, *, collection: str, data: Dict[str, Any]) -> List[str]:
-        query = f'db.collection("{collection}").add({{data: {json.dumps(data, ensure_ascii=False)}}})'
+    def add(self, *, collection: str, data: Any) -> List[str]:
+        if isinstance(data, list):
+            # 微信限制批量 add 最大 100 条（云函数 native），HTTP API 建议也保持在此范围内
+            query = f'db.collection("{collection}").add({{data: {json.dumps(data)}}})'
+        else:
+            query = f'db.collection("{collection}").add({{data: {json.dumps(data)}}})'
+            
         payload = self._post_api("tcb/databaseadd", {"env": self._env_id, "query": query})
         ids = payload.get("id_list")
         if isinstance(ids, list):
@@ -256,7 +274,7 @@ class CloudDbClient:
 
     def update_where(self, *, collection: str, where_js: str, data: Dict[str, Any]) -> int:
         query = (
-            f'db.collection("{collection}").where({where_js}).update({{data: {json.dumps(data, ensure_ascii=False)}}})'
+            f'db.collection("{collection}").where({where_js}).update({{data: {json.dumps(data)}}})'
         )
         payload = self._post_api("tcb/databaseupdate", {"env": self._env_id, "query": query})
         updated = payload.get("updated")
@@ -283,7 +301,7 @@ class CloudDbClient:
         data: Dict[str, Any],
         create_data: Optional[Dict[str, Any]] = None,
     ) -> str:
-        where_js = json.dumps({unique_key: unique_value}, ensure_ascii=False)
+        where_js = json.dumps({unique_key: unique_value})
         existing = self.query(
             f'db.collection("{collection}").where({where_js}).limit(1).get()'
         )
@@ -341,11 +359,11 @@ class CloudDbClient:
 
         worker_count = max_workers if max_workers is not None else env_workers
         if worker_count is None:
-            worker_count = 8
+            worker_count = 32 # 提高默认工作线程数
         try:
             worker_count = int(worker_count)
         except Exception:
-            worker_count = 8
+            worker_count = 32
         if worker_count < 1:
             worker_count = 1
 
@@ -353,106 +371,103 @@ class CloudDbClient:
         if worker_count > 1:
             executor = ThreadPoolExecutor(max_workers=worker_count)
         try:
-            raw_add_chunk = os.getenv("WX_DB_ADD_CHUNK_SIZE") or os.getenv("WX_CLOUD_ADD_CHUNK_SIZE") or ""
-            add_chunk_size = chunk_size
-            if raw_add_chunk.strip():
+            # 1. 并行查询现有键，确定哪些需要插入，哪些需要更新
+            existing_keys = set()
+            query_chunk_size = 100 # 微信查询限制
+            
+            def _query_existing(batch_keys):
+                local_existing = set()
                 try:
-                    add_chunk_size = int(raw_add_chunk)
-                except Exception:
-                    add_chunk_size = chunk_size
-            if add_chunk_size < 1:
-                add_chunk_size = 1
-            if add_chunk_size > 200:
-                add_chunk_size = 200
+                    arr_js = json.dumps(batch_keys)
+                    where_js = "{" + f'"{unique_key}": db.command.in({arr_js})' + "}"
+                    res = self.query(f'db.collection("{collection}").where({where_js}).field({{{unique_key}: true}}).get()')
+                    for doc in res:
+                        val = doc.get(unique_key)
+                        if val is not None:
+                            local_existing.add(str(val))
+                except Exception as e:
+                    pass # 静默查询错误，假设不存在
+                return local_existing
 
-            for batch in _chunked(keys, chunk_size):
-                arr_js = json.dumps(batch, ensure_ascii=False)
-                where_js = "{" + f'{unique_key}: db.command.in({arr_js})' + "}"
-                existing = self.query(
-                    f'db.collection("{collection}").where({where_js}).field({{{unique_key}: true}}).get()'
-                )
-                existing_keys = set()
-                for doc in existing:
-                    val = doc.get(unique_key)
-                    if val is not None:
-                        existing_keys.add(str(val))
+            query_batches = list(_chunked(keys, query_chunk_size))
+            if executor:
+                query_futures = [executor.submit(_query_existing, b) for b in query_batches]
+                for fut in as_completed(query_futures):
+                    existing_keys.update(fut.result())
+            else:
+                for b in query_batches:
+                    existing_keys.update(_query_existing(b))
 
-                existing_batch = [k for k in batch if k in existing_keys]
-                new_batch = [k for k in batch if k not in existing_keys]
+            existing_batch = [k for k in keys if k in existing_keys]
+            new_batch = [k for k in keys if k not in existing_keys]
 
-                if new_batch:
-                    insert_docs: List[Dict[str, Any]] = []
-                    for k in new_batch:
-                        item = by_key.get(k)
-                        if item is None:
-                            continue
-                        now_iso = item.get("updated_at") or _utc_now_iso()
-                        insert_data = dict(item)
-                        if "_id" in insert_data:
-                            del insert_data["_id"]
-                        insert_data.setdefault("created_at", now_iso)
-                        insert_data.setdefault("updated_at", now_iso)
-                        insert_docs.append(insert_data)
-
-                    for docs_batch in _chunked(insert_docs, add_chunk_size):
-                        def _add_one(d: Dict[str, Any]) -> Tuple[bool, Optional[Dict[str, Any]]]:
-                            try:
-                                self.add(collection=collection, data=d)
-                                return True, None
-                            except Exception as e:
-                                return False, {"key": str(d.get(unique_key) or ""), "message": str(e)}
-
-                        if executor is None or len(docs_batch) <= 1:
-                            for d in docs_batch:
-                                ok, err = _add_one(d)
-                                if ok:
-                                    processed += 1
-                                elif err:
-                                    errors.append(err)
-                        else:
-                            futures = [executor.submit(_add_one, d) for d in docs_batch]
-                            for fut in as_completed(futures):
-                                ok, err = fut.result()
-                                if ok:
-                                    processed += 1
-                                elif err:
-                                    errors.append(err)
-
-                def _update_one(k: str) -> Tuple[bool, Optional[Dict[str, Any]]]:
+            # 2. 并行处理插入和更新
+            insert_futures_list = []
+            update_futures_list = []
+            
+            # 2.1 准备插入任务
+            if new_batch:
+                insert_docs = []
+                for k in new_batch:
                     item = by_key.get(k)
-                    if item is None:
-                        return False, None
+                    if item:
+                        doc = dict(item)
+                        if "_id" in doc: del doc["_id"]
+                        now = doc.get("updated_at") or _utc_now_iso()
+                        doc.setdefault("created_at", now)
+                        doc.setdefault("updated_at", now)
+                        insert_docs.append(doc)
+
+                def _insert_batch(docs_batch):
+                    count = 0
                     try:
-                        now_iso = item.get("updated_at") or _utc_now_iso()
-                        where_one = json.dumps({unique_key: k}, ensure_ascii=False)
+                        added_ids = self.add(collection=collection, data=docs_batch)
+                        count = len(added_ids)
+                    except Exception as e:
+                        errors.append({"batch": "insert", "message": str(e), "count": len(docs_batch)})
+                    return count
+
+                add_chunk_size = 100
+                insert_batches = list(_chunked(insert_docs, add_chunk_size))
+                if executor:
+                    insert_futures_list = [executor.submit(_insert_batch, b) for b in insert_batches]
+                else:
+                    for b in insert_batches:
+                        processed += _insert_batch(b)
+
+            # 2.2 准备更新任务
+            if existing_batch:
+                def _update_one(k):
+                    item = by_key.get(k)
+                    if not item: return False, None
+                    try:
+                        where_one = json.dumps({unique_key: k})
                         update_data = dict(item)
-                        if "_id" in update_data:
-                            del update_data["_id"]
-                        update_data["updated_at"] = now_iso
+                        if "_id" in update_data: del update_data["_id"]
+                        update_data["updated_at"] = item.get("updated_at") or _utc_now_iso()
                         self.update_where(collection=collection, where_js=where_one, data=update_data)
                         return True, None
                     except Exception as e:
                         return False, {"key": k, "message": str(e)}
 
-                if not existing_batch:
-                    continue
-
-                if executor is None or len(existing_batch) <= 1:
+                if executor:
+                    update_futures_list = [executor.submit(_update_one, k) for k in existing_batch]
+                else:
                     for k in existing_batch:
                         ok, err = _update_one(k)
-                        if ok:
-                            processed += 1
-                        elif err:
-                            errors.append(err)
-                    continue
-
-                futures = [executor.submit(_update_one, k) for k in existing_batch]
-                for fut in as_completed(futures):
-                    ok, err = fut.result()
-                    if ok:
-                        processed += 1
-                    elif err:
-                        errors.append(err)
+                        if ok: processed += 1
+                        elif err: errors.append(err)
+            
+            # 2.3 等待所有插入和更新任务完成
+            if executor:
+                for fut in as_completed(insert_futures_list + update_futures_list):
+                    res = fut.result()
+                    if isinstance(res, int):
+                        processed += res
+                    elif isinstance(res, tuple):
+                        ok, err = res
+                        if ok: processed += 1
+                        elif err: errors.append(err)
         finally:
             if executor is not None:
                 executor.shutdown(wait=True)
@@ -471,7 +486,8 @@ class CloudDbClient:
 
                 session = getattr(self._thread_local, "session", None)
                 if session is None:
-                    session = requests.Session()
+                    # 使用共享的配置好的 session
+                    session = self._session
                     self._thread_local.session = session
 
                 try:

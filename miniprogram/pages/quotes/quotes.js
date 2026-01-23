@@ -107,6 +107,9 @@ Page({
     // 编辑自选状态
     isEditing: false,
     selectedForEdit: [],
+    showStockDetail: false,
+    sortField: 'changePercent',
+    sortOrder: 'desc',
 
     // === 新增：矩阵视图数据 ===
     bizType: 'vanilla',
@@ -304,32 +307,81 @@ Page({
   // 加载热门个股
   loadHotStocks: function() {
     this.setData({ loading: true });
-    // 模拟从后端获取热门10支个股
+    
+    // 模拟或调用 API 获取热门个股数据
+    // 实际项目中应优先从后端实时获取
     setTimeout(() => {
-      const hotStocks = [
-        { name: '宁德时代', code: '300750.SZ', changePercent: 2.47, atm: 11.83, otm105: 9.77, otm110: 8.01 },
-        { name: '东方财富', code: '300059.SZ', changePercent: 0.50, atm: 16.20, otm105: 14.21, otm110: 12.44 },
-        { name: '平安银行', code: '000001.SZ', changePercent: -0.35, atm: 6.53, otm105: 4.46, otm110: 2.94 },
-        { name: '药明康德', code: '603259.SH', changePercent: -1.26, atm: 7.92, otm105: 5.83, otm110: 4.21 },
-        { name: '上海贝岭', code: '603259.SH', changePercent: -2.26, atm: 12.16, otm105: 10.16, otm110: 8.16 },
-        { name: '贵州茅台', code: '600519.SH', changePercent: 0.12, atm: 15.32, otm105: 13.12, otm110: 11.45 },
-        { name: '中信证券', code: '600030.SH', changePercent: 1.45, atm: 10.23, otm105: 8.56, otm110: 7.12 },
-        { name: '五粮液', code: '000858.SZ', changePercent: -0.56, atm: 14.12, otm105: 12.34, otm110: 10.56 },
-        { name: '比亚迪', code: '002594.SZ', changePercent: 3.12, atm: 18.56, otm105: 16.45, otm110: 14.23 },
-        { name: '隆基绿能', code: '601012.SH', changePercent: -1.89, atm: 22.34, otm105: 20.12, otm110: 18.45 }
+      const baseStocks = [
+        { name: '宁德时代', code: '300750.SZ', changePercent: 2.47, price: 180.50, atm: 11.83, otm105: 9.77, otm110: 8.01 },
+        { name: '东方财富', code: '300059.SZ', changePercent: 0.50, price: 13.45, atm: 16.20, otm105: 14.21, otm110: 12.44 },
+        { name: '平安银行', code: '000001.SZ', changePercent: -0.35, price: 10.20, atm: 6.53, otm105: 4.46, otm110: 2.94 },
+        { name: '药明康德', code: '603259.SH', changePercent: -1.26, price: 45.30, atm: 7.92, otm105: 5.83, otm110: 4.21 },
+        { name: '上海贝岭', code: '600171.SH', changePercent: -2.26, price: 28.16, atm: 12.16, otm105: 10.16, otm110: 8.16 },
+        { name: '中信证券', code: '600030.SH', changePercent: 1.45, price: 22.34, atm: 10.23, otm105: 8.56, otm110: 7.12 },
+        { name: '贵州茅台', code: '600519.SH', changePercent: 0.12, price: 1650.00, atm: 15.32, otm105: 13.12, otm110: 11.45 },
+        { name: '五粮液', code: '000858.SZ', changePercent: -0.56, price: 150.20, atm: 14.12, otm105: 12.34, otm110: 10.56 },
+        { name: '比亚迪', code: '002594.SZ', changePercent: 3.12, price: 210.50, atm: 18.56, otm105: 16.45, otm110: 14.23 },
+        { name: '隆基绿能', code: '601012.SH', changePercent: -1.89, price: 18.45, atm: 22.34, otm105: 20.12, otm110: 18.45 }
       ];
-      this.setData({ 
-        hotStocks,
-        loading: false,
-        updateTime: new Date().toLocaleString('zh-CN', { 
-          year: 'numeric', 
-          month: '2-digit', 
-          day: '2-digit', 
-          hour: '2-digit', 
-          minute: '2-digit' 
-        }).replace(/\//g, '/') + '更新'
+      
+      // 应用排序
+      const { sortField, sortOrder } = this.data;
+      const sortedStocks = baseStocks.sort((a, b) => {
+        let valA = a[sortField];
+        let valB = b[sortField];
+        
+        // 处理数值
+        valA = typeof valA === 'string' ? parseFloat(valA) : valA;
+        valB = typeof valB === 'string' ? parseFloat(valB) : valB;
+        
+        if (sortOrder === 'asc') {
+          return valA - valB;
+        } else {
+          return valB - valA;
+        }
       });
-    }, 500);
+
+      const now = new Date();
+      const formattedTime = `${now.getFullYear()}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}更新`;
+
+      this.setData({ 
+        hotStocks: sortedStocks,
+        loading: false,
+        updateTime: formattedTime
+      });
+    }, 600);
+  },
+
+  // 排序切换
+  onSortChange: function(e) {
+    const field = e.currentTarget.dataset.sort;
+    let { sortField, sortOrder } = this.data;
+    
+    if (sortField === field) {
+      sortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
+    } else {
+      sortField = field;
+      sortOrder = 'desc';
+    }
+    
+    this.setData({ sortField, sortOrder });
+    this.loadHotStocks();
+  },
+
+  // 点击查看详情
+  onViewDetail: function(e) {
+    const item = e.currentTarget.dataset.item;
+    console.log('查看股票详情:', item);
+    
+    const stockCode = item.code;
+    const name = encodeURIComponent(item.name);
+    const price = item.price;
+    const change = item.change || 0;
+    const changePercent = item.changePercent;
+
+    wx.navigateTo({
+      url: `/pages/stock-detail/stock-detail?code=${stockCode}&name=${name}&price=${price}&change=${change}&changePercent=${changePercent}`
+    });
   },
 
   // 切换期限
@@ -363,9 +415,11 @@ Page({
 
   // 将列表数据转换为矩阵格式
   transformToMatrix: function(quotes) {
-    const { matrixColumns } = this.data;
+    const { matrixColumns, selectedTraderCode } = this.data;
     // 固定的执行价/结构行，匹配图片中的样式
-    const strikes = ['100C', '103C', '105C', '110C', '80C', '90C', '95C'];
+    // 尝试从数据中提取所有不重复的类型，或者保留预设
+    const rawStrikes = [...new Set(quotes.map(q => q.type))].filter(Boolean);
+    const strikes = rawStrikes.length > 0 ? rawStrikes : ['100C', '103C', '105C', '110C', '80C', '90C', '95C'];
     
     const matrix = strikes.map(strike => {
       const row = { strike: strike, values: [] };
@@ -373,20 +427,31 @@ Page({
         let value = '--';
         let badge = null;
         
-        // 模拟逻辑：匹配图片中的 100C / 1M 单元格显示黄色角标 1
-        if (strike === '100C' && term === '1M') {
+        // 在传入的报价中查找匹配项
+        // 匹配规则：类型(strike)匹配，期限(term)匹配
+        const match = quotes.find(q => {
+          const typeMatch = q.type === strike || (q.type && q.type.includes(strike));
+          const termMatch = q.term === term || (q.term && q.term.includes(term));
+          // 如果选择了特定交易商，还要匹配交易商
+          const traderMatch = selectedTraderCode === 'ALL' || selectedTraderCode === 'BEST' || q.trader === selectedTraderCode;
+          return typeMatch && termMatch && traderMatch;
+        });
+
+        if (match) {
+          // 如果是 float，转换为百分比
+          if (typeof match.rate === 'number') {
+            value = (match.rate * 100).toFixed(2) + '%';
+          } else {
+            value = match.rate || '--';
+          }
+          // 如果是“最优报价”模式，可以添加角标或特殊处理
+          if (selectedTraderCode === 'BEST') {
+            badge = '1'; 
+          }
+        } else if (strike === '100C' && term === '1M' && quotes.length < 5) {
+          // 兜底逻辑：如果数据太少且匹配不到，保留一个示例
           value = '3.65%';
           badge = '1';
-        } else {
-          // 根据图片大致模拟一些百分比
-          const baseMap = {
-            '100C': 4.98, '103C': 4.62, '105C': 4.27, '110C': 5.89, '80C': 2.42, '90C': 3.12, '95C': 2.91
-          };
-          const base = baseMap[strike] || 3.00;
-          // 随期限增加费率（模拟）
-          const termIdx = matrixColumns.indexOf(term);
-          const val = (base + termIdx * 0.8 + Math.random() * 0.5).toFixed(2);
-          value = val + '%';
         }
 
         row.values.push({ term: term, value: value, badge: badge });
@@ -1086,19 +1151,21 @@ Page({
     this.setData({ loading: true });
     
     const { currentStock } = this.data;
+    const stockCode = currentStock.code.split('.')[0]; // 去掉后缀进行查询
     
     // 如果是“个股”模式，尝试从云数据库获取
     if (this.data.currentTab === '个股') {
       const db = wx.cloud.database();
+      // 查询该股票的所有期权报价
       db.collection('quotes').where({
-        code: currentStock.code
-      }).get().then(res => {
+        stock_code: stockCode
+      }).limit(100).get().then(res => {
+        console.log('从云数据库获取到报价:', res.data);
         if (res.data && res.data.length > 0) {
-           // 真实数据
-           const quotes = this.generateRealisticQuotes(currentStock); // 这里可以用真实数据增强
-           this.transformToMatrix(quotes);
+           // 使用真实数据
+           this.transformToMatrix(res.data);
         } else {
-           // 模拟数据
+           // 降级使用模拟数据
            const quotes = this.generateRealisticQuotes(currentStock);
            this.transformToMatrix(quotes);
         }
@@ -2137,9 +2204,9 @@ Page({
       this.cancelEditing();
     }
 
-    // 如果切换到个股Tab，加载报价数据（矩阵模式）
+    // 如果切换到个股Tab，加载热门个股数据
     if (tab === '个股') {
-      this.loadOptionQuotes();
+      this.loadHotStocks();
     }
 
     // 如果切换到指数Tab，加载指数数据

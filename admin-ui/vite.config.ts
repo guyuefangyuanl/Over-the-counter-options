@@ -7,17 +7,16 @@ export default defineConfig(({ mode }) => {
   const repoRoot = path.resolve(__dirname, '..')
   const env = loadEnv(mode, repoRoot, '')
 
-  const nodeEnv = env.NODE_ENV || 'development'
-  const rawFlaskPort = env.FLASK_PORT || '5000'
-  const parsedPort = Number.parseInt(rawFlaskPort, 10)
-  const flaskPort =
-    nodeEnv === 'development' && Number.isFinite(parsedPort) && parsedPort > 0 && parsedPort < 1024
-      ? 5000
-      : Number.isFinite(parsedPort) && parsedPort > 0
-        ? parsedPort
-        : 5000
+  const nodeEnv = env.NODE_ENV || mode
+  const flaskPort = Number.parseInt(env.FLASK_PORT || '5002', 10)
+  const cloudProxyTarget = 'https://flask-ym1v-210758-7-1374336462.sh.run.tcloudbase.com'
+  const localProxyTarget = `http://127.0.0.1:${flaskPort}`
+  const proxyMode = (env.VITE_PROXY_MODE || '').toLowerCase()
+  const proxyTarget = proxyMode === 'local' ? localProxyTarget : cloudProxyTarget
 
-  const proxyTarget = env.VITE_API_PROXY_TARGET || `http://127.0.0.1:${flaskPort}`
+  if (nodeEnv === 'development') {
+    console.log(`[vite] API 代理目标: ${proxyTarget}`)
+  }
 
   const apiProxy: ProxyOptions = {
     target: proxyTarget,

@@ -5,7 +5,7 @@
 """
 
 from flask import Blueprint, request, current_app, jsonify
-from backend_utils.response import success_response, error_response, paginated_response
+from backend_utils.response import success_response, error_response, paginated_response, flask_success_response, flask_error_response
 from services.stock_service import StockService
 from models.stock import StockModel
 from pymongo.errors import PyMongoError
@@ -214,6 +214,66 @@ def search_stocks():
     except Exception as e:
         logger.error(f"股票搜索时发生未知异常: {str(e)}")
         return jsonify(error_response("服务器内部错误", 500)), 500
+
+
+@stock_bp.route('/quotes/compare', methods=['GET'])
+def compare_quotes():
+    """
+    跨交易商报价比较接口
+    """
+    try:
+        stock_code = request.args.get('stock_code')
+        quote_type = request.args.get('type')
+        term = request.args.get('term')
+        
+        if not stock_code:
+            return jsonify(error_response("缺少 stock_code", 400)), 400
+            
+        cloud_client = getattr(current_app, 'cloud_db', None)
+        quotes = StockService.get_quotes_comparison(stock_code, quote_type, term, cloud_client)
+        
+        # 找出最低报价并标记
+        if quotes:
+            min_rate = float('inf')
+            min_idx = -1
+            for i, q in enumerate(quotes):
+                rate = q.get('rate')
+                if rate is not None and rate < min_rate:
+                    min_rate = rate
+                    min_idx = i
+            
+            if min_idx != -1:
+                quotes[min_idx]['is_lowest'] = True
+        
+        return flask_success_response(quotes, "获取报价比较成功")
+    except Exception as e:
+        logger.error(f"报价比较接口异常: {e}")
+        return flask_error_response(str(e), 500)
+
+
+@stock_bp.route('/quotes/lowest', methods=['GET'])
+def get_lowest_quote():
+    """
+    获取指定股票最低报价接口
+    """
+    try:
+        stock_code = request.args.get('stock_code')
+        quote_type = request.args.get('type')
+        term = request.args.get('term')
+        
+        if not stock_code or not quote_type or not term:
+            return flask_error_response("缺少参数 (stock_code, type, term)", 400)
+            
+        cloud_client = getattr(current_app, 'cloud_db', None)
+        quote = StockService.get_lowest_quote(stock_code, quote_type, term, cloud_client)
+        
+        if not quote:
+            return flask_error_response("未找到相关报价", 404)
+            
+        return flask_success_response(quote, "获取最低报价成功")
+    except Exception as e:
+        logger.error(f"获取最低报价接口异常: {e}")
+        return flask_error_response(str(e), 500)
 
 
 @stock_bp.route('/list', methods=['GET'])

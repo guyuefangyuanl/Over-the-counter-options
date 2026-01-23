@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -9,8 +9,9 @@ import {
   UserOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
-import { Layout, Menu, Button, theme } from 'antd';
+import { Layout, Menu, Button, theme, App } from 'antd';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
+import { notificationManager } from '../utils/notification';
 
 const { Header, Sider, Content } = Layout;
 
@@ -18,9 +19,24 @@ const AdminLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { notification } = App.useApp();
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
+
+  useEffect(() => {
+    const unsubscribe = notificationManager.subscribe((options) => {
+      notification[options.type || 'info']({
+        message: options.title,
+        description: options.message,
+        duration: options.duration ? options.duration / 1000 : 4.5,
+        placement: 'topRight',
+        onClick: options.onClick,
+      });
+    });
+
+    return () => unsubscribe();
+  }, [notification]);
 
   const menuItems = [
     {

@@ -70,7 +70,7 @@ def init_db():
     logger.info(f"正在尝试连接 MongoDB: {mongo_uri.split('@')[-1]}") # 隐藏敏感信息
     try:
         # 设置较短的连接超时，避免阻塞启动
-        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=3000, connectTimeoutMS=3000)
+        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=1000, connectTimeoutMS=1000)
         # 验证连接
         client.admin.command('ping')
         logger.info("✅ MongoDB数据库连接成功")
@@ -298,7 +298,8 @@ if __name__ == '__main__':
     port = resolve_port()
     logger.info(f"Starting service on port {port} in {NODE_ENV} mode...")
     try:
-        app.run(host='0.0.0.0', port=port, debug=(NODE_ENV == 'development'))
+        # 在开发环境下禁用 reloader 以提高稳定性
+        app.run(host='0.0.0.0', port=port, debug=(NODE_ENV == 'development'), use_reloader=False)
     except OSError as e:
         fallback_port = 5000 if NODE_ENV == "development" else port
         if fallback_port != port:

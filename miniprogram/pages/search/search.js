@@ -232,26 +232,27 @@ Page({
   // 点击搜索结果
   onResultTap: function (e) {
     const item = e.currentTarget.dataset.item;
-    const app = getApp();
-    
-    // 设置全局参数，跳转到报价页面
-    app.globalData.pendingQuoteParams = {
-      code: item.code,
-      name: item.name,
-      price: item.price,
-      changePercent: item.changePercent,
-      source: this.data.source || 'search'
-    };
-
-    // 报价页是 tabBar 页面，必须使用 switchTab
-    wx.switchTab({
-      url: '/pages/quotes/quotes',
+      
+    // 跳转到新的非 tabBar 股票详情页面
+    wx.navigateTo({
+      url: `/pages/stock-detail/stock-detail?code=${item.code}&name=${item.name}&price=${item.price}&changePercent=${item.changePercent}`,
       success: () => {
-        console.log('[跳转] 报价页成功');
+        console.log('[跳转] 股票详情页成功');
       },
       fail: (err) => {
-        console.error('[跳转] 报价页失败:', err);
-        wx.showToast({ title: '跳转失败', icon: 'none' });
+        console.error('[跳转] 股票详情页失败:', err);
+        // 如果跳转失败，降级回退到旧的逻辑 (tabBar 报价页)
+        const app = getApp();
+        app.globalData.pendingQuoteParams = {
+          code: item.code,
+          name: item.name,
+          price: item.price,
+          changePercent: item.changePercent,
+          source: this.data.source || 'search'
+        };
+        wx.switchTab({
+          url: '/pages/quotes/quotes'
+        });
       }
     });
   },

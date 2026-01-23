@@ -178,6 +178,53 @@ class StockService:
             return None
     
     @staticmethod
+    def get_quotes_comparison(stock_code: str, quote_type: Optional[str] = None, term: Optional[str] = None, cloud_client: Any = None) -> List[Dict[str, Any]]:
+        """
+        获取不同交易商的报价比较
+        """
+        if not cloud_client:
+            return []
+            
+        try:
+            # 构造查询语句
+            query_parts = [f'stock_code: "{stock_code}"']
+            if quote_type:
+                query_parts.append(f'type: "{quote_type}"')
+            if term:
+                query_parts.append(f'term: "{term}"')
+            
+            where_js = "{" + ", ".join(query_parts) + "}"
+            query = f'db.collection("quotes").where({where_js}).get()'
+            
+            quotes = cloud_client.query(query)
+            if not quotes:
+                return []
+                
+            # 按交易商分组，并找出最低报价
+            # 如果没有指定 type 和 term，可能返回很多数据，这里简单按交易商+类型+期限分组
+            return quotes
+            
+        except Exception as e:
+            logger.error(f"获取报价比较失败: {stock_code}, {e}")
+            return []
+
+    @staticmethod
+    def get_lowest_quote(stock_code: str, quote_type: str, term: str, cloud_client: Any = None) -> Optional[Dict[str, Any]]:
+        """
+        获取指定股票在特定类型和期限下的最低报价
+        """
+        quotes = StockService.get_quotes_comparison(stock_code, quote_type, term, cloud_client)
+        if not quotes:
+            return None
+            
+        # 过滤掉没有 rate 的数据并排序
+        valid_quotes = [q for q in quotes if q.get("rate") is not None]
+        if not valid_quotes:
+            return None
+            
+        return min(valid_quotes, key=lambda x: x.get("rate", float('inf')))
+
+    @staticmethod
     def search_stock(keyword: str) -> Optional[List[Dict[str, Any]]]:
         """
         搜索股票

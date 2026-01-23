@@ -97,6 +97,12 @@ class CloudDbClient {
     }
   }
 
+  _safeStringify(data) {
+    return JSON.stringify(data).replace(/[^\x00-\x7f]/g, (c) => {
+      return '\\u' + ('000' + c.charCodeAt(0).toString(16)).slice(-4)
+    })
+  }
+
   async _post(apiPath, query) {
     const token = await this.getAccessToken()
     let lastErr = null
@@ -150,7 +156,7 @@ class CloudDbClient {
    * 添加数据
    */
   async add(collection, data) {
-    const query = `db.collection("${collection}").add({data: ${JSON.stringify(data)}})`
+    const query = `db.collection("${collection}").add({data: ${this._safeStringify(data)}})`
     const resp = await this._post('tcb/databaseadd', query)
     return resp.id_list
   }
@@ -159,7 +165,7 @@ class CloudDbClient {
    * 更新数据 (根据条件)
    */
   async updateWhere(collection, whereJs, data) {
-    const query = `db.collection("${collection}").where(${whereJs}).update({data: ${JSON.stringify(data)}})`
+    const query = `db.collection("${collection}").where(${whereJs}).update({data: ${this._safeStringify(data)}})`
     const resp = await this._post('tcb/databaseupdate', query)
     return resp.updated
   }
@@ -185,11 +191,11 @@ class CloudDbClient {
 
     if (typeof uniqueKeyOrWhere === 'object' && data === undefined) {
       // 方式 2: upsert(collection, { key: "value" }, data)
-      whereJs = JSON.stringify(uniqueKeyOrWhere)
+      whereJs = this._safeStringify(uniqueKeyOrWhere)
       finalData = uniqueValue
     } else {
       // 方式 1: upsert(collection, "key", "value", data)
-      whereJs = JSON.stringify({ [uniqueKeyOrWhere]: uniqueValue })
+      whereJs = this._safeStringify({ [uniqueKeyOrWhere]: uniqueValue })
       finalData = data
     }
 
@@ -262,10 +268,10 @@ class CloudDbClient {
     }
 
     for (const batch of chunked) {
-      const arrJs = JSON.stringify(batch)
-      const whereJs = `{${uniqueKey}: db.command.in(${arrJs})}`
+      const arrJs = this._safeStringify(batch)
+      const whereJs = `{"${uniqueKey}": db.command.in(${arrJs})}`
       const existing = await this.query(
-        `db.collection("${collection}").where(${whereJs}).field({${uniqueKey}: true}).get()`,
+        `db.collection("${collection}").where(${whereJs}).field({"${uniqueKey}": true}).get()`,
       )
       const existingKeys = new Set()
       for (const doc of existing || []) {
@@ -276,7 +282,7 @@ class CloudDbClient {
       await withConcurrency(batch, Math.min(writeConcurrency, batch.length), async (k) => {
         const item = byKey.get(k)
         if (!item) return
-        const whereOne = JSON.stringify({ [uniqueKey]: k })
+        const whereOne = this._safeStringify({ [uniqueKey]: k })
         try {
           const payload = { ...item, updated_at: item.updated_at || nowIso }
           delete payload._id

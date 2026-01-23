@@ -157,7 +157,8 @@ exports.main = async (event, context) => {
         .filter(Boolean)
 
       if (writeTasks.length > 0) {
-        await withConcurrency(writeTasks, 10, task => task())
+        // P0-3: 提高写并发到 50，以加速大批量存储（分钟级目标）
+        await withConcurrency(writeTasks, 50, task => task())
         updatedCount += writeTasks.length
       }
     }

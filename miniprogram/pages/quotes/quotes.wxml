@@ -20,95 +20,96 @@
   <!-- 内容滚动区域 -->
   <scroll-view scroll-y class="content-scroll" style="padding-top: {{statusBarHeight + navBarHeight}}px;">
     
-    <!-- 1. 个股详情展示 (矩阵模式) -->
-    <view class="stock-detail-view" wx:if="{{currentTab === '个股'}}">
-      <!-- 股票信息卡片 -->
-      <view class="stock-info-card">
-        <view class="stock-left-info">
-          <view class="stock-name-row">
-            <text class="stock-name">{{currentStock.name}}</text>
-            <text class="stock-code">{{currentStock.code}}</text>
-          </view>
-          <view class="stock-price-row">
-            <text class="price {{currentStock.changePercent >= 0 ? 'up' : 'down'}}">{{currentStock.price}}</text>
-            <text class="change-info {{currentStock.changePercent >= 0 ? 'up' : 'down'}}">{{currentStock.changePercent >= 0 ? '+' : ''}}{{currentStock.changePercent}}%</text>
-          </view>
-        </view>
-        <view class="stock-right-actions">
-          <view class="heart-icon {{isFavorited ? 'active' : ''}}" bindtap="toggleFavorite"></view>
+    <!-- 1. 个股列表展示 (根据设计图重构) -->
+    <view class="stock-list-view" wx:if="{{currentTab === '个股'}}">
+      <!-- 次级导航 (匹配设计图) -->
+      <view class="sub-nav-bar">
+        <view class="sub-nav-item active">全部</view>
+        <view class="biz-pill-btn">香草看涨</view>
+        <view class="data-info-trigger" bindtap="showDataInfo">
+          <text class="info-label">数据说明</text>
+          <view class="info-icon">?</view>
         </view>
       </view>
-    
-      <!-- 搜索和客服 -->
-      <view class="filter-dropdown-bar">
-        <view class="filter-item" bindtap="onSearchStock">
-          <view class="dropdown-trigger">
-            <text class="trigger-text">搜索标的</text>
-            <text class="search-icon">🔍</text>
-          </view>
-        </view>
-        <view class="filter-item" bindtap="contactService">
-          <view class="dropdown-trigger">
-            <text class="trigger-text">联系客服</text>
-            <text class="cs-icon">💬</text>
-          </view>
+
+      <!-- 搜索框 -->
+      <view class="search-bar">
+        <view class="search-input-box" bindtap="onSearchStock">
+          <text class="search-icon">🔍</text>
+          <text class="search-placeholder">搜索标的</text>
         </view>
       </view>
-    
-      <!-- 报价日和交易商筛选 -->
-      <view class="filter-dropdown-bar" style="border-top: none; padding-top: 0;">
-        <view class="filter-item">
-          <text class="filter-label">报价日</text>
-          <view class="dropdown-trigger" bindtap="showDatePicker">
-            <text class="trigger-text">{{selectedQuoteDate}}</text>
-            <text class="trigger-arrow">▼</text>
-          </view>
+
+      <!-- 场外 龙虎榜 横幅 -->
+      <view class="hot-list-banner">
+        <view class="banner-left">
+          <text class="banner-title">场外</text>
+          <view class="rank-btn">龙虎榜</view>
         </view>
-        <view class="filter-item">
-          <text class="filter-label">交易商</text>
-          <view class="dropdown-trigger" bindtap="showTraderPicker">
-            <text class="trigger-text">{{selectedTrader}}</text>
-            <text class="trigger-arrow">▼</text>
-          </view>
+        <view class="banner-right">
+          <text class="update-time">{{updateTime}}</text>
+          <text class="banner-arrow">></text>
         </view>
       </view>
-    
-      <!-- 矩阵内容区 -->
-      <view class="matrix-container-outer">
-        <view class="biz-tools-bar">
-          <view class="biz-tabs-flat">
-            <view class="biz-tab-item {{bizType === 'vanilla' ? 'active' : ''}}" bindtap="onBizTypeChange" data-type="vanilla">香草</view>
-            <view class="biz-tab-item {{bizType === 'snowball' ? 'active' : ''}}" bindtap="onBizTypeChange" data-type="snowball">雪球</view>
+
+      <!-- 筛选栏 -->
+      <view class="list-filter-bar">
+        <view class="filter-group">
+          <text class="filter-label">期限</text>
+          <view class="chip-group">
+            <view wx:for="{{terms}}" wx:key="*this" 
+                  class="chip {{selectedTerm === item ? 'active' : ''}}" 
+                  bindtap="onTermChange" data-term="{{item}}">{{item}}</view>
           </view>
-          <view class="tools-group">
-            <view class="tool-icon-btn" bindtap="goToCalculator">
-              <view class="tool-btn-border">计算器</view>
-            </view>
-            <view class="tool-icon-btn" bindtap="goToWorkspace">
-              <view class="tool-btn-border">工作台</view>
+        </view>
+        <view class="filter-group">
+          <view class="dropdown-trigger" bindtap="toggleTraderPicker">
+            <text class="trigger-text">交易商</text>
+            <text class="trigger-arrow {{showTraderPicker ? 'up' : 'down'}}">▼</text>
+          </view>
+          <!-- 交易商选择弹窗 -->
+          <view class="trader-dropdown" wx:if="{{showTraderPicker}}">
+            <view wx:for="{{traders}}" wx:key="code" 
+                  class="trader-option {{selectedTraderCode === item.code ? 'active' : ''}}" 
+                  bindtap="onTraderChange" data-code="{{item.code}}" data-name="{{item.name}}">
+              {{item.name}}
             </view>
           </view>
         </view>
-    
-        <scroll-view class="matrix-scroll-area" scroll-x scroll-y>
-          <view class="matrix-table">
-            <!-- 表头 -->
-            <view class="matrix-tr thead">
-              <view class="matrix-th sticky-col">结构/期限</view>
-              <view class="matrix-th" wx:for="{{matrixColumns}}" wx:key="*this">{{item}}</view>
+      </view>
+
+      <!-- 数据表格 (热门个股列表) -->
+      <view class="hot-stocks-container">
+        <view class="table-header hot-header">
+          <view class="th col-name">标的|代码</view>
+          <view class="th col-price" bindtap="onSortChange" data-sort="price">最新价 <text class="sort-icon">⇅</text></view>
+          <view class="th col-change" bindtap="onSortChange" data-sort="changePercent">涨跌幅 <text class="sort-icon">⇅</text></view>
+          <view class="th col-val" bindtap="onSortChange" data-sort="atm">平值 <text class="sort-icon">⇅</text></view>
+        </view>
+        <view class="hot-list">
+          <view class="stock-card" wx:for="{{hotStocks}}" wx:key="code" bindtap="onViewDetail" data-item="{{item}}">
+            <view class="card-left">
+              <view class="stock-name-box">
+                <text class="stock-name">{{item.name}}</text>
+                <text class="stock-code">{{item.code}}</text>
+              </view>
             </view>
-            <!-- 表体 -->
-            <view class="matrix-tr" wx:for="{{matrixData}}" wx:key="strike" wx:for-item="row">
-              <view class="matrix-td sticky-col">{{row.strike}}</view>
-              <view class="matrix-td {{cell.value === '--' ? 'empty' : 'blue'}}" 
-                    wx:for="{{row.values}}" wx:key="term" wx:for-item="cell"
-                    bindtap="onCellTap" data-strike="{{row.strike}}" data-term="{{cell.term}}">
-                <text class="cell-val-text">{{cell.value}}</text>
-                <view class="cell-badge" wx:if="{{cell.badge}}">{{cell.badge}}</view>
+            <view class="card-center">
+              <view class="price-box">
+                <text class="price-val {{item.changePercent >= 0 ? 'up' : 'down'}}">{{item.price}}</text>
+              </view>
+            </view>
+            <view class="card-right">
+              <view class="change-box {{item.changePercent >= 0 ? 'bg-up' : 'bg-down'}}">
+                <text class="change-val">{{item.changePercent >= 0 ? '+' : ''}}{{item.changePercent}}%</text>
+              </view>
+              <view class="atm-box">
+                <text class="atm-label">平值 </text>
+                <text class="atm-val">{{item.atm}}%</text>
               </view>
             </view>
           </view>
-        </scroll-view>
+        </view>
       </view>
     
       <!-- 加载状态 -->
@@ -287,54 +288,55 @@
 
     <!-- 6. 原有的自选/列表筛选逻辑 (仅在自选模式下显示) -->
     <block wx:if="{{currentTab === '自选'}}">
-      <!-- 原有的次级筛选栏 -->
+      <!-- 2. 次级筛选栏 -->
       <view class="sub-filter-bar">
-        <view class="sub-filters" style="position: relative; left: 11rpx; top: -77rpx; flex: 1; min-width: 0; display: flex; box-sizing: border-box">
-          <view class="sub-filter-item {{subFilter === '全部' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="全部">全部</view>
-          <view class="sub-filter-item {{subFilter === '持仓' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="持仓">持仓</view>
-          <view class="sub-filter-item {{subFilter === '沪深' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="沪深">沪深</view>
-          <view class="sub-filter-item {{subFilter === '指数' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="指数">指数</view>
-          <scroll-view
-            class="top-groups {{topGroupAnimationClass}}"
-            scroll-x
-            show-scrollbar="{{false}}"
-            wx:if="{{topGroups.length > 0}}"
-          >
-            <view class="top-groups-inner">
-              <view
-                class="sub-filter-item top-group-item {{activeGroupId === item.id ? 'active' : ''}}"
-                wx:for="{{topGroups}}"
-                wx:key="id"
-                bindtap="onSwitchGroup"
-                data-id="{{item.id}}"
-                hover-class="top-group-item-hover"
-                hover-stay-time="80"
-              >
-                <text class="top-group-name">{{item.name}}</text>
-                <text class="top-group-count-inline">({{groupCountsById[item.id] || 0}})</text>
+        <view class="filter-row top-row">
+          <view class="sub-filters">
+            <view class="sub-filter-item {{subFilter === '全部' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="全部">全部</view>
+            <view class="sub-filter-item {{subFilter === '持仓' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="持仓">持仓</view>
+            <view class="sub-filter-item {{subFilter === '沪深' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="沪深">沪深</view>
+            <view class="sub-filter-item {{subFilter === '指数' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="指数">指数</view>
+            <scroll-view
+              class="top-groups {{topGroupAnimationClass}}"
+              scroll-x
+              show-scrollbar="{{false}}"
+              wx:if="{{topGroups.length > 0}}"
+            >
+              <view class="top-groups-inner">
+                <view
+                  class="sub-filter-item top-group-item {{activeGroupId === item.id ? 'active' : ''}}"
+                  wx:for="{{topGroups}}"
+                  wx:key="id"
+                  bindtap="onSwitchGroup"
+                  data-id="{{item.id}}"
+                  hover-class="top-group-item-hover"
+                  hover-stay-time="80"
+                >
+                  <text class="top-group-name">{{item.name}}</text>
+                  <text class="top-group-count-inline">({{groupCountsById[item.id] || 0}})</text>
+                </view>
               </view>
+            </scroll-view>
+            <view class="top-group-skeleton" wx:if="{{loadingGroups}}">
+              <view class="top-group-skeleton-chip"></view>
             </view>
-          </scroll-view>
-          <view class="top-group-skeleton" wx:if="{{loadingGroups}}">
-            <view class="top-group-skeleton-chip"></view>
+          </view>
+          <view class="group-func-btn" bindtap="onGroupClick" aria-label="分组功能" role="button">
+            <view class="group-icon-svg">
+              <view class="svg-line"></view>
+              <view class="svg-line"></view>
+              <view class="svg-line"></view>
+            </view>
           </view>
         </view>
-        <view class="filter-right-area">
-          <view class="group-func-btn" bindtap="onGroupClick" aria-label="分组功能" role="button">
-             <view class="group-icon-svg">
-                <view class="svg-line"></view>
-                <view class="svg-line"></view>
-                <view class="svg-line"></view>
-             </view>
+
+        <view class="filter-row bottom-row">
+          <view class="vanilla-tag">
+            <text>香草看涨</text>
           </view>
-          <view class="filter-right-row">
-             <view class="vanilla-tag" style="position: relative; left: -425rpx; top: -6rpx; width: 119rpx; display: block; box-sizing: border-box; height: 51rpx">
-                <text>香草看涨</text>
-             </view>
-             <view class="data-info" bindtap="showDataInfo">
-                <text class="info-label" style="position: relative; left: -29rpx; top: 9rpx; height: 44rpx; display: block; box-sizing: border-box">数据说明</text>
-                <view class="info-icon">?</view>
-             </view>
+          <view class="data-info" bindtap="showDataInfo">
+            <text class="info-label">数据说明</text>
+            <view class="info-icon">?</view>
           </view>
         </view>
       </view>

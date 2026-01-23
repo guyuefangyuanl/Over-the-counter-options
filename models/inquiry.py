@@ -57,16 +57,28 @@ class InquiryModel:
             logger.error(f"获取询价记录失败: {e}")
             return []
 
-    def update_status(self, inquiry_id: str, status: str, remark: str = None) -> bool:
+    def update_status(self, inquiry_id: str, status: str, remark: str = None, operator: str = None) -> bool:
         from bson.objectid import ObjectId
         try:
-            update_data = {"status": status, "updatedAt": datetime.utcnow()}
+            now = datetime.utcnow()
+            update_data = {"status": status, "updatedAt": now}
             if remark:
                 update_data["remark"] = remark
                 
+            # 记录历史
+            history_entry = {
+                "status": status,
+                "remark": remark,
+                "operator": operator,
+                "time": now
+            }
+            
             result = self.collection.update_one(
                 {"_id": ObjectId(inquiry_id)},
-                {"$set": update_data}
+                {
+                    "$set": update_data,
+                    "$push": {"history": history_entry}
+                }
             )
             return result.modified_count > 0
         except Exception as e:
