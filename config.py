@@ -5,6 +5,8 @@
 """
 
 import os
+import logging
+from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
 
 # 加载.env文件中的环境变量
@@ -56,7 +58,27 @@ class Config:
         Args:
             app (Flask): Flask应用实例
         """
-        pass
+        # 配置日志收集
+        if not app.debug:
+            # 创建logs目录
+            if not os.path.exists('logs'):
+                os.mkdir('logs')
+            
+            # 配置文件日志处理器（自动轮转）
+            file_handler = RotatingFileHandler(
+                'logs/app.log',
+                maxBytes=10240000,  # 10MB
+                backupCount=10,     # 保留10个备份文件
+                encoding='utf-8'
+            )
+            file_handler.setFormatter(logging.Formatter(
+                '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+            ))
+            file_handler.setLevel(logging.INFO)
+            app.logger.addHandler(file_handler)
+            
+            app.logger.setLevel(logging.INFO)
+            app.logger.info('应用启动 - 生产环境')
 
 class DevelopmentConfig(Config):
     """

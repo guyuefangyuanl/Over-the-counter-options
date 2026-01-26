@@ -100,6 +100,11 @@ def create_app() -> Flask:
     from routes.admin import admin_bp
     from routes.auth import auth_bp
     from routes.group import group_bp
+    from routes.fee import fee_bp
+    from routes.customer import customer_bp
+    from routes.trade import trade_bp
+    from routes.message import message_bp
+    from routes.config import config_bp
 
     flask_app = Flask(__name__)
     flask_app.json = CustomJSONProvider(flask_app)
@@ -168,6 +173,11 @@ def create_app() -> Flask:
     flask_app.register_blueprint(stock_bp, url_prefix='/api/v1/stock')
     flask_app.register_blueprint(admin_bp, url_prefix='/api/v1/admin')
     flask_app.register_blueprint(group_bp, url_prefix='/api/v1')
+    flask_app.register_blueprint(fee_bp, url_prefix='/api/v1/admin')
+    flask_app.register_blueprint(customer_bp, url_prefix='/api/v1/admin')
+    flask_app.register_blueprint(trade_bp, url_prefix='/api/v1/admin')
+    flask_app.register_blueprint(message_bp, url_prefix='/api/v1/admin')
+    flask_app.register_blueprint(config_bp, url_prefix='/api/v1/admin')
     
     @flask_app.before_request
     def log_request_info():

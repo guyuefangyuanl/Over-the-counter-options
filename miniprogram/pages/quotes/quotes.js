@@ -1540,22 +1540,120 @@ Page({
   
   // 提交询价
   submitInquiry: function(quote) {
-    wx.showLoading({
-      title: '提交询价中...'
-    });
+    if (!quote) {
+      wx.showToast({ title: '询价信息不完整', icon: 'none' });
+      return;
+    }
+
+    wx.showLoading({ title: '提交询价中...' });
     
-    setTimeout(() => {
+    // 获取用户信息
+    const storedUserInfo = wx.getStorageSync('userInfo') || {};
+    const loginService = require('../../utils/loginService.js');
+    const currentUser = loginService.getCurrentUser() || {};
+    
+    // 组合用户信息
+    const userInfo = {
+      ...storedUserInfo,
+      ...currentUser,
+      userId: currentUser.userId || storedUserInfo.userId || 'anonymous_' + Date.now(),
+      openid: currentUser.openid || storedUserInfo.openid || 'anonymous',
+      nickname: currentUser.nickName || storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || '匿名用户'
+    };
+    
+    // 解析期权类型
+    let optionType = 'call';
+    if (quote.optionType) {
+      if (quote.optionType.includes('看跌') || quote.optionType.toLowerCase().includes('put')) {
+        optionType = 'put';
+      }
+    }
+    
+    // 构造提交数据（与inquiry页面格式保持一致）
+    const submitData = {
+      // 产品信息
+      selectedProduct: {
+        name: quote.underlyingAsset || quote.name || '未知标的',
+        code: quote.code || quote.underlyingCode || '',
+        type: 'stock'
+      },
+      productName: quote.underlyingAsset || quote.name || '未知标的',
+      productCode: quote.code || quote.underlyingCode || '',
+      
+      // 询价参数
+      optionType: optionType,
+      structure: quote.structure || 'vanilla',
+      term: quote.term || quote.maturity || '1M',
+      notionalAmount: quote.notionalAmount || 100,
+      strikePrice: quote.strikePrice || quote.strike || '100',
+      selectedDealers: quote.trader ? [quote.trader.name || quote.trader] : [],
+      
+      // 报价信息
+      premiumPercent: quote.premiumPercent || '',
+      premium: quote.premium || '',
+      
+      // 联系信息
+      contactName: storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || '报价用户',
+      phone: storedUserInfo.phone || '',
+      contactPhone: storedUserInfo.phone || '',
+      contactEmail: storedUserInfo.email || '',
+      notes: `通过报价列表提交询价 - ${quote.optionType || '期权'}`,
+      
+      // 状态与时间
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      
+      // 用户信息
+      userId: userInfo.userId || userInfo.openid || 'anonymous_' + Date.now(),
+      userName: userInfo.nickname || '报价用户',
+      openid: userInfo.openid || 'anonymous',
+      
+      // 额外字段
+      source: 'miniprogram_quotes',  // 标识来源为报价列表
+      history: [],
+      
+      contactInfo: {
+        name: storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || '报价用户',
+        phone: storedUserInfo.phone || '',
+        email: storedUserInfo.email || ''
+      }
+    };
+    
+    console.log('报价列表提交询价数据:', submitData);
+    
+    // 提交到云数据库
+    const db = wx.cloud.database();
+    db.collection('inquiries').add({
+      data: {
+        ...submitData,
+        createdAt: db.serverDate(),
+        updatedAt: db.serverDate()
+      }
+    }).then(res => {
+      console.log('询价提交成功，ID:', res._id);
       wx.hideLoading();
       wx.showToast({
         title: '询价已提交',
-        icon: 'success'
+        icon: 'success',
+        duration: 2000
       });
       
-      // 跳转到询价中心
-      wx.switchTab({
-        url: '/pages/inquiry/inquiry'
+      // 延迟跳转到询价中心
+      setTimeout(() => {
+        wx.switchTab({
+          url: '/pages/inquiry/inquiry'
+        });
+      }, 1500);
+    }).catch(err => {
+      console.error('询价提交失败:', err);
+      wx.hideLoading();
+      wx.showToast({
+        title: '提交失败：' + (err.errMsg || '请重试'),
+        icon: 'none',
+        duration: 3000
       });
-    }, 1500);
+    });
   },
   
   // 查看详情
@@ -1712,25 +1810,120 @@ Page({
     });
   },
 
-  // 提交询价
+  // 提交询价（从定价系统）
   submitInquiry: function(item) {
-    wx.showLoading({
-      title: '提交询价中...'
-    });
+    if (!item) {
+      wx.showToast({ title: '询价信息不完整', icon: 'none' });
+      return;
+    }
 
-    // 模拟询价提交
-    setTimeout(() => {
+    wx.showLoading({ title: '提交询价中...' });
+    
+    // 获取用户信息
+    const storedUserInfo = wx.getStorageSync('userInfo') || {};
+    const loginService = require('../../utils/loginService.js');
+    const currentUser = loginService.getCurrentUser() || {};
+    
+    // 组合用户信息
+    const userInfo = {
+      ...storedUserInfo,
+      ...currentUser,
+      userId: currentUser.userId || storedUserInfo.userId || 'anonymous_' + Date.now(),
+      openid: currentUser.openid || storedUserInfo.openid || 'anonymous',
+      nickname: currentUser.nickName || storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || '匿名用户'
+    };
+    
+    // 解析期权类型
+    let optionType = 'call';
+    if (item.optionType) {
+      if (item.optionType.includes('看跌') || item.optionType.toLowerCase().includes('put')) {
+        optionType = 'put';
+      }
+    }
+    
+    // 构造提交数据（与inquiry页面格式保持一致）
+    const submitData = {
+      // 产品信息
+      selectedProduct: {
+        name: item.underlyingAsset || item.name || '未知标的',
+        code: item.code || item.underlyingCode || '',
+        type: 'stock'
+      },
+      productName: item.underlyingAsset || item.name || '未知标的',
+      productCode: item.code || item.underlyingCode || '',
+      
+      // 询价参数
+      optionType: optionType,
+      structure: item.structure || 'vanilla',
+      term: item.term || item.maturity || '1M',
+      notionalAmount: item.notionalAmount || 100,
+      strikePrice: item.strikePrice || item.strike || '100',
+      selectedDealers: item.trader ? [item.trader.name || item.trader] : [],
+      
+      // 报价信息
+      bidPrice: item.bidPrice || '',
+      askPrice: item.askPrice || '',
+      
+      // 联系信息
+      contactName: storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || '定价用户',
+      phone: storedUserInfo.phone || '',
+      contactPhone: storedUserInfo.phone || '',
+      contactEmail: storedUserInfo.email || '',
+      notes: `通过定价系统提交询价 - ${item.optionType || '期权'}`,
+      
+      // 状态与时间
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      
+      // 用户信息
+      userId: userInfo.userId || userInfo.openid || 'anonymous_' + Date.now(),
+      userName: userInfo.nickname || '定价用户',
+      openid: userInfo.openid || 'anonymous',
+      
+      // 额外字段
+      source: 'miniprogram_pricing',  // 标识来源为定价系统
+      history: [],
+      
+      contactInfo: {
+        name: storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || '定价用户',
+        phone: storedUserInfo.phone || '',
+        email: storedUserInfo.email || ''
+      }
+    };
+    
+    console.log('定价系统提交询价数据:', submitData);
+    
+    // 提交到云数据库
+    const db = wx.cloud.database();
+    db.collection('inquiries').add({
+      data: {
+        ...submitData,
+        createdAt: db.serverDate(),
+        updatedAt: db.serverDate()
+      }
+    }).then(res => {
+      console.log('询价提交成功，ID:', res._id);
       wx.hideLoading();
       wx.showToast({
         title: '询价已提交',
-        icon: 'success'
+        icon: 'success',
+        duration: 2000
       });
       
-      // 可以跳转到询价详情页面
+      // 跳转到询价详情页面
       wx.navigateTo({
-        url: '/pages/inquiry/inquiry?type=detail&id=' + Date.now()
+        url: '/pages/inquiry/inquiry?type=detail&id=' + res._id
       });
-    }, 1500);
+    }).catch(err => {
+      console.error('询价提交失败:', err);
+      wx.hideLoading();
+      wx.showToast({
+        title: '提交失败：' + (err.errMsg || '请重试'),
+        icon: 'none',
+        duration: 3000
+      });
+    });
   },
 
   // 查看详情

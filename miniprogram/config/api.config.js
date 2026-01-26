@@ -10,17 +10,17 @@
 
 // 开发环境配置
 const DEV_CONFIG = {
-  // 后端 API 服务地址（根据实际启动的服务调整）
-  // 推荐配置：Flask 后端在 5002，Node.js 后端在 5000
-  apiBaseUrl: 'http://localhost:5002/api/v1',
+  // 后端 API 服务地址 - 使用云托管Flask API
+  apiBaseUrl: 'https://flask-ym1v-210758-7-1374336462.sh.run.tcloudbase.com/api/v1',
   
   // 云端环境（生产/测试）
-  cloudApiBaseUrl: 'https://your-cloud-api.com/api/v1'
+  cloudApiBaseUrl: 'https://flask-ym1v-210758-7-1374336462.sh.run.tcloudbase.com/api/v1'
 };
 
 // 生产环境配置
 const PROD_CONFIG = {
-  apiBaseUrl: 'https://your-production-api.com/api/v1'
+  // 【重要】生产环境使用云托管Flask API
+  apiBaseUrl: 'https://flask-ym1v-210758-7-1374336462.sh.run.tcloudbase.com/api/v1'
 };
 
 /**

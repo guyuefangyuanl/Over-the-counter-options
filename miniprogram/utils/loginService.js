@@ -11,33 +11,34 @@ class LoginService {
    */
   wechatLogin(code, userInfo) {
     return new Promise((resolve, reject) => {
-      const account = (typeof wx.getAccountInfoSync === 'function') ? wx.getAccountInfoSync() : null;
-      const envVersion = account && account.miniProgram && account.miniProgram.envVersion;
-      const useRealBackend = wx.getStorageSync('useRealBackend') === true;
-      if (envVersion === 'develop' && !useRealBackend) {
-        const mockResult = {
-          userId: `mock_${Date.now()}`,
-          openid: `mock_openid_${Math.random().toString(36).slice(2)}`,
-          userInfo: {
-            nickName: (userInfo && userInfo.nickName) || '微信用户',
-            avatarUrl: (userInfo && userInfo.avatarUrl) || '',
-            gender: (userInfo && userInfo.gender) || 0
-          },
-          token: `mock_token_${Date.now()}`
-        };
-        resolve(mockResult);
-        return;
-      }
-      api.request('/auth/wechat/login', 'POST', {
-        code: code,
-        userInfo: userInfo
-      }, {}, { silent: true, retries: 0, suppressErrorLog: true, suppressRetryLog: true }).then(result => {
-        if (result.success) {
-          resolve(result.data);
+      // 使用微信云函数登录
+      wx.cloud.callFunction({
+        name: 'login',
+        data: {
+          userInfo: userInfo
+        }
+      }).then(res => {
+        console.log('云函数登录结果:', res)
+        if (res.result && res.result.success) {
+          resolve(res.result.data)
         } else {
-          reject(new Error(result.message || '微信登录失败'));
+          // 云函数调用失败，回退到Mock数据
+          console.warn('云函数登录失败，使用Mock数据:', res.result ? res.result.message : '未知错误')
+          const mockResult = {
+            userId: `mock_${Date.now()}`,
+            openid: `mock_openid_${Math.random().toString(36).slice(2)}`,
+            userInfo: {
+              nickName: (userInfo && userInfo.nickName) || '微信用户',
+              avatarUrl: (userInfo && userInfo.avatarUrl) || '',
+              gender: (userInfo && userInfo.gender) || 0
+            },
+            token: `mock_token_${Date.now()}`
+          }
+          resolve(mockResult)
         }
       }).catch(error => {
+        console.error('调用云函数失败:', error)
+        // 云函数调用异常，回退到Mock数据
         const mockResult = {
           userId: `mock_${Date.now()}`,
           openid: `mock_openid_${Math.random().toString(36).slice(2)}`,
@@ -47,9 +48,9 @@ class LoginService {
             gender: (userInfo && userInfo.gender) || 0
           },
           token: `mock_token_${Date.now()}`
-        };
-        resolve(mockResult);
-      });
+        }
+        resolve(mockResult)
+      })
     });
   }
 

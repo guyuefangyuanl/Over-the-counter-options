@@ -527,30 +527,113 @@ Page({
     
     this.setData({ isSubmitting: true });
     
-    // 构造提交数据
+    // 获取用户信息，支持未登录用户提交询价
+    const storedUserInfo = wx.getStorageSync('userInfo') || {};
+    
+    // 从登录服务获取当前用户信息
+    const loginService = require('../../utils/loginService.js');
+    const currentUser = loginService.getCurrentUser() || {};
+    
+    // 组合用户信息：优先使用当前登录用户，其次是存储的用户信息
+    const userInfo = {
+      ...storedUserInfo,
+      ...currentUser,
+      userId: currentUser.userId || storedUserInfo.userId || 'anonymous_' + Date.now(),
+      openid: currentUser.openid || storedUserInfo.openid || 'anonymous',
+      nickname: currentUser.nickName || storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || inquiryForm.contactName || '匿名用户'
+    };
+    
+    // 构造提交数据（与后台格式保持一致）
     const submitData = {
-      ...inquiryForm,
+      // 产品信息
+      selectedProduct: {
+        name: inquiryForm.selectedProduct.name,
+        code: inquiryForm.selectedProduct.code,
+        type: inquiryForm.selectedProduct.type || 'stock'
+      },
       productName: inquiryForm.selectedProduct.name,
       productCode: inquiryForm.selectedProduct.code,
-      createTime: new Date().toISOString(),
-      status: 'pending'
+      
+      // 询价参数
+      optionType: inquiryForm.optionType,
+      structure: inquiryForm.structure,
+      term: inquiryForm.term,
+      notionalAmount: inquiryForm.notionalAmount,
+      strikePrice: inquiryForm.strikePrice,
+      selectedDealers: inquiryForm.selectedDealers || [],
+      
+      // 联系信息
+      contactName: inquiryForm.contactName,
+      phone: inquiryForm.contactPhone,  // 注意：后台使用 phone 字段
+      contactPhone: inquiryForm.contactPhone,
+      contactEmail: inquiryForm.contactEmail || '',
+      notes: inquiryForm.notes || '',
+      
+      // 状态与时间
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      
+      // 用户信息
+      userId: userInfo.userId || userInfo.openid || 'anonymous_' + Date.now(),
+      userName: userInfo.nickname || inquiryForm.contactName || '匿名用户',
+      openid: userInfo.openid || 'anonymous',
+      
+      // 额外字段（便于后台管理）
+      source: 'miniprogram',
+      history: [],
+      
+      // 确保联系信息也被保存
+      contactInfo: {
+        name: inquiryForm.contactName,
+        phone: inquiryForm.contactPhone,
+        email: inquiryForm.contactEmail
+      }
     };
+    
+    console.log('提交询价数据:', submitData);
     
     // 提交到云数据库 'inquiries' 集合
     const db = wx.cloud.database();
     db.collection('inquiries').add({
       data: {
         ...submitData,
-        createTime: db.serverDate(),
-        updateTime: db.serverDate(),
-        userId: '{openid}' 
+        createdAt: db.serverDate(),  // 使用服务器时间
+        updatedAt: db.serverDate()
       }
     }).then(res => {
-      wx.showToast({ title: '询价提交成功', icon: 'success' });
+      console.log('询价提交成功，ID:', res._id);
+      wx.showToast({ 
+        title: '询价提交成功', 
+        icon: 'success',
+        duration: 2000
+      });
+      
+      // 重置表单
+      this.setData({
+        inquiryForm: {
+          selectedProduct: null,
+          optionType: 'call',
+          structure: 'vanilla',
+          term: '1M',
+          notionalAmount: '',
+          strikePrice: '100',
+          selectedDealers: ['CICC'],
+          contactName: '',
+          contactPhone: '',
+          contactEmail: '',
+          notes: ''
+        }
+      });
+      
       this.hideInquiryForm();
     }).catch(err => {
-      console.error('提交询价失败', err);
-      wx.showToast({ title: '提交失败，请重试', icon: 'none' });
+      console.error('提交询价失败:', err);
+      wx.showToast({ 
+        title: '提交失败：' + (err.errMsg || '请重试'), 
+        icon: 'none',
+        duration: 3000
+      });
     }).finally(() => {
       this.setData({ isSubmitting: false });
     });
@@ -619,7 +702,7 @@ Page({
   },
 
   // 打开新建分组弹窗
-  openNewGroupDialog() {4
+  openNewGroupDialog() {
     this.setData({ 
       showNewGroupDialog: true,
       newGroupName: '',

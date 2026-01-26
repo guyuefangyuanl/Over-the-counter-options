@@ -311,9 +311,112 @@ Page({
       data: text,
       success: () => {
         wx.showToast({ title: '已复制下单文本', icon: 'success' });
-        // 2. 生成图片并预览
+        // 2. 提交询价数据到云数据库
+        this.submitInquiryToDatabase();
+        // 3. 生成图片并预览
         this.generateOrderImage();
       }
+    });
+  },
+
+  // 提交询价数据到云数据库
+  submitInquiryToDatabase() {
+    const { stock, orderForm } = this.data;
+    
+    // 获取用户信息
+    const storedUserInfo = wx.getStorageSync('userInfo') || {};
+    const loginService = require('../../utils/loginService.js');
+    const currentUser = loginService.getCurrentUser() || {};
+    
+    // 组合用户信息
+    const userInfo = {
+      ...storedUserInfo,
+      ...currentUser,
+      userId: currentUser.userId || storedUserInfo.userId || 'anonymous_' + Date.now(),
+      openid: currentUser.openid || storedUserInfo.openid || 'anonymous',
+      nickname: currentUser.nickName || storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || '匿名用户'
+    };
+    
+    // 从行权价字符串中提取期权类型和行权价
+    // 例如: "100C" -> optionType: "call", strikePrice: "100"
+    const strikeStr = orderForm.strike || '';
+    let optionType = 'call';
+    let strikePrice = '100';
+    if (strikeStr.includes('C')) {
+      optionType = 'call';
+      strikePrice = strikeStr.replace('C', '');
+    } else if (strikeStr.includes('P')) {
+      optionType = 'put';
+      strikePrice = strikeStr.replace('P', '');
+    }
+    
+    // 构造提交数据（与inquiry页面格式保持一致）
+    const submitData = {
+      // 产品信息
+      selectedProduct: {
+        name: stock.name,
+        code: stock.code,
+        type: 'stock'
+      },
+      productName: stock.name,
+      productCode: stock.code,
+      
+      // 询价参数
+      optionType: optionType,
+      structure: 'vanilla',  // 默认香草期权
+      term: orderForm.term || '1M',
+      notionalAmount: orderForm.notional || 100,
+      strikePrice: strikePrice,
+      selectedDealers: [orderForm.trader || 'ZJGJ'],
+      
+      // 询价详情
+      direction: orderForm.direction,
+      rate: orderForm.rate,
+      price: orderForm.price || '市价',
+      
+      // 联系信息（从用户信息或存储中获取）
+      contactName: storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || '转发用户',
+      phone: storedUserInfo.phone || '',
+      contactPhone: storedUserInfo.phone || '',
+      contactEmail: storedUserInfo.email || '',
+      notes: `通过转发下单图片提交 - ${orderForm.direction}`,
+      
+      // 状态与时间
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      
+      // 用户信息
+      userId: userInfo.userId || userInfo.openid || 'anonymous_' + Date.now(),
+      userName: userInfo.nickname || '转发用户',
+      openid: userInfo.openid || 'anonymous',
+      
+      // 额外字段
+      source: 'miniprogram_forward',  // 标识来源为转发图片功能
+      history: [],
+      
+      contactInfo: {
+        name: storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || '转发用户',
+        phone: storedUserInfo.phone || '',
+        email: storedUserInfo.email || ''
+      }
+    };
+    
+    console.log('转发图片同时提交询价数据:', submitData);
+    
+    // 提交到云数据库
+    const db = wx.cloud.database();
+    db.collection('inquiries').add({
+      data: {
+        ...submitData,
+        createdAt: db.serverDate(),
+        updatedAt: db.serverDate()
+      }
+    }).then(res => {
+      console.log('询价数据提交成功，ID:', res._id);
+    }).catch(err => {
+      console.error('询价数据提交失败:', err);
+      // 静默失败，不影响图片生成流程
     });
   },
 

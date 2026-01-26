@@ -23,12 +23,51 @@ MOCK_QUOTES = [
 
 @inquiry_bp.route('/quotes', methods=['GET'])
 def get_quotes():
-    """获取报价列表"""
-    return jsonify({
-        "success": True,
-        "message": "获取成功",
-        "data": MOCK_QUOTES
-    })
+    """获取报价列表 - 从真实数据库读取"""
+    try:
+        # 优先使用微信云数据库
+        cloud_db = getattr(current_app, 'cloud_db', None)
+        if cloud_db:
+            try:
+                result = cloud_db.query('quotes', {})
+                quotes_data = result.get('data', []) if isinstance(result, dict) else result
+                if quotes_data:
+                    logger.info(f"从云数据库获取到 {len(quotes_data)} 条报价数据")
+                    return jsonify({
+                        "success": True,
+                        "message": "获取成功",
+                        "data": quotes_data
+                    })
+            except Exception as e:
+                logger.warning(f"从云数据库获取报价失败，尝试本地数据库: {e}")
+        
+        # 回退到本地MongoDB
+        db = getattr(current_app, 'db', None)
+        if db:
+            quotes = list(db.quotes.find({}, {'_id': 0}).limit(100))
+            if quotes:
+                logger.info(f"从本地数据库获取到 {len(quotes)} 条报价数据")
+                return jsonify({
+                    "success": True,
+                    "message": "获取成功",
+                    "data": quotes
+                })
+        
+        # 如果都没有数据，返回空列表而非模拟数据
+        logger.warning("数据库中没有报价数据，返回空列表")
+        return jsonify({
+            "success": True,
+            "message": "暂无报价数据",
+            "data": []
+        })
+        
+    except Exception as e:
+        logger.error(f"获取报价失败: {e}")
+        return jsonify({
+            "success": False,
+            "message": "获取报价失败，请稍后重试",
+            "data": []
+        }), 500
 
 @inquiry_bp.route('/inquiry', methods=['POST'])
 def create_inquiry():
@@ -111,7 +150,9 @@ def admin_get_inquiries():
                 count_js = f"db.collection('inquiries').where({json.dumps(where_clause)}).count()"
                 total = cloud_db.count(count_js)
                 
-                if cloud_data:
+                # 判断是否成功获取到数据（包括空数组）
+                if cloud_data is not None:
+                    logger.info(f"从云数据库获取询价列表成功: {len(cloud_data)} 条记录, 总数: {total}")
                     # 格式化日期，云数据库返回的可能是 ISO 字符串或特定格式
                     return flask_paginated_response(
                         data=cloud_data,
@@ -121,6 +162,7 @@ def admin_get_inquiries():
                     )
             except Exception as e:
                 logger.error(f"从云数据库获取询价列表失败，尝试回退到本地数据库: {e}")
+
 
 
         def parse_dt(raw: str, is_end: bool) -> datetime.datetime:
@@ -252,6 +294,22 @@ def admin_update_inquiry_status(id):
 def get_inquiry_statistics():
     """获取询价统计信息"""
     try:
+        # 优先使用云数据库
+        cloud_db = getattr(current_app, 'cloud_db', None)
+        if cloud_db:
+            try:
+                stats = {
+                    "pending": cloud_db.count("db.collection('inquiries').where({status: 'pending'}).count()"),
+                    "processing": cloud_db.count("db.collection('inquiries').where({status: 'processing'}).count()"),
+                    "completed": cloud_db.count("db.collection('inquiries').where({status: 'completed'}).count()"),
+                    "rejected": cloud_db.count("db.collection('inquiries').where({status: 'rejected'}).count()"),
+                }
+                logger.info(f"从云数据库获取询价统计成功: {stats}")
+                return flask_success_response(data=stats, message="统计成功")
+            except Exception as e:
+                logger.error(f"从云数据库获取统计信息失败，尝试回退到本地数据库: {e}")
+        
+        # 回退到本地数据库
         db = getattr(current_app, 'db', None)
         if not db:
             return flask_success_response(data={"pending": 0, "processing": 0, "completed": 0, "rejected": 0}, message="数据库未连接")

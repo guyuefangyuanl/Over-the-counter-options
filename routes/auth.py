@@ -4,6 +4,8 @@ import os
 import base64
 import hashlib
 import hmac
+import requests
+import logging
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import Any, Callable, Dict, Optional, TypeVar, cast, List, Tuple
@@ -14,6 +16,8 @@ from flask import Blueprint, g, request, current_app
 from backend_utils.response import flask_error_response, flask_success_response
 
 auth_bp = Blueprint("auth", __name__)
+
+logger = logging.getLogger(__name__)
 
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_SECRET = os.getenv("JWT_SECRET") or os.getenv("SECRET_KEY") or "dev-secret-key-change-in-production"
@@ -340,3 +344,94 @@ def delete_admin_user(username: str):
     if not deleted:
         return flask_error_response("账号不存在", 404)
     return flask_success_response(data=None, message="删除成功")
+
+
+@auth_bp.route("/wechat/login", methods=["POST"])
+def wechat_login():
+    """微信登录 - 小程序端调用"""
+    try:
+        data = request.get_json()
+        code = data.get('code')  # wx.login() 获取的code
+        
+        if not code:
+            return flask_error_response("缺少code参数", 400)
+        
+        # 调用微信接口换取openid
+        wx_appid = os.getenv('WX_APPID')
+        wx_secret = os.getenv('WX_SECRET')
+        
+        if not wx_appid or not wx_secret:
+            logger.error("微信配置未设置: WX_APPID 或 WX_SECRET")
+            return flask_error_response("服务器配置错误，请联系管理员", 500)
+        
+        url = 'https://api.weixin.qq.com/sns/jscode2session'
+        params = {
+            'appid': wx_appid,
+            'secret': wx_secret,
+            'js_code': code,
+            'grant_type': 'authorization_code'
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        result = response.json()
+        
+        if 'openid' not in result:
+            error_msg = result.get('errmsg', '微信登录失败')
+            logger.error(f"微信登录失败: {error_msg}, code: {code}")
+            return flask_error_response(f"微信登录失败: {error_msg}", 500)
+        
+        openid = result['openid']
+        session_key = result.get('session_key')
+        unionid = result.get('unionid')
+        
+        # 查询或创建用户
+        db = _get_db()
+        if not db:
+            return flask_error_response("数据库未连接", 503)
+        
+        user = db.users.find_one({'openid': openid})
+        
+        if not user:
+            # 创建新用户
+            user = {
+                'openid': openid,
+                'unionid': unionid,
+                'nickname': '微信用户',
+                'avatar': '',
+                'phone': '',
+                'created_at': datetime.utcnow(),
+                'last_login': datetime.utcnow()
+            }
+            result_insert = db.users.insert_one(user)
+            user['_id'] = str(result_insert.inserted_id)
+            logger.info(f"创建新用户: openid={openid}")
+        else:
+            # 更新最后登录时间
+            db.users.update_one(
+                {'openid': openid},
+                {'$set': {'last_login': datetime.utcnow()}}
+            )
+            user['_id'] = str(user['_id'])
+            logger.info(f"用户登录: openid={openid}")
+        
+        # 生成JWT token
+        token = _issue_token(openid, 'user')
+        
+        return flask_success_response(
+            data={
+                'token': token,
+                'openid': openid,
+                'unionid': unionid,
+                'nickname': user.get('nickname', '微信用户'),
+                'avatar': user.get('avatar', ''),
+                'phone': user.get('phone', '')
+            },
+            message="登录成功"
+        )
+        
+    except requests.RequestException as e:
+        logger.error(f"调用微信API失败: {e}")
+        return flask_error_response("网络连接失败，请稍后重试", 500)
+    except Exception as e:
+        logger.error(f"微信登录失败: {e}", exc_info=True)
+        return flask_error_response(str(e), 500)
