@@ -104,7 +104,7 @@ const FeeList: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      render: (_, record) => (
+      render: () => (
         <Space>
           <Button type="link" size="small">查看</Button>
         </Space>

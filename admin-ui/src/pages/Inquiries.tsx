@@ -326,7 +326,7 @@ const Inquiries: React.FC = () => {
       width: 150,
       render: (dealers: string[]) => (
         <Space size={2} wrap>
-          {Array.isArray(dealers) ? dealers.map(d => <Tag key={d} size="small">{d}</Tag>) : '-'}
+          {Array.isArray(dealers) ? dealers.map(d => <Tag key={d}>{d}</Tag>) : '-'}
         </Space>
       )
     },

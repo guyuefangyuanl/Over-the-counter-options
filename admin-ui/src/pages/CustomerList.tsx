@@ -113,7 +113,7 @@ const CustomerList: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      render: (_, record) => (
+      render: () => (
         <Space>
           <Button type="link" size="small">编辑</Button>
           <Button type="link" size="small">详情</Button>
