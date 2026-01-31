@@ -81,7 +81,7 @@ type ConfirmUploadPayload = {
     invalid: number;
     count: number;
     durationMs: number;
-    errors?: any[];
+    errors?: unknown[];
   };
 };
 
@@ -117,6 +117,13 @@ type PaginatedPayload<T> = {
 function createRowKey(prefix: string) {
   const uuid = globalThis.crypto?.randomUUID?.();
   return uuid ? `${prefix}-${uuid}` : `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function formatSyncError(err: unknown) {
+  if (err && typeof err === 'object' && 'message' in err) {
+    return String((err as { message?: unknown }).message ?? '');
+  }
+  return JSON.stringify(err);
 }
 
 const Quotes: React.FC = () => {
@@ -227,7 +234,7 @@ const Quotes: React.FC = () => {
       title: '费率/价格',
       dataIndex: 'rate',
       key: 'rate',
-      render: (val, record: any) => {
+      render: (val, record: Quote) => {
         if (typeof val === 'number') return `${(val * 100).toFixed(2)}%`;
         if (typeof record.price === 'number') return record.price.toFixed(2);
         return '-';
@@ -295,7 +302,7 @@ const Quotes: React.FC = () => {
                 }
               }
             }
-          } catch (err) {
+          } catch {
             if (uploadPollTimerRef.current !== null) {
               window.clearInterval(uploadPollTimerRef.current);
               uploadPollTimerRef.current = null;
@@ -812,7 +819,7 @@ const Quotes: React.FC = () => {
                 <Typography.Text type="danger">部分同步失败原因：</Typography.Text>
                 <ul>
                   {uploadResult.errors.slice(0, 5).map((err, i) => (
-                    <li key={i}>{err.message || JSON.stringify(err)}</li>
+                    <li key={i}>{formatSyncError(err)}</li>
                   ))}
                   {uploadResult.errors.length > 5 && <li>...等更多错误</li>}
                 </ul>
@@ -897,5 +904,3 @@ const Quotes: React.FC = () => {
 };
 
 export default Quotes;
-
-

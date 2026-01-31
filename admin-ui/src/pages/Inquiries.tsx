@@ -67,6 +67,13 @@ type InquiryFilterFormValues = {
   dateRange?: [unknown, unknown];
 };
 
+type InquiryStatistics = {
+  pending: number;
+  processing: number;
+  completed: number;
+  rejected: number;
+};
+
 const Inquiries: React.FC = () => {
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
@@ -82,6 +89,7 @@ const Inquiries: React.FC = () => {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const autoRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const dataRef = useRef<Inquiry[]>([]);
 
   const maskPhone = (phone: string) => phone.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2');
 
@@ -94,8 +102,9 @@ const Inquiries: React.FC = () => {
       });
       if (res.success && res.data?.pagination && Array.isArray(res.data.items)) {
         // 检查是否有新询价并通知 (仅在静默刷新且页码为1时)
-        if (silent && page === 1 && data.length > 0 && res.data.items.length > 0) {
-          const firstOld = data[0]._id;
+        const previous = dataRef.current;
+        if (silent && page === 1 && previous.length > 0 && res.data.items.length > 0) {
+          const firstOld = previous[0]._id;
           const firstNew = res.data.items[0]._id;
           if (firstOld !== firstNew) {
             const newItem = res.data.items[0];
@@ -124,7 +133,7 @@ const Inquiries: React.FC = () => {
 
   const fetchStatistics = useCallback(async () => {
     try {
-      const res = await api.get<ApiResponse<any>>('/admin/inquiries/statistics');
+      const res = await api.get<ApiResponse<InquiryStatistics>>('/admin/inquiries/statistics');
       if (res.success && res.data) {
         setStatistics(res.data);
       }
@@ -140,6 +149,10 @@ const Inquiries: React.FC = () => {
     void fetchInquiries(currentPage, pageSize, filters);
     void fetchStatistics();
   }, [fetchInquiries, fetchStatistics, filters, currentPage, pageSize]);
+
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   // 自动刷新
   useEffect(() => {
