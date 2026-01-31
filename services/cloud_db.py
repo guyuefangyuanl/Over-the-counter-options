@@ -207,33 +207,43 @@ class CloudDbClient:
         return cls(env_id=env_id, token_provider=provider, verify=verify_ssl)
 
     def query(self, query: str) -> List[Dict[str, Any]]:
-        logger.debug(f"云数据库查询: {query}")
+        logger.info(f">>> 云数据库查询开始: {query}")
         try:
             payload = self._post_api("tcb/databasequery", {"env": self._env_id, "query": query})
+            logger.info(f"<<< 云数据库API响应: errcode={payload.get('errcode', 0)}, 有data字段={('data' in payload)}")
+            
             raw = payload.get("data")
             if raw is None:
+                logger.warning(f"⚠️ 云数据库返回payload中无data字段，返回空列表。完整payload: {payload}")
                 return []
             if not isinstance(raw, list):
-                logger.error(f"云数据库查询返回格式错误: data 非数组, query={query}")
+                logger.error(f"❌ 云数据库查询返回格式错误: data类型为{type(raw)}(期望list), query={query}")
                 return []
+            
+            logger.info(f"✓ 云数据库返回 {len(raw)} 条原始记录字符串")
             out: List[Dict[str, Any]] = []
-            for item in raw:
+            for idx, item in enumerate(raw):
                 if not isinstance(item, str):
+                    logger.warning(f"记录 {idx} 不是字符串类型: {type(item)}")
                     continue
                 try:
                     parsed = json.loads(item)
                     if isinstance(parsed, dict):
                         out.append(parsed)
+                    else:
+                        logger.warning(f"记录 {idx} JSON解析结果不是dict: {type(parsed)}")
                 except Exception as e:
-                    logger.warning(f"云数据库查询解析单条记录失败: {e}, item={item}")
+                    logger.warning(f"云数据库查询解析记录 {idx} 失败: {e}, item前100字符={item[:100]}")
                     continue
+            
+            logger.info(f"✓✓ 云数据库查询成功，解析出 {len(out)} 条有效记录")
             return out
         except CloudDbRequestError as e:
             err_msg = str(e)
             if "[ResourceNotFound]" in err_msg or "Db or Table not exist" in err_msg or "集合不存在" in err_msg:
-                logger.warning(f"云数据库查询失败: 集合不存在 ({e})")
+                logger.warning(f"⚠️ 云数据库查询失败: 集合不存在 ({e})")
                 return []
-            logger.error(f"云数据库查询异常: {e}, query={query}")
+            logger.error(f"❌ 云数据库查询异常: {e}, query={query}")
             raise
 
     def count(self, query: str) -> int:

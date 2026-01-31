@@ -97,12 +97,6 @@ def create_inquiry():
 def admin_get_inquiries():
     """管理后台：获取询价列表"""
     try:
-        db = getattr(current_app, 'db', None)
-        if not db:
-            return flask_paginated_response(data=[], page=1, per_page=20, total=0, message="数据库未连接，返回空询价列表")
-            
-        inquiry_model = InquiryModel(db)
-        
         page = request.args.get('page', 1)
         page_size = request.args.get('pageSize', 20)
         try:
@@ -128,40 +122,101 @@ def admin_get_inquiries():
         cloud_db = getattr(current_app, 'cloud_db', None)
         if cloud_db:
             try:
-                # 构造云数据库查询语句
-                where_clause = {}
-                if status:
-                    where_clause["status"] = status
+                logger.info("=" * 60)
+                logger.info("开始从云数据库获取询价列表")
+                logger.info(f"查询参数: page={page}, pageSize={page_size}, status={status}, keyword={keyword}")
+                logger.info("=" * 60)
                 
-                if isinstance(keyword, str) and keyword.strip() != "":
-                    kw = keyword.strip()
-                    # 云数据库模糊查询通常使用 db.RegExp
-                    where_clause["$or"] = [
-                        {"contactName": {"$regex": kw, "$options": "i"}},
-                        {"productName": {"$regex": kw, "$options": "i"}},
-                        {"productCode": {"$regex": kw, "$options": "i"}},
-                    ]
+                # 先获取全部数据用于过滤（只在前几页时这样做，数据量大时需要优化）
+                # 注意：为了正确分页，我们需要先获取所有数据再进行内存过滤
+                all_query_js = "db.collection('inquiries').orderBy('createdAt', 'desc').get()"
+                logger.info(f"云数据库查询语句: {all_query_js}")
                 
-                # 微信云数据库查询使用 JS 语法
-                query_js = f"db.collection('inquiries').where({json.dumps(where_clause)}).orderBy('createdAt', 'desc').skip({(page - 1) * page_size}).limit({page_size}).get()"
-                cloud_data = cloud_db.query(query_js)
+                all_data = cloud_db.query(all_query_js)
+                logger.info(f"✓ 云数据库查询完成，返回类型: {type(all_data)}, 数据长度: {len(all_data) if isinstance(all_data, list) else 'N/A'}")
                 
-                # 获取总数
-                count_js = f"db.collection('inquiries').where({json.dumps(where_clause)}).count()"
-                total = cloud_db.count(count_js)
-                
-                # 判断是否成功获取到数据（包括空数组）
-                if cloud_data is not None:
-                    logger.info(f"从云数据库获取询价列表成功: {len(cloud_data)} 条记录, 总数: {total}")
-                    # 格式化日期，云数据库返回的可能是 ISO 字符串或特定格式
+                # 检查是否为None或空
+                if all_data is None:
+                    logger.error("❌ 云数据库返回 None，可能是查询失败或集合不存在")
+                    logger.warning("⚠️ 继续尝试本地数据库...")
+                elif not isinstance(all_data, list):
+                    logger.error(f"❌ 云数据库返回数据类型错误: {type(all_data)}, 期望 list")
+                    logger.warning("⚠️ 继续尝试本地数据库...")
+                elif len(all_data) == 0:
+                    logger.warning("⚠️ 云数据库查询成功但返回空列表，可能是：")
+                    logger.warning("  1. inquiries 集合确实没有数据")
+                    logger.warning("  2. 小程序未提交询价数据")
+                    logger.warning("  3. 数据未正确同步到云数据库")
+                    logger.info("返回空结果给前端")
                     return flask_paginated_response(
-                        data=cloud_data,
+                        data=[],
+                        page=page,
+                        per_page=page_size,
+                        total=0,
+                        message="云数据库中暂无询价数据"
+                    )
+                
+                if all_data is not None and isinstance(all_data, list):
+                    # 打印前3条数据样例
+                    if len(all_data) > 0:
+                        logger.info(f"数据样例 (前3条):")
+                        for i, item in enumerate(all_data[:3], 1):
+                            logger.info(f"  记录 {i}: ID={item.get('_id')}, 产品={item.get('productName', 'N/A')}, 状态={item.get('status', 'N/A')}, 联系人={item.get('contactName', 'N/A')}")
+                    
+                    filtered_data = all_data
+                    
+                    # 应用状态过滤
+                    if status:
+                        before_count = len(filtered_data)
+                        filtered_data = [item for item in filtered_data if item.get('status') == status]
+                        logger.info(f"状态过滤: '{status}' - 过滤前 {before_count} 条，过滤后 {len(filtered_data)} 条")
+                    
+                    # 应用关键词过滤
+                    if isinstance(keyword, str) and keyword.strip() != "":
+                        kw = keyword.strip().lower()
+                        before_count = len(filtered_data)
+                        filtered_data = [
+                            item for item in filtered_data 
+                            if (kw in str(item.get('contactName', '')).lower() or
+                                kw in str(item.get('productName', '')).lower() or
+                                kw in str(item.get('productCode', '')).lower())
+                        ]
+                        logger.info(f"关键词过滤: '{kw}' - 过滤前 {before_count} 条，过滤后 {len(filtered_data)} 条")
+                    
+                    # 计算分页
+                    total = len(filtered_data)
+                    start_idx = (page - 1) * page_size
+                    end_idx = start_idx + page_size
+                    page_data = filtered_data[start_idx:end_idx]
+                    
+                    logger.info("=" * 60)
+                    logger.info(f"✓✓✓ 云数据库查询成功")
+                    logger.info(f"  - 原始数据: {len(all_data)} 条")
+                    logger.info(f"  - 过滤后: {total} 条")
+                    logger.info(f"  - 当前页: {len(page_data)} 条 (page={page}, pageSize={page_size})")
+                    logger.info("=" * 60)
+                    
+                    return flask_paginated_response(
+                        data=page_data,
                         page=page,
                         per_page=page_size,
                         total=total,
                     )
             except Exception as e:
-                logger.error(f"从云数据库获取询价列表失败，尝试回退到本地数据库: {e}")
+                logger.error("=" * 60)
+                logger.error(f"❌❌❌ 从云数据库获取询价列表失败")
+                logger.error(f"错误类型: {type(e).__name__}")
+                logger.error(f"错误信息: {str(e)}")
+                logger.error("=" * 60)
+                import traceback
+                logger.error(traceback.format_exc())
+                logger.warning("⚠️ 尝试回退到本地数据库...")
+
+        db = getattr(current_app, 'db', None)
+        if not db:
+            return flask_paginated_response(data=[], page=page, per_page=page_size, total=0, message="数据库未连接，返回空询价列表")
+            
+        inquiry_model = InquiryModel(db)
 
 
 
@@ -360,33 +415,80 @@ def batch_update_inquiries():
 def export_inquiries():
     """导出询价列表为Excel"""
     try:
-        db = getattr(current_app, 'db', None)
-        if not db:
-            return flask_error_response("数据库未连接", 503)
-            
-        inquiry_model = InquiryModel(db)
-        
         # 获取过滤条件
         status = request.args.get('status')
         keyword = request.args.get('keyword')
         
-        query = {}
-        if status:
-            query["status"] = status
-        if isinstance(keyword, str) and keyword.strip() != "":
-            kw = keyword.strip()
-            query["$or"] = [
-                {"contactName": {"$regex": kw, "$options": "i"}},
-                {"phone": {"$regex": kw, "$options": "i"}},
-                {"selectedProduct.name": {"$regex": kw, "$options": "i"}},
-            ]
-        
-        # 获取数据
-        cursor = inquiry_model.collection.find(query).sort("createdAt", -1).limit(1000)
         inquiries = []
-        for item in cursor:
-            item["_id"] = str(item["_id"])
-            inquiries.append(item)
+        
+        # 优先使用云数据库
+        cloud_db = getattr(current_app, 'cloud_db', None)
+        if cloud_db:
+            try:
+                # 从云数据库获取数据
+                logger.info("从云数据库导出询价数据")
+                all_query_js = "db.collection('inquiries').orderBy('createdAt', 'desc').get()"
+                all_data = cloud_db.query(all_query_js)
+                logger.info(f"从云数据库获取到 {len(all_data)} 条记录")
+                
+                # 应用过滤条件
+                filtered_data = all_data
+                
+                if status:
+                    filtered_data = [item for item in filtered_data if item.get('status') == status]
+                    logger.info(f"状态过滤后剩余 {len(filtered_data)} 条记录")
+                
+                if isinstance(keyword, str) and keyword.strip() != "":
+                    kw = keyword.strip().lower()
+                    filtered_data = [
+                        item for item in filtered_data 
+                        if (kw in str(item.get('contactName', '')).lower() or
+                            kw in str(item.get('productName', '')).lower() or
+                            kw in str(item.get('productCode', '')).lower())
+                    ]
+                    logger.info(f"关键词过滤后剩余 {len(filtered_data)} 条记录")
+                
+                inquiries = filtered_data[:1000]  # 限制最多导出1000条
+                logger.info(f"准备导出 {len(inquiries)} 条记录")
+                
+            except Exception as e:
+                logger.error(f"从云数据库获取导出数据失败: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                # 继续尝试本地数据库
+        
+        # 如果云数据库没有数据，回退到本地数据库
+        if not inquiries:
+            db = getattr(current_app, 'db', None)
+            if not db:
+                logger.warning("本地数据库未连接，且云数据库无数据")
+                return flask_error_response("暂无数据可导出", 404)
+            
+            logger.info("从本地数据库导出询价数据")
+            inquiry_model = InquiryModel(db)
+            
+            query = {}
+            if status:
+                query["status"] = status
+            if isinstance(keyword, str) and keyword.strip() != "":
+                kw = keyword.strip()
+                query["$or"] = [
+                    {"contactName": {"$regex": kw, "$options": "i"}},
+                    {"phone": {"$regex": kw, "$options": "i"}},
+                    {"selectedProduct.name": {"$regex": kw, "$options": "i"}},
+                ]
+            
+            cursor = inquiry_model.collection.find(query).sort("createdAt", -1).limit(1000)
+            for item in cursor:
+                item["_id"] = str(item["_id"])
+                inquiries.append(item)
+        
+        # 检查是否有数据
+        if not inquiries:
+            logger.warning("没有符合条件的询价数据")
+            return flask_error_response("没有符合条件的数据可导出", 404)
+        
+        logger.info(f"开始生成Excel文件，共 {len(inquiries)} 条记录")
         
         # 创建Excel工作簿
         wb = openpyxl.Workbook()
@@ -465,6 +567,8 @@ def export_inquiries():
         wb.save(output)
         output.seek(0)
         
+        logger.info(f"✓ Excel文件生成成功")
+        
         return send_file(
             output,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -473,4 +577,6 @@ def export_inquiries():
         )
     except Exception as e:
         logger.error(f"导出询价失败: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return flask_error_response(str(e), 500)

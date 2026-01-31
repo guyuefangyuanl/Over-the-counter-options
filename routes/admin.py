@@ -858,6 +858,51 @@ def upload_quotes_progress():
         return flask_error_response(f"获取进度失败: {str(e)}", 404)
 
 
+@admin_bp.route('/debug/cloud-db', methods=['GET'])
+@require_auth
+def debug_cloud_db():
+    """诊断云数据库连接状态"""
+    try:
+        import os
+        from flask import current_app
+        
+        # 获取环境变量信息（部分脱敏）
+        secret = os.getenv("WX_SECRET") or ""
+        masked_secret = f"{secret[:4]}***{secret[-4:]}" if len(secret) > 8 else "***"
+        
+        env_info = {
+            "WX_CLOUD_ENV": os.getenv("WX_CLOUD_ENV"),
+            "WX_APPID": os.getenv("WX_APPID"),
+            "WX_SECRET": masked_secret,
+            "WX_DB_MAX_INFLIGHT": os.getenv("WX_DB_MAX_INFLIGHT"),
+        }
+        
+        cloud_db = getattr(current_app, 'cloud_db', None)
+        status = "initialized" if cloud_db else "not_initialized"
+        
+        test_result = None
+        query_error = None
+        
+        if cloud_db:
+            try:
+                # 尝试简单查询
+                test_result = cloud_db.query('db.collection("inquiries").limit(1).get()')
+            except Exception as e:
+                query_error = str(e)
+        
+        return flask_success_response(
+            data={
+                "env": env_info,
+                "status": status,
+                "test_result": test_result,
+                "query_error": query_error
+            },
+            message="诊断完成"
+        )
+    except Exception as e:
+        return flask_error_response(f"诊断失败: {str(e)}", 500)
+
+
 @admin_bp.route('/upload-quotes', methods=['POST'])
 @require_auth
 @require_roles("admin", "editor")

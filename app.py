@@ -113,14 +113,36 @@ def create_app() -> Flask:
     
     # 初始化云数据库客户端
     try:
+        logger.info("=" * 60)
+        logger.info("开始初始化微信云数据库客户端")
+        logger.info("=" * 60)
         flask_app.cloud_db = CloudDbClient.from_env()
         logger.info("✅ 微信云数据库客户端初始化成功")
+        # 测试连接
+        try:
+            test_query = "db.collection('inquiries').limit(1).get()"
+            logger.info(f"测试查询: {test_query}")
+            test_result = flask_app.cloud_db.query(test_query)
+            logger.info(f"✅ 云数据库连接测试成功，返回 {len(test_result)} 条记录")
+        except Exception as test_err:
+            logger.warning(f"⚠️ 云数据库连接测试失败: {test_err}")
+        logger.info("=" * 60)
     except CloudDbConfigError as e:
         flask_app.cloud_db = None
+        logger.warning("=" * 60)
         logger.warning(f"⚠️ 微信云数据库配置未就绪: {e}")
+        logger.warning("请检查以下环境变量：")
+        logger.warning("  - WX_CLOUD_ENV")
+        logger.warning("  - WX_APPID")
+        logger.warning("  - WX_SECRET")
+        logger.warning("=" * 60)
     except Exception as e:
         flask_app.cloud_db = None
+        logger.error("=" * 60)
         logger.error(f"❌ 微信云数据库初始化失败: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        logger.error("=" * 60)
 
     def ensure_db():
         if flask_app.db is not None:

@@ -857,23 +857,68 @@ Page({
   },
 
   /**
-   * 模拟提交询价（实际项目中应替换为真实API）
+   * 提交询价到云数据库（真实实现）
    */
   mockSubmitInquiry: function (data) {
     return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        // 模拟成功响应
+      console.log('[询价提交] 开始提交到云数据库', data);
+      
+      // 获取云数据库实例
+      const db = wx.cloud.database();
+      
+      // 构造云数据库记录
+      const inquiryRecord = {
+        // 产品信息
+        productId: data.productId,
+        productName: data.productName,
+        productCode: data.productCode,
+        
+        // 期权参数
+        optionType: data.optionType || 'call', // call, put
+        structure: data.structure || 'vanilla',
+        term: data.term || '1M',
+        notionalAmount: data.quantity || 100, // 名义本金（万元）
+        strikePrice: data.strikePrice || '100', // 行权价（%）
+        selectedDealers: data.dealers || [],
+        
+        // 联系人信息
+        contactName: data.contactInfo.name,
+        phone: data.contactInfo.phone,
+        contactEmail: data.contactInfo.email || '',
+        notes: data.contactInfo.notes || '',
+        
+        // 状态和时间
+        status: 'pending', // pending, processing, completed, rejected
+        createdAt: db.serverDate(), // 使用服务器时间
+        updateTime: db.serverDate(),
+        
+        // 用户信息
+        userId: data.userId || '',
+        source: 'miniprogram' // 标记来源为小程序
+      };
+      
+      // 写入云数据库
+      db.collection('inquiries').add({
+        data: inquiryRecord
+      }).then(res => {
+        console.log('[询价提交] 云数据库写入成功', res);
+        
+        // 构造返回结果
         const result = {
           ...data,
-          inquiryId: `INQ${Date.now()}`,
+          inquiryId: res._id, // 使用云数据库返回的ID
           inquiryNo: `XQ${Date.now().toString().slice(-8)}`,
           status: 'pending',
           createTime: new Date().toISOString(),
-          estimatedResponseTime: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() // 2小时后
+          estimatedResponseTime: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+          _id: res._id // 保存云数据库ID
         };
         
         resolve(result);
-      }, 1500);
+      }).catch(err => {
+        console.error('[询价提交] 云数据库写入失败', err);
+        reject(new Error('询价提交失败: ' + (err.errMsg || err.message || '未知错误')));
+      });
     });
   },
 
