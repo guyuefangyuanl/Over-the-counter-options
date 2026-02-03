@@ -1,0 +1,125 @@
+{
+	"info": {
+		"_postman_id": "84882772-8822-450f-9029-873099120899",
+		"name": "OTC期权交易系统 - 云端API测试",
+		"description": "用于验证云端环境的API连通性和功能",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "基础功能",
+			"item": [
+				{
+					"name": "获取报价列表",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/quotes",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"quotes"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "用户认证",
+			"item": [
+				{
+					"name": "微信登录 (模拟)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"code\": \"mock_code_for_test\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/wechat/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"wechat",
+								"login"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "询价业务",
+			"item": [
+				{
+					"name": "提交询价",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"selectedProduct\": {\n        \"name\": \"上证50\",\n        \"code\": \"000016\"\n    },\n    \"optionType\": \"call\",\n    \"structure\": \"vanilla\",\n    \"term\": \"1M\",\n    \"notionalAmount\": 100,\n    \"strikePrice\": 100,\n    \"contactName\": \"测试用户\",\n    \"phone\": \"13800138000\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/inquiry",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"inquiry"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "https://flask-ym1v-210758-7-1374336462.sh.run.tcloudbase.com/api/v1",
+			"type": "string"
+		}
+	]
+}

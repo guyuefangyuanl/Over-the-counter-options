@@ -37,17 +37,24 @@ logger.info(f"日志将同时写入到: {log_file}")
 # 加载环境变量
 env_dir = os.path.dirname(__file__)
 local_env_path = os.path.join(env_dir, ".env.local")
+prod_env_path = os.path.join(env_dir, ".env.production")
 default_env_path = os.path.join(env_dir, ".env")
+
+# 检查系统环境变量中的 NODE_ENV
+system_node_env = os.environ.get('NODE_ENV', 'development')
 
 if os.path.exists(local_env_path):
     load_dotenv(local_env_path, override=True)
     logger.info(f"已从 {local_env_path} 加载环境变量")
+elif system_node_env == 'production' and os.path.exists(prod_env_path):
+    load_dotenv(prod_env_path, override=True)
+    logger.info(f"生产环境：已从 {prod_env_path} 加载环境变量")
 elif os.path.exists(default_env_path):
     load_dotenv(default_env_path, override=True)
     logger.info(f"已从 {default_env_path} 加载环境变量")
 else:
     load_dotenv(override=True)
-    logger.warning(f"未找到 {default_env_path}，尝试使用默认路径加载")
+    logger.warning(f"未找到配置文件，尝试使用默认路径加载")
 
 logger.info(f"当前环境变量中包含 WX_CLOUD_ENV: {'WX_CLOUD_ENV' in os.environ}")
 if 'WX_CLOUD_ENV' in os.environ:
@@ -197,7 +204,7 @@ def create_app() -> Flask:
     flask_app.register_blueprint(group_bp, url_prefix='/api/v1')
     flask_app.register_blueprint(fee_bp, url_prefix='/api/v1/admin')
     flask_app.register_blueprint(customer_bp, url_prefix='/api/v1/admin')
-    flask_app.register_blueprint(trade_bp, url_prefix='/api/v1/admin')
+    flask_app.register_blueprint(trade_bp, url_prefix='/api/v1/trade')
     flask_app.register_blueprint(message_bp, url_prefix='/api/v1/admin')
     flask_app.register_blueprint(config_bp, url_prefix='/api/v1/admin')
     

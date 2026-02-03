@@ -122,6 +122,7 @@ logs/
 .env
 .env.local
 .env.*.local
+.env.production
 .local
 
 # Runtime temp data

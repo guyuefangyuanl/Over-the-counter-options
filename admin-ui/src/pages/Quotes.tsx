@@ -797,10 +797,10 @@ const Quotes: React.FC = () => {
                 <AntdStatistic title="已处理" value={uploadProgress?.current || 0} />
               </Col>
               <Col span={6}>
-                <AntdStatistic title="成功" value={uploadProgress?.success || 0} valueStyle={{ color: '#3f8600' }} />
+                <AntdStatistic title="成功" value={uploadProgress?.success || 0} styles={{ content: { color: '#3f8600' } }} />
               </Col>
               <Col span={6}>
-                <AntdStatistic title="清洗过滤" value={uploadProgress?.invalid || 0} valueStyle={{ color: '#cf1322' }} />
+                <AntdStatistic title="清洗过滤" value={uploadProgress?.invalid || 0} styles={{ content: { color: '#cf1322' } }} />
               </Col>
             </Row>
           </div>
@@ -877,7 +877,7 @@ const Quotes: React.FC = () => {
         footer={null}
         closable={false}
         maskClosable={false}
-        destroyOnClose
+        destroyOnHidden
       >
         <div style={{ textAlign: 'center', padding: '20px 0' }}>
           <Progress 

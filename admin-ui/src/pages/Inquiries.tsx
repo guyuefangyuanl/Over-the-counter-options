@@ -302,7 +302,7 @@ const Inquiries: React.FC = () => {
           <div style={{ fontWeight: 'bold' }}>
             {record.productName || record.selectedProduct?.name} ({record.productCode || record.selectedProduct?.code})
           </div>
-          <Space size={4} split={<Text type="secondary">|</Text>}>
+          <Space size={4} separator={<Text type="secondary">|</Text>}>
             <Text type="secondary">{record.optionType === 'call' ? '看涨' : record.optionType === 'put' ? '看跌' : record.optionType}</Text>
             <Text type="secondary">{record.structure}</Text>
             <Text type="secondary">{record.term}</Text>
@@ -384,7 +384,7 @@ const Inquiries: React.FC = () => {
             <Statistic
               title="待处理"
               value={statistics.pending}
-              valueStyle={{ color: '#faad14' }}
+              styles={{ content: { color: '#faad14' } }}
               prefix={<ClockCircleOutlined />}
             />
           </Card>
@@ -394,7 +394,7 @@ const Inquiries: React.FC = () => {
             <Statistic
               title="处理中"
               value={statistics.processing}
-              valueStyle={{ color: '#1890ff' }}
+              styles={{ content: { color: '#1890ff' } }}
               prefix={<SyncOutlined spin />}
             />
           </Card>
@@ -404,7 +404,7 @@ const Inquiries: React.FC = () => {
             <Statistic
               title="已完成"
               value={statistics.completed}
-              valueStyle={{ color: '#52c41a' }}
+              styles={{ content: { color: '#52c41a' } }}
               prefix={<CheckCircleOutlined />}
             />
           </Card>
@@ -414,7 +414,7 @@ const Inquiries: React.FC = () => {
             <Statistic
               title="已拒绝"
               value={statistics.rejected}
-              valueStyle={{ color: '#ff4d4f' }}
+              styles={{ content: { color: '#ff4d4f' } }}
               prefix={<CloseCircleOutlined />}
             />
           </Card>

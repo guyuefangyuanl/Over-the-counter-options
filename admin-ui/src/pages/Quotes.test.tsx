@@ -54,6 +54,7 @@ vi.mock('antd', async () => {
     Space: (props: { children?: React.ReactNode }) => <div>{props.children}</div>,
     Modal: (props: { open?: boolean; children?: React.ReactNode }) =>
       props.open ? <div data-testid="modal">{props.children}</div> : null,
+    Progress: () => <div data-testid="progress" />,
     Typography: {
       Title: (props: { children?: React.ReactNode }) => <h1>{props.children}</h1>,
     },
@@ -110,7 +111,7 @@ describe('Quotes page crawl button', () => {
 
     expect(hoisted.apiGet).toHaveBeenCalledWith('/admin/quotes', { params: { page: 1, pageSize: 10 } })
 
-    const crawlBtn = getButtonByText(container, '从新浪同步最新行情')
+    const crawlBtn = getButtonByText(container, '快速更新 (默认股票)')
     await act(async () => {
       crawlBtn.click()
     })
@@ -131,7 +132,7 @@ describe('Quotes page crawl button', () => {
       root.render(<Quotes />)
     })
 
-    const crawlBtn = getButtonByText(container, '从新浪同步最新行情')
+    const crawlBtn = getButtonByText(container, '快速更新 (默认股票)')
     await act(async () => {
       crawlBtn.click()
     })
@@ -166,7 +167,7 @@ describe('Quotes page crawl button', () => {
       ticked = true
     }, 0)
 
-    const crawlBtn = getButtonByText(container, '从新浪同步最新行情')
+    const crawlBtn = getButtonByText(container, '快速更新 (默认股票)')
     await act(async () => {
       crawlBtn.click()
     })

@@ -7,10 +7,12 @@ from flask import Blueprint, request, jsonify, current_app
 from backend_utils.response import flask_success_response, flask_error_response
 from bson import ObjectId
 from datetime import datetime
+from routes.auth import require_auth, require_roles
 
 customer_bp = Blueprint('customer', __name__)
 
 @customer_bp.route('/customers', methods=['GET'])
+@require_auth
 def get_customers():
     """获取客户列表"""
     try:
@@ -66,6 +68,7 @@ def get_customers():
         return flask_error_response(str(e), code=500)
 
 @customer_bp.route('/customers/<customer_id>', methods=['GET'])
+@require_auth
 def get_customer(customer_id):
     """获取客户详情"""
     try:
@@ -97,6 +100,8 @@ def get_customer(customer_id):
         return flask_error_response(str(e), code=500)
 
 @customer_bp.route('/customers', methods=['POST'])
+@require_auth
+@require_roles("admin", "editor")
 def create_customer():
     """创建客户"""
     try:
@@ -141,6 +146,8 @@ def create_customer():
         return flask_error_response(str(e), code=500)
 
 @customer_bp.route('/customers/<customer_id>', methods=['PUT'])
+@require_auth
+@require_roles("admin", "editor")
 def update_customer(customer_id):
     """更新客户信息"""
     try:
@@ -174,6 +181,7 @@ def update_customer(customer_id):
         return flask_error_response(str(e), code=500)
 
 @customer_bp.route('/customer-groups', methods=['GET'])
+@require_auth
 def get_customer_groups():
     """获取客户分组列表"""
     try:

@@ -54,6 +54,7 @@ export default defineConfig(({ mode }) => {
           }),
         )
       })
+// Trigger reload
     },
   }
 

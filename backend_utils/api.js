@@ -2,7 +2,7 @@
 // 使用环境变量或默认地址
 // API Base URL配置
 // 生产环境必须通过环境变量设置，不能使用localhost
-const BASE_URL = process.env.API_BASE_URL || 'http://localhost:5002/api/v1';
+const BASE_URL = process.env.API_BASE_URL || 'https://flask-ym1v-210758-7-1374336462.sh.run.tcloudbase.com/api/v1';
 const performanceOptimizer = require('./performance-optimizer.js').getInstance();
 
 // API响应缓存

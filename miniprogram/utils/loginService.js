@@ -22,7 +22,16 @@ class LoginService {
         if (res.result && res.result.success) {
           resolve(res.result.data)
         } else {
-          // 云函数调用失败，回退到Mock数据
+          // 生产环境直接报错
+          const account = (typeof wx.getAccountInfoSync === 'function') ? wx.getAccountInfoSync() : null;
+          const envVersion = account && account.miniProgram && account.miniProgram.envVersion;
+          
+          if (envVersion !== 'develop') {
+             reject(new Error(res.result ? res.result.message : '登录失败'));
+             return;
+          }
+
+          // 仅开发环境允许回退到Mock数据
           console.warn('云函数登录失败，使用Mock数据:', res.result ? res.result.message : '未知错误')
           const mockResult = {
             userId: `mock_${Date.now()}`,
@@ -38,7 +47,17 @@ class LoginService {
         }
       }).catch(error => {
         console.error('调用云函数失败:', error)
-        // 云函数调用异常，回退到Mock数据
+        
+        // 生产环境直接报错
+        const account = (typeof wx.getAccountInfoSync === 'function') ? wx.getAccountInfoSync() : null;
+        const envVersion = account && account.miniProgram && account.miniProgram.envVersion;
+        
+        if (envVersion !== 'develop') {
+           reject(new Error('系统服务暂时不可用，请稍后重试'));
+           return;
+        }
+
+        // 仅开发环境允许回退到Mock数据
         const mockResult = {
           userId: `mock_${Date.now()}`,
           openid: `mock_openid_${Math.random().toString(36).slice(2)}`,

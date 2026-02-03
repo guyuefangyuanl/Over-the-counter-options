@@ -14,7 +14,7 @@ def test_inquiries_api():
     
     # 1. 先登录获取token
     print("\n1. 登录获取token...")
-    login_url = f"{base_url}/auth/admin/login"
+    login_url = f"{base_url}/api/v1/auth/login"
     login_data = {
         "username": "admin",
         "password": "admin123"

@@ -12,15 +12,6 @@ from routes.auth import require_auth
 logger = logging.getLogger(__name__)
 inquiry_bp = Blueprint('inquiry', __name__)
 
-# 模拟数据库 - 报价列表 (保留以向后兼容小程序端)
-MOCK_QUOTES = [
-    { "id": 1, "group": "group1", "type": "stock", "name": "贵州茅台", "code": "600519", "changePercent": 1.23, "term": "1M", "structure": "vanilla", "dealers": ["CICC", "CITIC"], "rates": { "100": 10.50, "105": 8.30, "110": 6.50 } },
-    { "id": 2, "group": "group1", "type": "stock", "name": "宁德时代", "code": "300750", "changePercent": -2.45, "term": "1M", "structure": "vanilla", "dealers": ["CICC", "GJS"], "rates": { "100": 12.80, "105": 10.20, "110": 8.90 } },
-    { "id": 3, "group": "group2", "type": "stock", "name": "比亚迪", "code": "002594", "changePercent": 3.10, "term": "2M", "structure": "vanilla", "dealers": ["CITIC"], "rates": { "100": 15.25, "105": 12.85, "110": 10.45 } },
-    { "id": 4, "group": "holding", "type": "stock", "name": "药明康德", "code": "603259", "changePercent": 0.55, "term": "3M", "structure": "snowball", "dealers": ["CICC", "CITIC", "GJS"], "rates": { "100": 18.00, "105": 15.50, "110": 13.00 } },
-    { "id": 5, "group": "all", "type": "index", "name": "沪深300指数", "code": "000300", "changePercent": -0.55, "term": "1M", "structure": "vanilla", "dealers": ["GJS"], "rates": { "100": 5.50, "105": 4.30, "110": 3.50 } },
-]
-
 @inquiry_bp.route('/quotes', methods=['GET'])
 def get_quotes():
     """获取报价列表 - 从真实数据库读取"""
@@ -128,12 +119,18 @@ def admin_get_inquiries():
                 logger.info("=" * 60)
                 
                 # 先获取全部数据用于过滤（只在前几页时这样做，数据量大时需要优化）
-                # 注意：为了正确分页，我们需要先获取所有数据再进行内存过滤
-                all_query_js = "db.collection('inquiries').orderBy('createdAt', 'desc').get()"
+                # 修正：增加 limit(1000) 以获取更多数据，避免因默认 limit(20) 导致分页或过滤后无数据
+                # 注意：如果数据量超过 1000，仍需进一步优化为数据库层面的分页
+                all_query_js = "db.collection('inquiries').orderBy('createdAt', 'desc').limit(1000).get()"
                 logger.info(f"云数据库查询语句: {all_query_js}")
                 
                 all_data = cloud_db.query(all_query_js)
-                logger.info(f"✓ 云数据库查询完成，返回类型: {type(all_data)}, 数据长度: {len(all_data) if isinstance(all_data, list) else 'N/A'}")
+                
+                # 增强日志：打印原始返回数据的大小
+                if isinstance(all_data, list):
+                     logger.info(f"✓ 云数据库查询完成，实际返回数据: {len(all_data)} 条")
+                else:
+                     logger.info(f"✓ 云数据库查询完成，返回类型: {type(all_data)}")
                 
                 # 检查是否为None或空
                 if all_data is None:

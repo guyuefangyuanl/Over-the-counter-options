@@ -93,8 +93,11 @@ class ProductionConfig(Config):
     生产环境配置
     """
     DEBUG = False
-    # 生产环境使用不同的密钥
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'production-secret-key-must-be-set-in-env'
+    # 生产环境必须从环境变量获取密钥，严禁使用默认值
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+    if not SECRET_KEY:
+        # 如果是生产环境但没有设置密钥，直接报错阻止启动
+        raise ValueError("FATAL: SECRET_KEY environment variable not set for ProductionConfig!")
     
     # 生产环境使用不同的数据库
     MONGO_URI = os.environ.get('PROD_MONGO_URI') or 'mongodb://localhost:27017/option_data_prod'

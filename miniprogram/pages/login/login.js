@@ -434,17 +434,29 @@ Page({
 
   // 显示用户协议
   showUserAgreement: function() {
-    wx.showToast({
-      title: '用户协议',
-      icon: 'none'
+    wx.navigateTo({
+      url: '/pages/agreement/user-agreement',
+      fail: (err) => {
+        console.error('跳转用户协议失败', err);
+        wx.showToast({
+          title: '无法打开用户协议',
+          icon: 'none'
+        });
+      }
     });
   },
 
   // 显示隐私政策
   showPrivacyPolicy: function() {
-    wx.showToast({
-      title: '隐私政策',
-      icon: 'none'
+    wx.navigateTo({
+      url: '/pages/agreement/privacy-policy',
+      fail: (err) => {
+        console.error('跳转隐私政策失败', err);
+        wx.showToast({
+          title: '无法打开隐私政策',
+          icon: 'none'
+        });
+      }
     });
   },
 

@@ -1,5 +1,9 @@
+const accountService = require('../../utils/accountService.js');
+const app = getApp();
+
 Page({
   data: {
+    userInfo: null, // 用户信息
     accounts: [
       { id: 'W0008888', name: '场外期权账户' },
       { id: 'M0008888', name: '模拟账户' }
@@ -24,6 +28,8 @@ Page({
         selected: 2
       })
     }
+    // 每次显示时刷新用户资料
+    this.fetchUserProfile();
   },
 
   onPullDownRefresh() {
@@ -52,7 +58,25 @@ Page({
   },
 
   handleAddPosition() {
-    wx.showToast({ title: '录入持仓开发中', icon: 'none' })
+    // 如果是开发环境且没有持仓，尝试生成测试数据
+    if (this.data.allPositions.length === 0) {
+        wx.showModal({
+            title: '测试数据',
+            content: '当前无持仓，是否生成测试数据？',
+            success: async (res) => {
+                if (res.confirm) {
+                    try {
+                        await accountService.seedPositions();
+                        this.loadPageData();
+                    } catch (e) {
+                        wx.showToast({ title: '生成失败', icon: 'none' });
+                    }
+                }
+            }
+        })
+    } else {
+        wx.showToast({ title: '录入持仓开发中', icon: 'none' })
+    }
   },
 
   handlePositionAction(e) {
@@ -61,19 +85,81 @@ Page({
     console.log('position action', id, action)
   },
 
+  // 获取用户资料
+  async fetchUserProfile() {
+      try {
+          const user = await accountService.getUserProfile();
+          this.setData({ userInfo: user });
+      } catch (e) {
+          console.error('获取用户资料失败', e);
+      }
+  },
+
+  // 更新头像
+  onChooseAvatar(e) {
+    const { avatarUrl } = e.detail 
+    this.setData({ 'userInfo.avatar': avatarUrl })
+    // 上传到服务器需要先上传文件，这里简化直接更新URL（如果是微信临时URL，需要持久化）
+    // 实际生产中应先 wx.uploadFile 换取永久链接
+    // 这里演示更新接口调用
+    accountService.updateUserProfile({ avatar: avatarUrl });
+  },
+
+  // 更新昵称
+  onNicknameChange(e) {
+      const nickname = e.detail.value;
+      this.setData({ 'userInfo.nickname': nickname });
+      accountService.updateUserProfile({ nickname });
+  },
+
   async loadPageData() {
     wx.showLoading({ title: '加载中' })
-    const fetchOverview = () => new Promise(resolve => setTimeout(() => resolve({ totalScale: 1250000, totalProfit: 125050, completedProfit: 30500 }), 200))
-    const fetchCosts = () => new Promise(resolve => setTimeout(() => resolve({ total: 52000, optionFee: 38000, commission: 14000 }), 200))
-    const fetchPositions = () => new Promise(resolve => setTimeout(() => resolve([
-      { id: 1, productName: '平安银行 香草 100C-1M', notional: 1000000, fillPrice: 2.8, currentPrice: 3.1, pnlRate: 10.7, pnl: 30000, dealer: 'CICC', daysLeft: 25, status: 'CONTINUING', statusText: '存续中' },
-      { id: 2, productName: '中证1000 雪球 90P-3M', notional: 500000, fillPrice: 15.2, currentPrice: 14.9, pnlRate: -1.97, pnl: -1500, dealer: 'CITIC', daysLeft: 5, status: 'CONTINUING', statusText: '临近到期' },
-      { id: 3, productName: '招商银行 香草 95C-1M', notional: 300000, fillPrice: 3.6, currentPrice: 3.9, pnlRate: 8.3, pnl: 2500, dealer: 'GJS', daysLeft: 0, status: 'CLOSED', statusText: '已完结' }
-    ]), 200))
+    
     try {
-      const [overview, costs, positions] = await Promise.all([fetchOverview(), fetchCosts(), fetchPositions()])
-      this.setData({ overview, costDetails: costs, allPositions: positions })
-      this.filterPositions()
+      // 1. 获取资产概览
+      const overviewData = await accountService.getAssetOverview();
+      
+      // 2. 获取持仓列表
+      const positionsData = await accountService.getPositions(1, 100); // 获取前100条
+      
+      // 数据映射
+      const overview = {
+          totalScale: overviewData.totalMarketValue || 0,
+          totalProfit: overviewData.totalProfitLoss || 0,
+          completedProfit: 0 // 后端暂未返回已结平仓盈亏
+      };
+
+      const positions = (positionsData.items || []).map(p => {
+          const quantity = p.quantity || 0;
+          const price = p.price || 0; // 成本价
+          const marketValue = p.marketValue || 0;
+          const currentPrice = quantity ? (marketValue / quantity).toFixed(3) : 0;
+          const pnl = p.profitLoss || 0;
+          // 计算收益率
+          const costBasis = quantity * price;
+          const pnlRate = costBasis ? ((pnl / costBasis) * 100).toFixed(2) : 0;
+          
+          return {
+              id: p._id,
+              productName: p.productName || '未知产品',
+              dealer: '自营', // 后端未返回
+              notional: marketValue, // 暂用市值代替名义本金展示
+              fillPrice: price,
+              currentPrice: currentPrice,
+              pnlRate: pnlRate,
+              pnl: pnl,
+              daysLeft: 30, // 后端未返回到期日，暂硬编码
+              status: p.status === 'active' ? 'CONTINUING' : 'CLOSED',
+              statusText: p.status === 'active' ? '存续中' : '已完结'
+          };
+      });
+
+      this.setData({ overview, allPositions: positions });
+      this.filterPositions();
+      
+    } catch (e) {
+        console.error('加载账户数据失败', e);
+        wx.showToast({ title: '加载失败', icon: 'none' });
     } finally {
       wx.hideLoading()
     }

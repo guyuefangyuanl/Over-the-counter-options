@@ -291,12 +291,77 @@ def admin_me():
     payload = getattr(g, "admin", None)
     if not isinstance(payload, dict):
         return flask_error_response("未登录或登录已过期", 401)
+    
+    username = payload.get("sub")
+    role = payload.get("role")
+    
+    # 如果是普通用户（微信用户），从数据库获取详细信息
+    if role == 'user':
+        db = _get_db()
+        if db:
+            user = db.users.find_one({'openid': username})
+            if user:
+                return flask_success_response(
+                    data={
+                        "username": username,
+                        "role": role,
+                        "nickname": user.get('nickname', '微信用户'),
+                        "avatar": user.get('avatar', ''),
+                        "phone": user.get('phone', ''),
+                        "openid": user.get('openid'),
+                        "unionid": user.get('unionid')
+                    }
+                )
+    
+    # 管理员或默认返回
     return flask_success_response(
         data={
-            "username": payload.get("sub"),
-            "role": payload.get("role"),
+            "username": username,
+            "role": role,
         }
     )
+
+
+@auth_bp.route("/me", methods=["PUT"])
+@require_auth
+def update_profile():
+    """更新个人资料"""
+    payload = getattr(g, "admin", None)
+    if not isinstance(payload, dict):
+        return flask_error_response("未登录或登录已过期", 401)
+        
+    username = payload.get("sub") # 对于微信用户，这是openid
+    role = payload.get("role")
+    
+    if role != 'user':
+        return flask_error_response("只有普通用户可以修改个人资料", 403)
+        
+    data = request.get_json() or {}
+    updates = {}
+    
+    if 'nickname' in data:
+        updates['nickname'] = data['nickname']
+    if 'avatar' in data:
+        updates['avatar'] = data['avatar']
+    if 'phone' in data:
+        updates['phone'] = data['phone']
+        
+    if not updates:
+        return flask_success_response(message="没有需要更新的内容")
+        
+    db = _get_db()
+    if not db:
+        return flask_error_response("数据库未连接", 503)
+        
+    result = db.users.update_one(
+        {'openid': username},
+        {'$set': updates}
+    )
+    
+    if result.modified_count > 0:
+        return flask_success_response(message="更新成功")
+    else:
+        return flask_success_response(message="没有数据被修改")
 
 
 @auth_bp.route("/users", methods=["GET"])
