@@ -2,9 +2,9 @@
 FROM node:18-slim AS frontend-builder
 WORKDIR /app/admin-ui
 COPY admin-ui/package*.json ./
-RUN npm install
+RUN npm install --registry=https://registry.npmmirror.com
 COPY admin-ui/ .
-RUN npm run build
+RUN npm run build 2>&1 || (echo "构建失败，检查错误信息" && exit 1)
 
 # --- 阶段 2: 构建 Python 后端 ---
 FROM python:3.9-slim
@@ -28,11 +28,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # 升级 pip 并配置国内镜像源
-RUN pip install --no-cache-dir --upgrade pip -i https://mirrors.aliyun.com/pypi/simple/
+RUN pip install --no-cache-dir --upgrade pip -i https://mirrors.aliyun.com/pypi/simple/ || \
+    pip install --no-cache-dir --upgrade pip
 
 # 复制依赖文件并安装
 COPY requirements.txt .
-RUN pip install --no-cache-dir --default-timeout=1000 -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
+RUN pip install --no-cache-dir --default-timeout=1000 -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ || \
+    pip install --no-cache-dir --default-timeout=1000 -r requirements.txt
 
 # 从前端构建阶段复制打包好的文件
 COPY --from=frontend-builder /app/admin-ui/dist ./admin-ui/dist

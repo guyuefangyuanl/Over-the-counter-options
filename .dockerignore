@@ -9,7 +9,7 @@ __pycache__
 *.pyo
 *.pyd
 .env
-.env.production
+.env.local
 .venv
 env/
 venv/
