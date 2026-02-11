@@ -263,59 +263,67 @@ class AuthService:
         
         # 如果是 mock code，或者开发环境缺少微信配置，使用模拟登录
         if code.startswith("mock_") or (is_dev_mode and not has_wx_config):
-            logger.info(f"Using Mock Login (dev mode). Code: {code[:20]}..., has_wx_config: {has_wx_config}")
-            openid = f"mock_openid_{code[:20]}"
-            unionid = f"mock_unionid_{code[:20]}"
-            
-            model = self._get_model()
-            user = model.find_user_by_openid(openid)
-            
-            if not user:
-                user_data = {
-                    'openid': openid,
-                    'unionid': unionid,
-                    'nickname': '开发用户',
-                    'avatar': '',
-                    'phone': '',
-                    'created_at': datetime.utcnow(),
-                    'last_login': datetime.utcnow()
-                }
-                model.create_user(user_data)
-                user = user_data
-            else:
-                model.update_user_login_time(openid)
-            
-            # Sync Identity
-            self._sync_user_to_customer(user)
-            return True, user, None
+            try:
+                logger.info(f"Using Mock Login (dev mode). Code: {code[:20]}..., has_wx_config: {has_wx_config}")
+                openid = f"mock_openid_{code[:20]}"
+                unionid = f"mock_unionid_{code[:20]}"
+                
+                model = self._get_model()
+                user = model.find_user_by_openid(openid)
+                
+                if not user:
+                    user_data = {
+                        'openid': openid,
+                        'unionid': unionid,
+                        'nickname': '开发用户',
+                        'avatar': '',
+                        'phone': '',
+                        'created_at': datetime.utcnow(),
+                        'last_login': datetime.utcnow()
+                    }
+                    model.create_user(user_data)
+                    user = user_data
+                else:
+                    model.update_user_login_time(openid)
+                
+                # Sync Identity
+                self._sync_user_to_customer(user)
+                return True, user, None
+            except Exception as e:
+                logger.error(f"Mock login failed: {e}")
+                return False, None, f"模拟登录失败: {str(e)}"
 
         if not has_wx_config:
-            logger.error("微信登录失败: 服务器未配置 WX_APPID 和 WX_SECRET")
-            # 生产环境也降级到模拟登录，方便测试
-            logger.warning("生产环境缺少微信配置，自动降级到模拟登录模式")
-            openid = f"mock_openid_{code[:20]}"
-            unionid = f"mock_unionid_{code[:20]}"
-            
-            model = self._get_model()
-            user = model.find_user_by_openid(openid)
-            
-            if not user:
-                user_data = {
-                    'openid': openid,
-                    'unionid': unionid,
-                    'nickname': '测试用户',
-                    'avatar': '',
-                    'phone': '',
-                    'created_at': datetime.utcnow(),
-                    'last_login': datetime.utcnow()
-                }
-                model.create_user(user_data)
-                user = user_data
-            else:
-                model.update_user_login_time(openid)
-            
-            self._sync_user_to_customer(user)
-            return True, user, None
+            try:
+                logger.error("微信登录失败: 服务器未配置 WX_APPID 和 WX_SECRET")
+                # 生产环境也降级到模拟登录，方便测试
+                logger.warning("生产环境缺少微信配置，自动降级到模拟登录模式")
+                openid = f"mock_openid_{code[:20]}"
+                unionid = f"mock_unionid_{code[:20]}"
+                
+                model = self._get_model()
+                user = model.find_user_by_openid(openid)
+                
+                if not user:
+                    user_data = {
+                        'openid': openid,
+                        'unionid': unionid,
+                        'nickname': '测试用户',
+                        'avatar': '',
+                        'phone': '',
+                        'created_at': datetime.utcnow(),
+                        'last_login': datetime.utcnow()
+                    }
+                    model.create_user(user_data)
+                    user = user_data
+                else:
+                    model.update_user_login_time(openid)
+                
+                self._sync_user_to_customer(user)
+                return True, user, None
+            except Exception as e:
+                logger.error(f"Mock login (no config) failed: {e}")
+                return False, None, f"模拟登录失败: {str(e)}"
             
         url = 'https://api.weixin.qq.com/sns/jscode2session'
         params = {
