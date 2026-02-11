@@ -242,6 +242,13 @@ def create_app() -> Flask:
             return flask_error_response("资源不存在", code=404)
 
         dist_dir = os.path.join(flask_app.root_path, 'admin-ui/dist')
+        
+        # 如果 dist 目录不存在，返回 API 服务提示
+        if not os.path.exists(dist_dir):
+            return flask_success_response(
+                data={"service": "期权数据服务 API", "version": "v1"},
+                message="API 服务运行正常，前端资源未构建"
+            )
 
         target_file = os.path.join(dist_dir, path)
         if os.path.exists(target_file) and os.path.isfile(target_file):
