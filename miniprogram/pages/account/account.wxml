@@ -157,7 +157,7 @@
 
       <!-- 空状态 -->
       <view class="empty-state" wx:else>
-        <image class="empty-state__image" src="/images/empty-state.png" mode="aspectFit"></image>
+        <image class="empty-state__image" src="/images/empty.svg" mode="aspectFit"></image>
         <text class="empty-state__text">暂无相关持仓数据</text>
       </view>
     </view>

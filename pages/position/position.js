@@ -1,144 +1,125 @@
 // pages/position/position.js
 const { RiskMonitor, TransactionManager } = require('../../utils/enhanced-features.js');
+const api = require('../../utils/request');
 
 Page({
   data: {
     currentTab: 0, // 0:存续持仓, 1:近期到期, 2:已到期, 3:已完结
     currentPositions: [], // 当前显示的持仓列表
     tabList: [
-      { name: '存续持仓', count: 3, key: 'active' },
-      { name: '近期到期', count: 1, key: 'nearExpiry' },
+      { name: '存续持仓', count: 0, key: 'active' },
+      { name: '近期到期', count: 0, key: 'nearExpiry' },
       { name: '已到期', count: 0, key: 'expired' },
-      { name: '已完结', count: 5, key: 'completed' }
+      { name: '已完结', count: 0, key: 'completed' }
     ],
     positionData: {
-      active: [
-        {
-          id: 'POS001',
-          type: '香草看涨',
-          underlying: '中证1000',
-          scale: 100, // 规模（万）
-          openScale: 100, // 开仓规模
-          currentPrice: 6420.35,
-          strikePrice: 6500,
-          openPrice: 6380.12,
-          strikeType: '102%',
-          profitLoss: -37999.31,
-          profitRate: -7.6,
-          status: '开仓',
-          statusClass: 'open',
-          createTime: '2024-12-28 09:30:00',
-          expireTime: '2025-03-28',
-          remainingDays: 88,
-          optionFee: 6.2, // 期权费率
-          breakEvenPoint: 6750.5,
-          distanceToStrike: -1.23,
-          distanceToBreakEven: -4.89,
-          greeks: {
-            delta: 0.456,
-            gamma: 0.0234,
-            theta: -0.0456,
-            vega: 0.2345,
-            rho: 0.1234
-          },
-          riskLevel: 'MEDIUM'
-        },
-        {
-          id: 'POS002',
-          type: '8080看涨',
-          underlying: '上证50ETF',
-          scale: 50,
-          openScale: 50,
-          currentPrice: 2.445,
-          strikePrice: 1.956, // 80%
-          openPrice: 2.445,
-          strikeType: '80%',
-          profitLoss: 8950.75,
-          profitRate: 17.9,
-          status: '开仓',
-          statusClass: 'open',
-          createTime: '2024-12-25 14:20:00',
-          expireTime: '2025-02-25',
-          remainingDays: 59,
-          optionFee: 20.4,
-          breakEvenPoint: 2.156,
-          distanceToStrike: 25.0,
-          distanceToBreakEven: 13.4,
-          greeks: {
-            delta: 0.789,
-            gamma: 0.0156,
-            theta: -0.0234,
-            vega: 0.1234,
-            rho: 0.0567
-          },
-          riskLevel: 'LOW'
-        },
-        {
-          id: 'POS003',
-          type: '香草看涨',
-          underlying: '沪深300ETF',
-          scale: 80,
-          openScale: 100,
-          currentPrice: 3.852,
-          strikePrice: 3.968, // 103%
-          openPrice: 3.852,
-          strikeType: '103%',
-          profitLoss: -15680.24,
-          profitRate: -19.6,
-          status: '部分完结',
-          statusClass: 'partial',
-          createTime: '2024-12-20 10:15:00',
-          expireTime: '2025-01-20',
-          remainingDays: 23,
-          optionFee: 4.8,
-          breakEvenPoint: 4.037,
-          distanceToStrike: -2.9,
-          distanceToBreakEven: -4.6,
-          greeks: {
-            delta: 0.234,
-            gamma: 0.0345,
-            theta: -0.0567,
-            vega: 0.3456,
-            rho: 0.0789
-          },
-          riskLevel: 'HIGH'
-        }
-      ],
-      nearExpiry: [
-        {
-          id: 'POS004',
-          type: '香草看涨',
-          underlying: '创业板ETF',
-          scale: 30,
-          openScale: 30,
-          currentPrice: 2.198,
-          strikePrice: 2.286, // 105%
-          openPrice: 2.177,
-          strikeType: '105%',
-          profitLoss: -2340.67,
-          profitRate: -15.6,
-          status: '开仓',
-          statusClass: 'open',
-          createTime: '2024-12-20 16:30:00',
-          expireTime: '2025-01-03',
-          remainingDays: 3,
-          optionFee: 5.2,
-          breakEvenPoint: 2.291,
-          distanceToStrike: -3.8,
-          distanceToBreakEven: -4.1,
-          greeks: {
-            delta: 0.123,
-            gamma: 0.0567,
-            theta: -0.0890,
-            vega: 0.1567,
-            rho: 0.0234
-          },
-          riskLevel: 'HIGH'
-        }
-      ],
+      active: [],
+      nearExpiry: [],
       expired: [],
       completed: []
     },
+    selectedPosition: null,
+    showPositionDetail: false,
+    sortBy: 'createTime', // 排序方式: createTime, profitLoss, scale, expireTime
+    sortOrder: 'desc', // asc, desc
+    filterRisk: 'ALL', // ALL, LOW, MEDIUM, HIGH
+    searchKeyword: '',
+    riskMonitor: null,
+    transactionManager: null,
+    isLoading: false
+  },
+
+  onLoad: function (options) {
+    this.initPage();
+    this.initManagers();
+    // Check login first? api.get will handle 401 but better check
+  },
+
+  onShow: function () {
+    this.loadPositionData();
+  },
+
+  // ... (initPage, initManagers unchanged)
+
+  // 加载持仓数据
+  loadPositionData: function () {
+    this.setData({ isLoading: true });
+    
+    // Call API
+    api.get('/trade/positions', { pageSize: 100 }) // Get all for now or implement pagination
+      .then(res => {
+          const items = res.items || [];
+          this.processPositionData(items);
+      })
+      .catch(err => {
+          console.error("Fetch positions error:", err);
+          wx.showToast({ title: '获取持仓失败', icon: 'none' });
+      })
+      .finally(() => {
+          this.setData({ isLoading: false });
+          wx.stopPullDownRefresh();
+      });
+  },
+
+  processPositionData: function(items) {
+      // Categorize items
+      const now = new Date();
+      const active = [];
+      const nearExpiry = [];
+      const expired = [];
+      const completed = [];
+
+      items.forEach(item => {
+          // Adapt backend model to frontend model
+          // Backend: productCode, productName, quantity, price, marketValue, profitLoss, status, createdAt
+          // Frontend needs: id, type, underlying, scale...
+          
+          // Basic mapping
+          const pos = {
+              id: item._id,
+              type: '香草看涨', // Default or from backend
+              underlying: item.productName || item.productCode,
+              scale: item.quantity / 10000, // Assuming quantity is units, scale is Wan
+              openScale: item.quantity / 10000,
+              currentPrice: item.price, // This should be real-time, but for now use stored
+              strikePrice: item.price * 0.9, // Mock if missing
+              openPrice: item.price,
+              strikeType: '100%',
+              profitLoss: item.profitLoss,
+              profitRate: (item.profitLoss / (item.quantity * item.price)) * 100,
+              status: item.status === 'active' ? '开仓' : '完结',
+              createTime: item.createdAt,
+              expireTime: '2025-12-31', // Mock
+              remainingDays: 30, // Mock
+              optionFee: 0,
+              breakEvenPoint: 0,
+              distanceToStrike: 0,
+              distanceToBreakEven: 0,
+              riskLevel: 'LOW' // Recalculate later
+          };
+          
+          if (pos.status === '开仓') {
+              active.push(pos);
+          } else {
+              completed.push(pos);
+          }
+      });
+      
+      const positionData = {
+          active, nearExpiry, expired, completed
+      };
+      
+      // Update counts
+      const tabList = this.data.tabList.map(tab => ({
+          ...tab,
+          count: positionData[tab.key].length
+      }));
+      
+      this.setData({ positionData, tabList });
+      this.updateCurrentPositions();
+      this.calculateRiskLevels();
+  },
+
     selectedPosition: null,
     showPositionDetail: false,
     sortBy: 'createTime', // 排序方式: createTime, profitLoss, scale, expireTime
@@ -176,42 +157,7 @@ Page({
 
   // 下拉刷新
   onPullDownRefresh: function () {
-    this.refreshPositionData();
-    setTimeout(() => {
-      wx.stopPullDownRefresh();
-    }, 2000);
-  },
-
-  // 加载持仓数据
-  loadPositionData: function () {
-    // 模拟从后端获取持仓数据
-    const positionData = this.data.positionData;
-    
-    // 预处理数据，添加statusClass
-    Object.keys(positionData).forEach(category => {
-      positionData[category].forEach(position => {
-        if (!position.statusClass) {
-          position.statusClass = this.getStatusClass(position.status);
-        }
-      });
-    });
-    
-    // 更新标签计数
-    const tabList = this.data.tabList.map(tab => ({
-      ...tab,
-      count: positionData[tab.key] ? positionData[tab.key].length : 0
-    }));
-
-    this.setData({
-      tabList: tabList,
-      positionData: positionData
-    });
-
-    // 更新当前显示的持仓列表
-    this.updateCurrentPositions();
-
-    // 计算风险等级
-    this.calculateRiskLevels();
+    this.loadPositionData();
   },
 
   // 更新当前显示的持仓列表

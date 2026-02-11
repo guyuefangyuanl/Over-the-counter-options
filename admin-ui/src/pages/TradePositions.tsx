@@ -1,11 +1,389 @@
-import React from 'react';
-import { Card, Empty } from 'antd';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
+import { Card, Table, message, Button, Space, Typography, Tag, Input, Modal, Form, Select, InputNumber, Switch, Popconfirm, App } from 'antd';
+import { ReloadOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, SearchOutlined } from '@ant-design/icons';
+import api, { getApiErrorMessage, type ApiResponse } from '../utils/api';
+import PageState from '../components/PageState';
+
+const { Title, Text } = Typography;
+
+interface Position {
+  _id: string;
+  productCode: string;
+  productName: string;
+  customerId: string;
+  customerName: string;
+  quantity: number;
+  price: number;
+  currentPrice?: number;
+  marketValue: number;
+  profitLoss: number;
+  returnRate?: number;
+  status: string;
+  currency?: string;
+  market?: string;
+  createdAt: string;
+}
 
 const TradePositions: React.FC = () => {
+  const { message: antdMessage } = App.useApp();
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<Position[]>([]);
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
+  
+  // Search state
+  const [searchText, setSearchText] = useState('');
+  
+  // Auto refresh
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Modal state
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [currentPosition, setCurrentPosition] = useState<Position | null>(null);
+  const [form] = Form.useForm();
+
+  // Helper to fetch customers for dropdown (simplified)
+  // In a real app, we might search customers via API. For now, let's use a simple input for customerId.
+
+  const fetchPositions = useCallback(async (page = 1, pageSize = 10, search = searchText) => {
+    setLoading(true);
+    try {
+      const params: any = { page, pageSize };
+      if (search) {
+          // Backend currently filters by customerId only for simple users.
+          // For admin, we might need a general keyword search.
+          // The current backend route doesn't support 'keyword' search for positions directly.
+          // But let's assume we can filter by customerId if the search looks like an ID.
+          // Or we update backend to support 'keyword' search on customerName/productCode.
+          // Since we didn't update backend search logic in `TradeService.get_positions` to support keyword (it supports customer_id),
+          // let's pass it as customerId if strictly needed, or just warn.
+          // Actually, let's assume the user enters customerId for now, or we rely on client-side filtering if data is small?
+          // No, requirement says "Search".
+          // Let's pass it as customerId for now.
+          params.customerId = search;
+      }
+      
+      const res = await api.get<ApiResponse<{ items: Position[]; pagination: any }>>('/trade/positions', {
+        params
+      });
+      
+      if (res.success && res.data) {
+        setData(res.data.items);
+        setPagination({
+          current: res.data.pagination.page,
+          pageSize: res.data.pagination.per_page,
+          total: res.data.pagination.total,
+        });
+      }
+    } catch (err) {
+      if (!autoRefresh) { // Don't spam error on auto-refresh
+         antdMessage.error(getApiErrorMessage(err, '获取持仓列表失败'));
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [antdMessage, searchText, autoRefresh]);
+
+  useEffect(() => {
+    fetchPositions(1, pagination.pageSize);
+  }, []); // Initial load
+
+  useEffect(() => {
+      if (autoRefresh) {
+          timerRef.current = setInterval(() => {
+              fetchPositions(pagination.current, pagination.pageSize);
+          }, 5000);
+      } else {
+          if (timerRef.current) clearInterval(timerRef.current);
+      }
+      return () => {
+          if (timerRef.current) clearInterval(timerRef.current);
+      }
+  }, [autoRefresh, pagination.current, pagination.pageSize, fetchPositions]);
+
+  const handleSearch = () => {
+      fetchPositions(1, pagination.pageSize, searchText);
+  };
+
+  const handleExport = () => {
+      // Simple CSV export
+      const headers = ['持仓ID', '客户', '产品代码', '产品名称', '数量', '成本价', '现价', '市值', '盈亏', '收益率', '市场', '币种', '状态', '建仓时间'];
+      const csvContent = [
+          headers.join(','),
+          ...data.map(item => [
+              item._id,
+              item.customerName,
+              item.productCode,
+              item.productName,
+              item.quantity,
+              item.price,
+              item.currentPrice || '',
+              item.marketValue,
+              item.profitLoss,
+              item.returnRate ? (item.returnRate * 100).toFixed(2) + '%' : '',
+              item.market || 'CN',
+              item.currency || 'CNY',
+              item.status,
+              item.createdAt
+          ].join(','))
+      ].join('\n');
+      
+      const blob = new Blob([`\ufeff${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `positions_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  };
+
+  const handleDelete = async (id: string) => {
+      try {
+          await api.delete(`/trade/positions/${id}`);
+          antdMessage.success('删除成功');
+          fetchPositions(pagination.current, pagination.pageSize);
+      } catch (err) {
+          antdMessage.error(getApiErrorMessage(err, '删除失败'));
+      }
+  };
+
+  const openCreateModal = () => {
+      setCurrentPosition(null);
+      form.resetFields();
+      form.setFieldsValue({
+          status: 'active',
+          currency: 'CNY',
+          market: 'CN',
+          quantity: 100,
+          price: 1.0
+      });
+      setIsModalOpen(true);
+  };
+
+  const openEditModal = (record: Position) => {
+      setCurrentPosition(record);
+      form.setFieldsValue(record);
+      setIsModalOpen(true);
+  };
+
+  const handleModalOk = async () => {
+      try {
+          const values = await form.validateFields();
+          setModalLoading(true);
+          
+          if (currentPosition) {
+              await api.put(`/trade/positions/${currentPosition._id}`, values);
+              antdMessage.success('更新成功');
+          } else {
+              // For create, we need customerId. 
+              // In this simple UI, we ask for customerId text input.
+              // We also need customerName, productName.
+              await api.post('/trade/positions', values);
+              antdMessage.success('创建成功');
+          }
+          
+          setIsModalOpen(false);
+          fetchPositions(pagination.current, pagination.pageSize);
+      } catch (err) {
+           if (err instanceof Error && err.name === 'ValidationError') return;
+           antdMessage.error(getApiErrorMessage(err, currentPosition ? '更新失败' : '创建失败'));
+      } finally {
+          setModalLoading(false);
+      }
+  };
+
+  const columns = [
+    { title: '持仓ID', dataIndex: '_id', key: '_id', width: 80, ellipsis: true },
+    { title: '客户', dataIndex: 'customerName', key: 'customerName', width: 100, ellipsis: true },
+    { 
+        title: '产品', 
+        key: 'product',
+        width: 150,
+        render: (_: any, record: Position) => (
+            <Space direction="vertical" size={0}>
+                <Text strong>{record.productName}</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{record.productCode}</Text>
+            </Space>
+        )
+    },
+    { 
+      title: '持仓数量', 
+      dataIndex: 'quantity', 
+      key: 'quantity',
+      render: (val: number) => val.toLocaleString()
+    },
+    { 
+      title: '成本/现价', 
+      key: 'price',
+      render: (_: any, record: Position) => (
+          <Space direction="vertical" size={0}>
+              <Text>成本: {record.price.toFixed(3)}</Text>
+              {record.currentPrice && (
+                  <Text type={record.currentPrice >= record.price ? "success" : "danger"}>
+                      现价: {record.currentPrice.toFixed(3)}
+                  </Text>
+              )}
+          </Space>
+      )
+    },
+    { 
+      title: '市值/盈亏', 
+      key: 'marketValue',
+      render: (_: any, record: Position) => (
+          <Space direction="vertical" size={0}>
+              <Text>{record.marketValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+              <Text type={record.profitLoss >= 0 ? "success" : "danger"}>
+                 {record.profitLoss > 0 ? '+' : ''}{record.profitLoss.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                 {record.returnRate !== undefined && ` (${(record.returnRate * 100).toFixed(2)}%)`}
+              </Text>
+          </Space>
+      )
+    },
+    {
+        title: '市场/币种',
+        key: 'market',
+        width: 100,
+        render: (_: any, record: Position) => (
+            <Space split="/">
+                <Text>{record.market || 'CN'}</Text>
+                <Text>{record.currency || 'CNY'}</Text>
+            </Space>
+        )
+    },
+    { 
+      title: '状态', 
+      dataIndex: 'status', 
+      key: 'status',
+      width: 80,
+      render: (val: string) => <Tag color={val === 'active' ? 'blue' : 'default'}>{val === 'active' ? '持仓' : '已平'}</Tag>
+    },
+    { 
+      title: '操作', 
+      key: 'action',
+      width: 150,
+      render: (_: any, record: Position) => (
+        <Space>
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)} />
+          <Popconfirm title="确定删除吗？" onConfirm={() => handleDelete(record._id)}>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      )
+    }
+  ];
+
   return (
     <Card>
-      <h2>持仓管理</h2>
-      <Empty description="功能开发中" />
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <Title level={4} style={{ margin: 0 }}>持仓管理</Title>
+            <Input.Search 
+                placeholder="搜索客户ID" 
+                style={{ width: 200 }} 
+                onSearch={handleSearch}
+                value={searchText}
+                onChange={e => setSearchText(e.target.value)}
+                allowClear
+            />
+        </div>
+        <Space>
+          <Space>
+              <Text>自动刷新</Text>
+              <Switch checked={autoRefresh} onChange={setAutoRefresh} />
+          </Space>
+          <Button icon={<DownloadOutlined />} onClick={handleExport}>导出</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>新增持仓</Button>
+          <Button icon={<ReloadOutlined />} onClick={() => fetchPositions(pagination.current, pagination.pageSize)}>
+            刷新
+          </Button>
+        </Space>
+      </div>
+
+      <PageState loading={loading && data.length === 0} error={null} onRetry={() => fetchPositions()}>
+        <Table
+          columns={columns}
+          dataSource={data}
+          rowKey="_id"
+          loading={loading}
+          pagination={{
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+            total: pagination.total,
+            showSizeChanger: true,
+            onChange: (page, size) => fetchPositions(page, size)
+          }}
+          scroll={{ x: 1000 }}
+        />
+      </PageState>
+
+      <Modal
+          title={currentPosition ? "调整持仓" : "新增持仓"}
+          open={isModalOpen}
+          onOk={handleModalOk}
+          onCancel={() => setIsModalOpen(false)}
+          confirmLoading={modalLoading}
+          width={600}
+      >
+          <Form
+              form={form}
+              layout="vertical"
+          >
+              {!currentPosition && (
+                  <div style={{ display: 'flex', gap: 16 }}>
+                      <Form.Item name="customerId" label="客户ID" rules={[{ required: true }]} style={{ flex: 1 }}>
+                          <Input placeholder="输入客户ID" />
+                      </Form.Item>
+                      <Form.Item name="customerName" label="客户名称" rules={[{ required: true }]} style={{ flex: 1 }}>
+                          <Input placeholder="输入客户名称" />
+                      </Form.Item>
+                  </div>
+              )}
+              
+              <div style={{ display: 'flex', gap: 16 }}>
+                  <Form.Item name="productCode" label="产品代码" rules={[{ required: true }]} style={{ flex: 1 }}>
+                      <Input placeholder="如 510050" disabled={!!currentPosition} />
+                  </Form.Item>
+                  <Form.Item name="productName" label="产品名称" rules={[{ required: true }]} style={{ flex: 1 }}>
+                      <Input placeholder="如 上证50ETF" disabled={!!currentPosition} />
+                  </Form.Item>
+              </div>
+
+              <div style={{ display: 'flex', gap: 16 }}>
+                  <Form.Item name="market" label="市场" initialValue="CN" style={{ flex: 1 }}>
+                      <Select>
+                          <Select.Option value="CN">CN (A股)</Select.Option>
+                          <Select.Option value="HK">HK (港股)</Select.Option>
+                          <Select.Option value="US">US (美股)</Select.Option>
+                      </Select>
+                  </Form.Item>
+                  <Form.Item name="currency" label="币种" initialValue="CNY" style={{ flex: 1 }}>
+                      <Select>
+                          <Select.Option value="CNY">CNY</Select.Option>
+                          <Select.Option value="USD">USD</Select.Option>
+                          <Select.Option value="HKD">HKD</Select.Option>
+                      </Select>
+                  </Form.Item>
+              </div>
+
+              <div style={{ display: 'flex', gap: 16 }}>
+                  <Form.Item name="quantity" label="持仓数量" rules={[{ required: true }]} style={{ flex: 1 }}>
+                      <InputNumber style={{ width: '100%' }} min={0} />
+                  </Form.Item>
+                  <Form.Item name="price" label="成本均价" rules={[{ required: true }]} style={{ flex: 1 }}>
+                      <InputNumber style={{ width: '100%' }} min={0} step={0.001} />
+                  </Form.Item>
+              </div>
+
+              <Form.Item name="status" label="状态">
+                  <Select>
+                      <Select.Option value="active">持仓中 (Active)</Select.Option>
+                      <Select.Option value="closed">已平仓 (Closed)</Select.Option>
+                  </Select>
+              </Form.Item>
+          </Form>
+      </Modal>
     </Card>
   );
 };

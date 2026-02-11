@@ -8,7 +8,7 @@
       </view>
       <view class="title">持仓数据说明</view>
       <view class="share-btn" bindtap="onShareAppMessage">
-        <image src="/images/share.png" class="share-icon"></image>
+        <text class="share-icon">↗️</text>
       </view>
     </view>
     
@@ -19,7 +19,7 @@
       <input class="search-input" 
              placeholder="搜索术语或内容..." 
              bindinput="searchContent" />
-      <image src="/images/search.png" class="search-icon"></image>
+      <text class="search-icon">🔍</text>
     </view>
     
     <!-- 操作按钮 -->
@@ -66,10 +66,9 @@
           <view class="term-definition">
             <view class="term">
               <text class="term-text">{{contentItem.term}}</text>
-              <image src="/images/copy.png" 
-                     class="copy-icon"
+              <text class="copy-icon"
                      data-text="{{contentItem.term}}: {{contentItem.definition}}"
-                     bindtap="copyText"></image>
+                     bindtap="copyText">📋</text>
             </view>
             <view class="definition">{{contentItem.definition}}</view>
           </view>

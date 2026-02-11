@@ -39,8 +39,8 @@ const Orders: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get<ApiResponse<PaginatedPayload<Order>>>('/admin/orders', {
-        params: { page, pageSize },
+      const res = await api.get<ApiResponse<PaginatedPayload<Order>>>('/trade/orders', {
+        params: { page, pageSize, customerId: undefined }, // Admin can see all
       });
       if (res.success && res.data?.pagination && Array.isArray(res.data.items)) {
         setData(res.data.items);
@@ -58,6 +58,18 @@ const Orders: React.FC = () => {
       setLoading(false);
     }
   }, [message]);
+
+  const handleUpdateStatus = useCallback(async (id: string, status: string) => {
+    try {
+      const res = await api.put<ApiResponse<void>>(`/trade/orders/${id}/status`, { status });
+      if (res.success) {
+        message.success('状态更新成功');
+        void fetchOrders(pagination.current, pagination.pageSize);
+      }
+    } catch (err) {
+      message.error(getApiErrorMessage(err, '更新状态失败'));
+    }
+  }, [fetchOrders, message, pagination]);
 
   useEffect(() => {
     void fetchOrders();

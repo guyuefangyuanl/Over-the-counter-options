@@ -275,10 +275,13 @@ Page({
       });
       return;
     }
-
-    if (!this.data.phoneForm.code || this.data.phoneForm.code.length !== 6) {
+    
+    // Check password if we are using password login mode
+    // For now, assuming current UI still uses code field for password or code
+    // The backend expects 'password' for phone login
+    if (!this.data.phoneForm.code) {
       wx.showToast({
-        title: '请输入6位验证码',
+        title: '请输入密码',
         icon: 'none'
       });
       return;
@@ -290,6 +293,7 @@ Page({
     });
 
     // 调用手机号登录接口
+    // Note: Reuse 'code' field as password for now, or need UI update to explicit password field
     loginService.phoneLogin(this.data.phoneForm.phone, this.data.phoneForm.code)
       .then(result => {
         this.handleLoginSuccess(result, 'phone');
@@ -383,15 +387,18 @@ Page({
 
   // 处理登录成功
   handleLoginSuccess: function(result, loginType) {
+    // 确保 userInfo 对象存在
+    const rawUserInfo = result.userInfo || {};
+    
     // 保存用户信息和token
     const userInfo = {
       isLoggedIn: true,
       isGuest: false,
-      userId: result.userId,
+      userId: result.userId || result.openid, // 兼容不同返回格式
       openid: result.openid,
-      nickname: result.userInfo.nickName,
-      avatar: result.userInfo.avatarUrl,
-      gender: result.userInfo.gender,
+      nickname: rawUserInfo.nickName || rawUserInfo.nickname || '微信用户', // 兼容大小写和不同字段名
+      avatar: rawUserInfo.avatarUrl || rawUserInfo.avatar || '',
+      gender: rawUserInfo.gender || 0,
       loginTime: new Date().toISOString(),
       loginType: loginType
     };

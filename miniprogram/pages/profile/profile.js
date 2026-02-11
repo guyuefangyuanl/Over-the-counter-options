@@ -11,20 +11,28 @@ Page({
       vipId: '0000001',
       memberType: '会员'
     },
+    userStatistics: {
+      totalInquiries: 0,
+      successfulTrades: 0,
+      favoriteStocks: 0,
+      daysUsed: 1
+    },
     menuItems: [
       {
         id: 'member',
         title: '会员合作',
         icon: 'member',
         path: '/pages/member/member',
-        showArrow: true
+        showArrow: true,
+        devMode: true // 开发中，页面暂不存在
       },
       {
         id: 'profile',
         title: '个人信息', 
         icon: 'profile',
         path: '/pages/user-info/user-info',
-        showArrow: true
+        showArrow: true,
+        devMode: true // 开发中，页面暂不存在
       },
       {
         id: 'service',
@@ -37,7 +45,7 @@ Page({
         id: 'suggestion',
         title: '功能建议',
         icon: 'suggestion',
-        path: '/pages/suggestion/suggestion',
+        path: '/pages/feedback/feedback', // 修改为已存在的feedback页面
         showArrow: true
       }
     ],
@@ -84,9 +92,44 @@ Page({
   // 刷新用户信息
   refreshUserInfo: function() {
     if (this.data.userInfo.isLoggedIn) {
-      // 模拟刷新用户数据
+      // 刷新用户数据
       this.loadUserInfo();
+      // 加载用户统计数据
+      this.loadUserStatistics();
     }
+  },
+
+  // 加载用户统计数据
+  loadUserStatistics: function() {
+    const api = require('../../utils/api.js');
+    
+    api.get('/auth/user/statistics')
+      .then(result => {
+        console.log('用户统计数据:', result);
+        if (result && result.data) {
+          const stats = result.data;
+          this.setData({
+            userStatistics: {
+              totalInquiries: stats.totalInquiries || 0,
+              successfulTrades: stats.successfulTrades || 0,
+              favoriteStocks: stats.favoriteStocks || 0,
+              daysUsed: stats.daysUsed || 1
+            }
+          });
+        }
+      })
+      .catch(error => {
+        console.error('获取用户统计失败:', error);
+        // 使用默认数据
+        this.setData({
+          userStatistics: {
+            totalInquiries: 0,
+            successfulTrades: 0,
+            favoriteStocks: 0,
+            daysUsed: 1
+          }
+        });
+      });
   },
 
   // 获取系统信息
@@ -165,37 +208,31 @@ Page({
 
   // 调用后端登录API
   callLoginAPI: function(code, userInfo) {
-    // 暂时跳过后端API调用，因为后端服务器尚未完全启动
-    console.log('登录信息:', { code, userInfo });
-    console.log('注意：后端API暂未启动，登录信息仅保存在本地');
+    const api = require('../../utils/api.js');
     
-    // 当后端服务器完全启动后，可以取消注释以下代码：
-    /*
-    const { getApiUrl } = require('../../config/api.config.js');
-    wx.request({
-      url: getApiUrl('/auth/wechat/login'),
-      method: 'POST',
-      data: {
-        code: code,
-        userInfo: userInfo
-      },
-      header: {
-        'content-type': 'application/json'
-      },
-      success: (res) => {
-        if (res.data.success) {
-          // 保存token
-          wx.setStorageSync('token', res.data.data.token);
-          console.log('后端登录成功', res.data);
-        } else {
-          console.error('后端登录失败', res.data);
-        }
-      },
-      fail: (err) => {
-        console.error('调用登录接口失败', err);
+    // 调用后端登录接口
+    api.post('/auth/wechat/login', {
+      code: code,
+      userInfo: userInfo
+    })
+    .then(result => {
+      console.log('后端登录成功:', result);
+      if (result && result.token) {
+        // 保存token
+        wx.setStorageSync('token', result.token);
+        wx.setStorageSync('refreshToken', result.refresh_token);
+        console.log('登录凭证已保存');
       }
+    })
+    .catch(error => {
+      console.error('后端登录失败:', error);
+      // 登录失败不影响本地登录流程，但会提示用户
+      wx.showToast({
+        title: '服务器连接失败，使用本地登录',
+        icon: 'none',
+        duration: 2000
+      });
     });
-    */
   },
 
   // 退出登录
@@ -236,6 +273,15 @@ Page({
     if (!this.data.userInfo.isLoggedIn && item.id !== 'service') {
       wx.showToast({
         title: '请先登录',
+        icon: 'none'
+      });
+      return;
+    }
+
+    // 检查是否是开发中的功能
+    if (item.devMode) {
+      wx.showToast({
+        title: '功能开发中，敬请期待',
         icon: 'none'
       });
       return;
@@ -313,7 +359,22 @@ Page({
       '/pages/index/index',
       '/pages/quotes/quotes',
       '/pages/calculator/calculator',
-      '/pages/profile/profile'
+      '/pages/profile/profile',
+      '/pages/login/login',
+      '/pages/feedback/feedback',
+      '/pages/agreement/user-agreement',
+      '/pages/agreement/privacy-policy',
+      '/pages/inquiry/inquiry',
+      '/pages/position/position',
+      '/pages/search/search',
+      '/pages/search-stock/search-stock',
+      '/pages/stock-detail/stock-detail',
+      '/pages/account/account',
+      '/pages/workbench/workbench',
+      '/pages/quote/quote',
+      '/pages/chart/chart',
+      '/pages/data-explanation/data-explanation',
+      '/pages/option-matrix/option-matrix'
     ];
     return existingPages.includes(path);
   },

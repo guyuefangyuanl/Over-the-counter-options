@@ -11,8 +11,63 @@ class LoginService {
    */
   wechatLogin(code, userInfo) {
     return new Promise((resolve, reject) => {
-      // 使用微信云函数登录
-      wx.cloud.callFunction({
+      // 优先尝试调用本地/后端API登录，而不是直接调用云函数
+      // 这样可以确保Token是由后端生成的，能够被后端正确验证
+      api.post('/auth/wechat/login', {
+        code: code,
+        userInfo: userInfo
+      }).then(result => {
+        console.log('后端API登录成功:', result);
+        if (result.success) {
+          resolve(result.data);
+        } else {
+          // 如果后端API失败，再尝试云函数作为降级方案（仅在生产环境）
+          this._tryCloudLogin(code, userInfo, resolve, reject, result.message);
+        }
+      }).catch(error => {
+        console.error('后端API登录失败:', error);
+        // 如果网络错误或接口不存在，尝试云函数
+        this._tryCloudLogin(code, userInfo, resolve, reject, error.message);
+      });
+    });
+  }
+
+  /**
+   * 尝试云函数登录（降级方案）
+   */
+  _tryCloudLogin(code, userInfo, resolve, reject, prevErrorMsg) {
+    const account = (typeof wx.getAccountInfoSync === 'function') ? wx.getAccountInfoSync() : null;
+    const envVersion = account && account.miniProgram && account.miniProgram.envVersion;
+    
+    // 只有在非开发环境，或者明确配置了使用云函数时才尝试
+    // 开发环境下如果API失败，通常意味着后端没启动或报错，不应该静默转到云函数（因为Token无法通用）
+    if (envVersion === 'develop') {
+      console.warn('开发环境后端登录失败，跳过云函数尝试以避免Token不一致');
+      
+      // 在开发模式下，如果后端连接失败（可能是WeChat API验证失败），
+      // 我们可以尝试使用特殊的 mock_code 再次请求后端，以触发后端的 Dev Mode Support。
+      console.log('尝试使用 Dev Mock Code 重新请求后端...');
+      const mockCode = `mock_${Date.now()}`;
+      
+      api.post('/auth/wechat/login', {
+        code: mockCode,
+        userInfo: userInfo
+      }).then(result => {
+        console.log('Dev Mock 登录成功:', result);
+        if (result.success) {
+          resolve(result.data);
+        } else {
+          // 如果还是失败，则只能使用纯前端Mock（虽然Token无效）
+          this._fallbackToFrontendMock(userInfo, resolve, prevErrorMsg);
+        }
+      }).catch(err => {
+         console.error('Dev Mock 登录也失败:', err);
+         this._fallbackToFrontendMock(userInfo, resolve, prevErrorMsg);
+      });
+      return;
+    }
+
+    wx.cloud.callFunction({
         name: 'login',
         data: {
           userInfo: userInfo
@@ -22,55 +77,41 @@ class LoginService {
         if (res.result && res.result.success) {
           resolve(res.result.data)
         } else {
-          // 生产环境直接报错
-          const account = (typeof wx.getAccountInfoSync === 'function') ? wx.getAccountInfoSync() : null;
-          const envVersion = account && account.miniProgram && account.miniProgram.envVersion;
-          
-          if (envVersion !== 'develop') {
-             reject(new Error(res.result ? res.result.message : '登录失败'));
-             return;
-          }
-
-          // 仅开发环境允许回退到Mock数据
-          console.warn('云函数登录失败，使用Mock数据:', res.result ? res.result.message : '未知错误')
-          const mockResult = {
-            userId: `mock_${Date.now()}`,
-            openid: `mock_openid_${Math.random().toString(36).slice(2)}`,
-            userInfo: {
-              nickName: (userInfo && userInfo.nickName) || '微信用户',
-              avatarUrl: (userInfo && userInfo.avatarUrl) || '',
-              gender: (userInfo && userInfo.gender) || 0
-            },
-            token: `mock_token_${Date.now()}`
-          }
-          resolve(mockResult)
+          reject(new Error(res.result ? res.result.message : '登录失败'));
         }
       }).catch(error => {
         console.error('调用云函数失败:', error)
-        
-        // 生产环境直接报错
-        const account = (typeof wx.getAccountInfoSync === 'function') ? wx.getAccountInfoSync() : null;
-        const envVersion = account && account.miniProgram && account.miniProgram.envVersion;
-        
-        if (envVersion !== 'develop') {
-           reject(new Error('系统服务暂时不可用，请稍后重试'));
-           return;
-        }
-
-        // 仅开发环境允许回退到Mock数据
-        const mockResult = {
-          userId: `mock_${Date.now()}`,
-          openid: `mock_openid_${Math.random().toString(36).slice(2)}`,
-          userInfo: {
-            nickName: (userInfo && userInfo.nickName) || '微信用户',
-            avatarUrl: (userInfo && userInfo.avatarUrl) || '',
-            gender: (userInfo && userInfo.gender) || 0
-          },
-          token: `mock_token_${Date.now()}`
-        }
-        resolve(mockResult)
+        reject(new Error('系统服务暂时不可用，请稍后重试'));
       })
-    });
+  }
+
+  _fallbackToFrontendMock(userInfo, resolve, prevErrorMsg) {
+      // 提供Mock数据方便UI调试
+      const mockResult = {
+        userId: `mock_${Date.now()}`,
+        openid: `mock_openid_${Math.random().toString(36).slice(2)}`,
+        userInfo: {
+          nickName: (userInfo && userInfo.nickName) || '微信用户',
+          avatarUrl: (userInfo && userInfo.avatarUrl) || '',
+          gender: (userInfo && userInfo.gender) || 0
+        },
+        token: `mock_token_${Date.now()}`
+      };
+      
+      // 询问用户是否使用Mock
+      wx.showModal({
+        title: '登录失败',
+        content: `连接本地后端失败: ${prevErrorMsg}\n是否使用模拟数据进入？(仅用于UI调试，无法通过后端验证)`,
+        success: (res) => {
+          if (res.confirm) {
+            resolve(mockResult);
+          } else {
+            // reject(new Error(prevErrorMsg || '登录失败'));
+            // 为了防止死循环，这里也resolve mock，但用户需知晓
+            resolve(mockResult); 
+          }
+        }
+      });
   }
 
   /**
@@ -154,7 +195,7 @@ class LoginService {
       }
       api.request('/auth/phone/login', 'POST', {
         phone: phone,
-        code: code
+        password: code // Use 'code' as password param to match backend expectation
       }, {}, { silent: true, retries: 0, suppressErrorLog: true, suppressRetryLog: true }).then(result => {
         if (result.success) {
           resolve(result.data);

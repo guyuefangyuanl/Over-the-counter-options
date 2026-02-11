@@ -12,15 +12,7 @@ import Settings from './pages/Settings';
 import FeeList from './pages/FeeList';
 import FeeStatistics from './pages/FeeStatistics';
 import CustomerList from './pages/CustomerList';
-import CustomerGroups from './pages/CustomerGroups';
-import TradeOrders from './pages/TradeOrders';
-import TradeInquiries from './pages/TradeInquiries';
-import TradePositions from './pages/TradePositions';
-import MessageList from './pages/MessageList';
-import MessageTemplates from './pages/MessageTemplates';
-import ConfigSystem from './pages/ConfigSystem';
-import ConfigUsers from './pages/ConfigUsers';
-import './App.css';
+import BoardList from './pages/BoardList';
 
 function App() {
   return (
@@ -39,6 +31,7 @@ function App() {
           {/* 行情管理 */}
           <Route path="quotes" element={<Quotes />} />
           <Route path="quotes/history" element={<QuotesHistory />} />
+          <Route path="quotes/boards" element={<BoardList />} />
           {/* 交易管理 */}
           <Route path="trade/orders" element={<TradeOrders />} />
           <Route path="trade/inquiries" element={<TradeInquiries />} />

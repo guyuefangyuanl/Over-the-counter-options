@@ -2,6 +2,13 @@
 """
 配置管理模块
 使用类来管理不同环境的配置，从.env文件读取环境变量
+
+【数据源架构说明】
+==================
+1. 微信云数据库 (优先): 小程序端直接读取，用于 quotes, inquiries, groups 等集合
+2. MongoDB (管理后台): 用于数据管理后台、数据处理和复杂查询
+3. 数据同步: 通过 export_data_to_cloud.py 定期将 MongoDB 数据同步到云数据库
+==================
 """
 
 import os
@@ -16,36 +23,41 @@ class Config:
     """
     基础配置类
     包含所有环境共用的配置项
+    
+    数据源优先级:
+    1. 微信云数据库 (WX_CLOUD_ENV) - 小程序端使用
+    2. MongoDB (MONGO_URI) - 管理后台使用
     """
     
     # Flask密钥，用于会话加密
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
     
-    # 数据库配置
-    # MongoDB配置
+    # ==================== 数据库配置 ====================
+    # 主数据源: MongoDB (管理后台和数据处理)
     MONGO_URI = os.environ.get('MONGO_URI') or 'mongodb://localhost:27017/option_data'
-    
-    # 数据库名称
     DATABASE_NAME = os.environ.get('DATABASE_NAME') or 'option_trading'
     
-    # API配置
-    # AkShare数据源配置
+    # 微信云数据库配置 (小程序端数据源)
+    WX_CLOUD_ENV = os.environ.get('WX_CLOUD_ENV') or 'develop-8gx7kh9g045e6c9a'
+    WX_APPID = os.environ.get('WX_APPID') or ''
+    WX_SECRET = os.environ.get('WX_SECRET') or ''
+    
+    # 数据源模式: 'cloud' (云数据库优先), 'local' (本地MongoDB), 'hybrid' (混合模式)
+    DATA_SOURCE_MODE = os.environ.get('DATA_SOURCE_MODE') or 'hybrid'
+    
+    # ==================== API配置 ====================
     AKSHARE_DATA_SOURCE = os.environ.get('AKSHARE_DATA_SOURCE') or 'default'
     
-    # 日志配置
+    # ==================== 日志配置 ====================
     LOG_LEVEL = os.environ.get('LOG_LEVEL') or 'INFO'
     LOG_FILE = os.environ.get('LOG_FILE') or 'app.log'
     
-    # 跨域配置
+    # ==================== 跨域配置 ====================
     CORS_ORIGINS = os.environ.get('CORS_ORIGINS') or '*'
     
-    # 应用配置
+    # ==================== 应用配置 ====================
     APP_NAME = os.environ.get('APP_NAME') or '期权数据服务'
-    
-    # 调试模式
     DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
-    
-    # 主机和端口配置
     FLASK_HOST = os.environ.get('FLASK_HOST') or '127.0.0.1'
     FLASK_PORT = int(os.environ.get('FLASK_PORT') or 5000)
     

@@ -159,7 +159,7 @@
 
   <!-- 空状态 -->
   <view class="empty-state" wx:else>
-    <image src="/images/empty.png" class="empty-icon"></image>
+    <text class="empty-icon">📊</text>
     <text class="empty-text">选择账户，无持仓展示。</text>
   </view>
 

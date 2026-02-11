@@ -87,7 +87,7 @@
           </block>
         </scroll-view>
         <view class="edit-group-btn" bindtap="showGroupManage">
-          <image src="../../images/edit.svg" class="edit-icon" mode="aspectFit" lazy-load="true" />
+          <image src="/images/edit.svg" class="edit-icon" mode="aspectFit" lazy-load="true" />
         </view>
       </view>
     </view>
@@ -96,7 +96,7 @@
     <view class="filter-section">
       <!-- 搜索框 -->
       <view class="search-bar">
-        <image src="../../images/icons/search.png" class="search-icon" mode="aspectFit" lazy-load="true" />
+        <image src="/images/icons/search.png" class="search-icon" mode="aspectFit" lazy-load="true" />
         <input class="search-input" 
                placeholder="搜索股票名称/代码" 
                value="{{filters.keyword}}" 
@@ -104,7 +104,7 @@
                bindconfirm="onSearchConfirm"
                confirm-type="search" />
         <image wx:if="{{filters.keyword}}" 
-               src="../../images/close.svg" 
+               src="/images/close.svg"
                class="clear-icon" 
                bindtap="clearSearch" 
                mode="aspectFit" 
@@ -148,7 +148,7 @@
         <!-- 数据说明 -->
         <view class="data-info-trigger" bindtap="showDataInfo">
           <text>数据说明</text>
-          <image src="../../images/info.png" class="info-icon" mode="aspectFit" lazy-load="true" />
+          <image src="/images/info.png" class="info-icon" mode="aspectFit" lazy-load="true" />
         </view>
       </view>
     </view>
@@ -219,7 +219,7 @@
     
     <!-- 空状态 -->
     <view class="empty-state" wx:if="{{filteredProducts.length === 0 && !isLoading}}">
-      <image src="../../images/empty.svg" class="empty-icon" mode="aspectFit" lazy-load="true" />
+      <image src="/images/empty.svg" class="empty-icon" mode="aspectFit" lazy-load="true" />
       <text class="empty-title">暂无数据</text>
       <text class="empty-desc">{{getEmptyStateText()}}</text>
       <van-button type="primary" size="small" bindtap="clearAllFilters" wx:if="{{hasActiveFilters()}}">
@@ -255,15 +255,15 @@
   <!-- 快捷入口 -->
   <view class="quick-actions">
     <view class="quick-action-item" bindtap="goToCalculator" hover-class="quick-action-hover">
-      <image src="../../images/calculator.png" class="quick-action-icon" mode="aspectFit" lazy-load="true" />
+      <image src="/images/calculator.png" class="quick-action-icon" mode="aspectFit" lazy-load="true" />
       <text class="quick-action-text">计算器</text>
     </view>
     <view class="quick-action-item" bindtap="goToInquiryRecords" hover-class="quick-action-hover">
-      <image src="../../images/records.png" class="quick-action-icon" mode="aspectFit" lazy-load="true" />
+      <image src="/images/records.png" class="quick-action-icon" mode="aspectFit" lazy-load="true" />
       <text class="quick-action-text">询价记录</text>
     </view>
     <view class="quick-action-item" bindtap="goToProfile" hover-class="quick-action-hover">
-      <image src="../../images/profile.png" class="quick-action-icon" mode="aspectFit" lazy-load="true" />
+      <image src="/images/profile.png" class="quick-action-icon" mode="aspectFit" lazy-load="true" />
       <text class="quick-action-text">个人中心</text>
     </view>
   </view>

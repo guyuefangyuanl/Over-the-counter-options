@@ -1,0 +1,37 @@
+<view class="container">
+  <view class="header">
+    <text class="title">提交询价</text>
+  </view>
+
+  <view class="form-group">
+    <view class="form-item">
+      <text class="label">产品信息</text>
+      <view class="value" wx:if="{{selectedProduct}}">
+        <text>{{selectedProduct.name}} ({{selectedProduct.code}})</text>
+        <text class="sub-text">{{selectedProduct.optionType}} {{selectedProduct.term}}</text>
+      </view>
+      <view class="value placeholder" wx:else>
+        请从报价页面选择产品
+      </view>
+    </view>
+
+    <view class="form-item">
+      <text class="label">联系人</text>
+      <input class="input" placeholder="请输入您的姓名" value="{{contactName}}" bindinput="onInputName" />
+    </view>
+
+    <view class="form-item">
+      <text class="label">联系电话</text>
+      <input class="input" type="number" placeholder="请输入手机号码" value="{{phone}}" bindinput="onInputPhone" />
+    </view>
+
+    <view class="form-item">
+      <text class="label">备注</text>
+      <textarea class="textarea" placeholder="请输入其他需求..." value="{{remark}}" bindinput="onInputRemark" />
+    </view>
+  </view>
+
+  <view class="footer">
+    <button class="submit-btn" type="primary" loading="{{isLoading}}" bindtap="submitInquiry">提交询价</button>
+  </view>
+</view>

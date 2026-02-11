@@ -95,19 +95,19 @@
     <view class="stats-title">我的统计</view>
     <view class="stats-grid">
       <view class="stat-item">
-        <view class="stat-number">12</view>
+        <view class="stat-number">{{userStatistics.totalInquiries || 0}}</view>
         <view class="stat-label">累计询价</view>
       </view>
       <view class="stat-item">
-        <view class="stat-number">5</view>
+        <view class="stat-number">{{userStatistics.successfulTrades || 0}}</view>
         <view class="stat-label">成功交易</view>
       </view>
       <view class="stat-item">
-        <view class="stat-number">8</view>
+        <view class="stat-number">{{userStatistics.favoriteStocks || 0}}</view>
         <view class="stat-label">关注标的</view>
       </view>
       <view class="stat-item">
-        <view class="stat-number">30</view>
+        <view class="stat-number">{{userStatistics.daysUsed || 1}}</view>
         <view class="stat-label">使用天数</view>
       </view>
     </view>

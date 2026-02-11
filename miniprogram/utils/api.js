@@ -192,6 +192,35 @@ function request(url, method = 'GET', data = {}, header = {}, options = {}) {
 }
 
 /**
+ * 跳转到登录页
+ */
+function redirectToLogin() {
+  const pages = getCurrentPages();
+  const currentPage = pages[pages.length - 1];
+  
+  // 如果当前已经是登录页，就不再跳转
+  if (currentPage && currentPage.route.includes('pages/login/login')) {
+    return;
+  }
+
+  wx.navigateTo({
+    url: '/pages/login/login',
+    fail: () => {
+      // 如果 navigateTo 失败（可能是因为在 tabbar 页面），尝试 switchTab 到我的页面
+      wx.switchTab({
+        url: '/pages/profile/profile',
+        fail: () => {
+          // 如果还是失败，尝试 redirectTo
+          wx.redirectTo({
+            url: '/pages/login/login'
+          });
+        }
+      });
+    }
+  });
+}
+
+/**
  * 处理未授权响应
  */
 function handleUnauthorized() {

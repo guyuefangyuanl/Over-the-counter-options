@@ -1,7 +1,7 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, g
 from backend_utils.response import flask_success_response, flask_error_response
 from models.group import GroupModel
-# from routes.auth import require_auth # Assuming auth is handled or we mock it for now
+from routes.auth import require_auth
 
 group_bp = Blueprint('group', __name__)
 
@@ -19,11 +19,14 @@ def is_protected_group_name(name: str) -> bool:
         return False
     return str(name).strip() in PROTECTED_GROUP_NAMES
 
-# Mock auth for now if not available, or retrieve user_id from header/token
 def get_current_user_id():
-    # In a real app, this comes from JWT or session
-    # For now, we assume a default user or get from header 'X-User-ID'
-    return request.headers.get('X-User-ID', 'default_user')
+    """获取当前登录用户ID"""
+    # 从 g.admin 中获取，由 require_auth 注入
+    if hasattr(g, 'admin') and g.admin:
+        return g.admin.get('sub')
+    # 如果未通过 require_auth (理论上不应发生)，尝试从 header 获取 (仅供调试，生产环境应禁用)
+    # return request.headers.get('X-User-ID', 'default_user')
+    return None
 
 def get_model():
     ensure_db = getattr(current_app, "ensure_db", None)
@@ -37,15 +40,19 @@ def get_model():
     return GroupModel(db, cloud_client=cloud_db)
 
 @group_bp.route('/groups', methods=['POST'])
+@require_auth
 def create_group():
     try:
+        creator_id = get_current_user_id()
+        if not creator_id:
+            return flask_error_response("未授权", 401)
+
         data = request.json
         if not data or not data.get('name'):
             return flask_error_response("分组名称不能为空", 400)
         if is_protected_group_name(data.get("name")):
             return flask_error_response("该分组名称为系统保留名称，无法创建", 400)
             
-        creator_id = get_current_user_id()
         data['creator_id'] = creator_id
         
         model = get_model()
@@ -59,9 +66,13 @@ def create_group():
         return flask_error_response(str(e), 500)
 
 @group_bp.route('/groups', methods=['GET'])
+@require_auth
 def get_groups():
     try:
         creator_id = get_current_user_id()
+        if not creator_id:
+            return flask_error_response("未授权", 401)
+
         model = get_model()
         
         # 记录请求
@@ -95,6 +106,7 @@ def get_groups():
         )
 
 @group_bp.route('/groups/<group_id>', methods=['PUT'])
+@require_auth
 def update_group(group_id):
     try:
         data = request.json
@@ -108,8 +120,13 @@ def update_group(group_id):
         group = model.get_group_by_id(group_id)
         if not group:
             return flask_error_response("分组不存在", 404)
-        if group['creator_id'] != get_current_user_id():
-            return flask_error_response("无权修改", 403)
+        
+        creator_id = get_current_user_id()
+        if group['creator_id'] != creator_id:
+            # 允许管理员修改任何分组（可选）
+            if g.admin.get('role') != 'admin':
+                return flask_error_response("无权修改", 403)
+                
         if is_protected_group_name(group.get("name")):
             return flask_error_response("系统保护分组不可重命名", 403)
             
@@ -122,6 +139,7 @@ def update_group(group_id):
         return flask_error_response(str(e), 500)
 
 @group_bp.route('/groups/<group_id>', methods=['DELETE'])
+@require_auth
 def delete_group(group_id):
     try:
         remove_favorites_raw = request.args.get('remove_favorites')
@@ -140,14 +158,18 @@ def delete_group(group_id):
         group = model.get_group_by_id(group_id)
         if not group:
             return flask_error_response("分组不存在", 404)
-        if group['creator_id'] != get_current_user_id():
-            return flask_error_response("无权删除", 403)
+            
+        creator_id = get_current_user_id()
+        if group['creator_id'] != creator_id:
+            if g.admin.get('role') != 'admin':
+                return flask_error_response("无权删除", 403)
+                
         if is_protected_group_name(group.get("name")):
             return flask_error_response("系统保护分组不可删除", 403)
 
         current_app.logger.info(
             "delete_group user=%s group_id=%s remove_favorites=%s members_count=%s",
-            get_current_user_id(),
+            creator_id,
             group_id,
             remove_favorites,
             len(group.get("members") or []),
@@ -162,6 +184,7 @@ def delete_group(group_id):
         return flask_error_response(str(e), 500)
 
 @group_bp.route('/groups/<group_id>/members', methods=['POST'])
+@require_auth
 def add_member(group_id):
     try:
         data = request.json
@@ -176,8 +199,11 @@ def add_member(group_id):
         group = model.get_group_by_id(group_id)
         if not group:
             return flask_error_response("分组不存在", 404)
-        if group['creator_id'] != get_current_user_id():
-            return flask_error_response("无权操作", 403)
+            
+        creator_id = get_current_user_id()
+        if group['creator_id'] != creator_id:
+            if g.admin.get('role') != 'admin':
+                return flask_error_response("无权操作", 403)
             
         success = model.add_member(group_id, data)
         if success:
@@ -188,6 +214,7 @@ def add_member(group_id):
         return flask_error_response(str(e), 500)
 
 @group_bp.route('/groups/<group_id>/members/<stock_code>', methods=['DELETE'])
+@require_auth
 def remove_member(group_id, stock_code):
     try:
         model = get_model()
@@ -198,8 +225,11 @@ def remove_member(group_id, stock_code):
         group = model.get_group_by_id(group_id)
         if not group:
             return flask_error_response("分组不存在", 404)
-        if group['creator_id'] != get_current_user_id():
-            return flask_error_response("无权操作", 403)
+            
+        creator_id = get_current_user_id()
+        if group['creator_id'] != creator_id:
+            if g.admin.get('role') != 'admin':
+                return flask_error_response("无权操作", 403)
             
         success = model.remove_member(group_id, stock_code)
         if success:
@@ -207,4 +237,32 @@ def remove_member(group_id, stock_code):
         else:
             return flask_error_response("移除失败", 500)
     except Exception as e:
+        return flask_error_response(str(e), 500)
+
+@group_bp.route('/groups/<group_id>/quotes', methods=['GET'])
+@require_auth
+def get_group_quotes(group_id):
+    """获取分组内股票的实时行情"""
+    try:
+        from services.quote_service import QuoteService
+        service = QuoteService()
+        
+        # 权限检查已经在 Service 中隐含（获取分组需要权限吗？通常需要）
+        # 这里我们在 Route 层做权限检查更明确
+        model = get_model()
+        group = model.get_group_by_id(group_id)
+        if not group:
+            return flask_error_response("分组不存在", 404)
+            
+        creator_id = get_current_user_id()
+        # 允许查看自己的或者系统分组
+        if group['creator_id'] != creator_id and not is_protected_group_name(group.get("name")):
+             # 如果不是自己的且不是系统分组，检查是否是管理员
+            if g.admin.get('role') != 'admin':
+                return flask_error_response("无权查看", 403)
+
+        quotes = service.get_group_quotes(group_id)
+        return flask_success_response(data=quotes, message="获取成功")
+    except Exception as e:
+        current_app.logger.error(f"获取分组行情失败: {e}")
         return flask_error_response(str(e), 500)

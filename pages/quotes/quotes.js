@@ -1,5 +1,6 @@
 // 报价页面 - 核心功能页面（个股期权报价）
 const OptionPricingSystem = require('../../utils/option-pricing.js');
+const api = require('../../utils/request');
 
 Page({
   data: {
@@ -331,38 +332,45 @@ Page({
       });
       return;
     }
-    
+
     this.setData({ loading: true });
     
-    // 模拟搜索结果
-    setTimeout(() => {
-      const stockDatabase = {
-        '000001': { name: '平安银行', price: 11.36 },
-        '000002': { name: '万科A', price: 8.92 },
-        '600036': { name: '招商银行', price: 35.67 },
-        '600519': { name: '贵州茅台', price: 1678.90 },
-        '000858': { name: '五粮液', price: 128.45 }
-      };
-      
-      const stock = stockDatabase[keyword] || stockDatabase['000001'];
-      const newStock = {
-        code: keyword,
-        name: stock.name,
-        price: stock.price,
-        change: (Math.random() * 2 - 1).toFixed(2),
-        changePercent: (Math.random() * 4 - 2).toFixed(2)
-      };
-      
-      newStock.displayText = `${newStock.price}  ${newStock.changePercent}%`;
-      
-      this.setData({
-        currentStock: newStock,
-        showSearch: false,
-        searchKeyword: ''
+    // 调用后端搜索接口
+    api.get('/stock/search', { keyword })
+      .then(res => {
+        if (res && res.length > 0) {
+          const stock = res[0]; // 默认取第一个
+          const newStock = {
+            code: stock.code,
+            name: stock.name,
+            price: stock.price,
+            change: (stock.price * stock.change_percent / 100).toFixed(2), // 近似计算
+            changePercent: stock.change_percent,
+            displayText: `${stock.price}  ${stock.change_percent}%`
+          };
+          
+          this.setData({
+            currentStock: newStock,
+            showSearch: false,
+            searchKeyword: ''
+          });
+          
+          // 更新期权报价基准
+          if (this.pricingSystem) {
+             this.pricingSystem.selectStock(newStock);
+          }
+          this.loadOptionQuotes();
+        } else {
+          wx.showToast({ title: '未找到相关股票', icon: 'none' });
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        wx.showToast({ title: '搜索失败', icon: 'none' });
+      })
+      .finally(() => {
+        this.setData({ loading: false });
       });
-      
-      this.loadOptionQuotes();
-    }, 1000);
   },
   
   // 取消搜索
@@ -390,22 +398,19 @@ Page({
   
   // 提交询价
   submitInquiry: function(quote) {
-    wx.showLoading({
-      title: '提交询价中...'
-    });
+    // 跳转到询价页面，并传递产品信息
+    const product = {
+        name: this.data.currentStock.name,
+        code: this.data.currentStock.code,
+        optionType: quote.optionType,
+        term: quote.expiryTerm,
+        strikePrice: quote.strikePrice,
+        price: quote.premium
+    };
     
-    setTimeout(() => {
-      wx.hideLoading();
-      wx.showToast({
-        title: '询价已提交',
-        icon: 'success'
-      });
-      
-      // 跳转到询价中心
-      wx.switchTab({
-        url: '/pages/inquiry/inquiry'
-      });
-    }, 1500);
+    wx.navigateTo({
+      url: `/pages/inquiry/inquiry?product=${encodeURIComponent(JSON.stringify(product))}`
+    });
   },
   
   // 查看详情

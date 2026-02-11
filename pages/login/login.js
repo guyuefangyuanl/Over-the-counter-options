@@ -1,6 +1,6 @@
 // 多端登录页面
-const loginService = require('../../utils/loginService');
-const api = require('../../utils/api');
+const auth = require('../../utils/auth');
+const api = require('../../utils/request');
 
 Page({
   data: {
@@ -92,7 +92,7 @@ Page({
               });
               
               // 调用登录服务，将 code 和 userInfo 一起发送到服务器
-              loginService.wechatLogin(loginRes.code, profileRes.userInfo)
+              auth.login()
                 .then(result => {
                   this.handleLoginSuccess(result, 'wechat');
                 })
@@ -402,17 +402,19 @@ Page({
     const userInfo = {
       isLoggedIn: true,
       isGuest: false,
-      userId: result.userId,
+      userId: result.openid,
       openid: result.openid,
-      nickname: result.userInfo.nickName,
-      avatar: result.userInfo.avatarUrl,
-      gender: result.userInfo.gender,
+      nickname: result.nickname || '微信用户',
+      avatar: result.avatar || '',
       loginTime: new Date().toISOString(),
       loginType: loginType
     };
 
     wx.setStorageSync('userInfo', userInfo);
-    wx.setStorageSync('token', result.token);
+    // token is already set by auth.login but we can ensure consistency
+    if (result.token) {
+        wx.setStorageSync('token', result.token);
+    }
 
     this.setData({ isLoading: false });
     

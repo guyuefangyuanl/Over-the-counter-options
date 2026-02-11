@@ -16,7 +16,7 @@
   <!-- 搜索和筛选栏 -->
   <view class="filter-bar">
     <view class="search-box">
-      <image src="/images/search.png" class="search-icon"></image>
+      <text class="search-icon">🔍</text>
       <input class="search-input" 
              placeholder="搜索标的或期权类型..." 
              bindinput="searchPositions" 

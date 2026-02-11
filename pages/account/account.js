@@ -1,211 +1,131 @@
 // pages/account/account.js
+const api = require('../../utils/request');
+
 Page({
   data: {
-    selectedAccount: '场外期权账户（W0008888）',
-    accountOptions: [
-      { id: 'W0008888', name: '场外期权账户（W0008888）', type: 'real' },
-      { id: 'M0008888', name: '模拟账户 (M0008888)', type: 'demo' }
-    ],
-    showAccountDropdown: false,
-    currentTab: 0, // 0:存续持仓, 1:近期到期, 2:已到期, 3:已完结
-    tabList: [
-      { name: '存续持仓', count: 1 },
-      { name: '近期到期', count: 0 },
-      { name: '已到期', count: 0 },
-      { name: '已完结', count: 0 }
-    ],
     accountSummary: {
-      totalScale: 100, // 存续规模（万）
-      totalProfit: -379993.13, // 存续净收益（元）
-      completedProfit: 0, // 完结净收益（元）
-      totalInvestment: 50000 // 投入成本（万）
+      totalScale: 0, 
+      totalProfit: 0, 
+      totalAsset: 0,
+      balance: 0
     },
-    positionList: [
-      {
-        id: 1,
-        type: '香草',
-        scale: 100,
-        underlyingAsset: '中证1000',
-        currentPrice: 6420.35,
-        strikePrice: 6500,
-        profitLoss: -37999.31,
-        profitRate: -7.6,
-        status: '开仓',
-        createTime: '2024-12-30',
-        expireTime: '2025-01-30',
-        isNearExpiry: false
-      }
-    ],
-    showCostDetail: false
+    positionList: [],
+    transactions: [],
+    showTransactionHistory: false,
+    isLoading: false
   },
 
   onLoad: function (options) {
-    this.loadAccountData();
+    this.loadData();
   },
 
   onShow: function () {
-    // 刷新数据
-    this.refreshData();
+    this.loadData();
   },
 
-  // 加载账户数据
-  loadAccountData: function () {
-    // 模拟从后端获取账户数据
-    this.setData({
-      accountSummary: {
-        totalScale: 100,
-        totalProfit: -379993.13,
-        completedProfit: 0,
-        totalInvestment: 50000
-      }
-    });
-  },
-
-  // 刷新数据
-  refreshData: function () {
-    wx.showLoading({
-      title: '刷新中...'
-    });
-    
-    setTimeout(() => {
-      this.loadAccountData();
+  loadData: function () {
+      this.loadAccountSummary();
       this.loadPositionList();
-      wx.hideLoading();
-      wx.showToast({
-        title: '刷新成功',
-        icon: 'success',
-        duration: 1500
-      });
+  },
+
+  onPullDownRefresh: function () {
+    this.loadData();
+    setTimeout(() => {
+        wx.stopPullDownRefresh();
     }, 1000);
   },
 
-  // 下拉刷新
-  onPullDownRefresh: function () {
-    this.refreshData();
-    setTimeout(() => {
-      wx.stopPullDownRefresh();
-    }, 1500);
-  },
-
-  // 切换账户下拉框
-  toggleAccountDropdown: function () {
-    this.setData({
-      showAccountDropdown: !this.data.showAccountDropdown
+  // 加载账户概览
+  loadAccountSummary: function () {
+    api.get('/trade/account').then(res => {
+        this.setData({
+            accountSummary: {
+                totalAsset: res.total_asset,
+                balance: res.balance,
+                positionValue: res.position_value,
+                totalProfit: res.total_profit
+            }
+        });
     });
-  },
-
-  // 选择账户
-  selectAccount: function (e) {
-    const account = e.currentTarget.dataset.account;
-    this.setData({
-      selectedAccount: account.name,
-      showAccountDropdown: false
-    });
-    
-    // 重新加载该账户的数据
-    this.loadAccountData();
-    this.loadPositionList();
-    
-    wx.showToast({
-      title: `已切换到${account.type === 'real' ? '真实' : '模拟'}账户`,
-      icon: 'success'
-    });
-  },
-
-  // 切换持仓标签
-  switchTab: function (e) {
-    const index = e.currentTarget.dataset.index;
-    this.setData({
-      currentTab: index
-    });
-    this.loadPositionList();
   },
 
   // 加载持仓列表
   loadPositionList: function () {
-    const { currentTab } = this.data;
-    let positionList = [];
-    
-    // 根据当前标签加载不同的持仓数据
-    switch(currentTab) {
-      case 0: // 存续持仓
-        positionList = [
-          {
-            id: 1,
-            type: '香草',
-            scale: 100,
-            underlyingAsset: '中证1000',
-            currentPrice: 6420.35,
-            strikePrice: 6500,
-            profitLoss: -37999.31,
-            profitRate: -7.6,
-            status: '开仓',
-            createTime: '2024-12-30',
-            expireTime: '2025-01-30',
-            isNearExpiry: false,
-            distanceToStrike: -1.23, // 距执行价百分比
-            breakEvenPoint: 6750.5,
-            distanceToBreakEven: -4.89 // 距盈亏平衡点百分比
+      api.get('/trade/positions').then(res => {
+          this.setData({
+              positionList: res.items || []
+          });
+      });
+  },
+
+  // 充值
+  onDeposit: function () {
+      wx.showModal({
+          title: '充值',
+          editable: true,
+          placeholderText: '请输入金额',
+          success: (res) => {
+              if (res.confirm && res.content) {
+                  const amount = parseFloat(res.content);
+                  if (isNaN(amount) || amount <= 0) {
+                      wx.showToast({ title: '金额无效', icon: 'none' });
+                      return;
+                  }
+                  
+                  wx.showLoading({ title: '处理中' });
+                  api.post('/trade/account/deposit', { amount })
+                    .then(res => {
+                        wx.showToast({ title: '充值成功' });
+                        this.loadAccountSummary();
+                    })
+                    .catch(err => {
+                        wx.showToast({ title: err.message || '失败', icon: 'none' });
+                    })
+                    .finally(() => wx.hideLoading());
+              }
           }
-        ];
-        break;
-      case 1: // 近期到期
-        positionList = [];
-        break;
-      case 2: // 已到期
-        positionList = [];
-        break;
-      case 3: // 已完结
-        positionList = [];
-        break;
-    }
-    
-    this.setData({
-      positionList: positionList
-    });
+      });
   },
 
-  // 录入持仓
-  addPosition: function () {
+  // 提现
+  onWithdraw: function () {
     wx.showModal({
-      title: '录入持仓',
-      content: '此功能需要后端支持，暂未开放',
-      showCancel: false
+        title: '提现',
+        editable: true,
+        placeholderText: '请输入金额',
+        success: (res) => {
+            if (res.confirm && res.content) {
+                const amount = parseFloat(res.content);
+                if (isNaN(amount) || amount <= 0) {
+                    wx.showToast({ title: '金额无效', icon: 'none' });
+                    return;
+                }
+                
+                wx.showLoading({ title: '处理中' });
+                api.post('/trade/account/withdraw', { amount })
+                  .then(res => {
+                      wx.showToast({ title: '提现成功' });
+                      this.loadAccountSummary();
+                  })
+                  .catch(err => {
+                      wx.showToast({ title: err.message || '失败', icon: 'none' });
+                  })
+                  .finally(() => wx.hideLoading());
+            }
+        }
     });
   },
 
-  // 查看持仓详情
-  viewPositionDetail: function (e) {
-    const position = e.currentTarget.dataset.position;
-    wx.navigateTo({
-      url: `/pages/position-detail/position-detail?id=${position.id}`
-    });
+  // 查看资金流水
+  viewTransactions: function () {
+      wx.navigateTo({
+          url: '/pages/account/transactions'
+      });
   },
-
-  // 切换投入成本详情
-  toggleCostDetail: function () {
-    this.setData({
-      showCostDetail: !this.data.showCostDetail
-    });
-  },
-
-  // 查看数据说明
-  viewDataExplanation: function () {
-    wx.navigateTo({
-      url: '/pages/data-explanation/data-explanation'
-    });
-  },
-
+  
   // 格式化数字
   formatNumber: function (num) {
-    if (Math.abs(num) >= 10000) {
-      return (num / 10000).toFixed(2) + '万';
-    }
-    return num.toFixed(2);
-  },
-
-  // 格式化百分比
-  formatPercent: function (num) {
-    return (num > 0 ? '+' : '') + num.toFixed(2) + '%';
+    if (!num) return '0.00';
+    return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 });

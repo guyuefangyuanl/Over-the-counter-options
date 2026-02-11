@@ -27,6 +27,13 @@ Page({
         showArrow: true
       },
       {
+        id: 'orders',
+        title: '我的订单',
+        icon: 'order', // Make sure this icon exists or use a generic one
+        path: '/pages/orders/orders',
+        showArrow: true
+      },
+      {
         id: 'service',
         title: '联系客服',
         icon: 'service',

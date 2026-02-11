@@ -255,13 +255,16 @@
       <view class="section knowledge-section-outer">
          <view class="section-header">
             <text class="section-title">知识</text>
-            <text class="more-btn">></text>
+            <text class="more-btn" bindtap="onKnowledgeMore">></text>
          </view>
          <view class="knowledge-list enhanced-card">
             <block wx:for="{{holdingsData.knowledge}}" wx:key="id">
               <view class="knowledge-item" data-id="{{item.id}}" bindtap="onKnowledgeItemTap">
                 <view class="knowledge-info">
-                  <text class="knowledge-title">{{item.title}}</text>
+                  <view class="knowledge-title-row">
+                    <text class="knowledge-title">{{item.title}}</text>
+                    <text class="external-link-icon" wx:if="{{item.type === 'external'}}">🔗</text>
+                  </view>
                   <text class="knowledge-meta">{{item.date}}</text>
                 </view>
               </view>

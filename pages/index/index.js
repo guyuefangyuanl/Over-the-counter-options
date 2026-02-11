@@ -1,6 +1,7 @@
 const app = getApp();
 const optionsService = require('../../services/options.js');
 const { uiEnhancer, dataFormatter, performanceMonitor } = require('../../utils/enhancedUtils');
+const knowledgeConfig = require('../../utils/knowledgeConfig.js');
 
 Page({
   data: {
@@ -193,29 +194,7 @@ Page({
           status: 'expired'
         }
       ],
-      knowledge: [
-        {
-          id: 1,
-          title: '沪深场外个股期权',
-          date: '24-12-08 14:58',
-          type: 'option',
-          link: '/pages/article/article?id=1'
-        },
-        {
-          id: 2,
-          title: '香草期权基础入门',
-          date: '24-12-12 09:30',
-          type: 'vanilla',
-          link: '/pages/article/article?id=2'
-        },
-        {
-          id: 3,
-          title: '持仓管理与风险控制',
-          date: '24-12-20 16:20',
-          type: 'knowledge',
-          link: '/pages/article/article?id=3'
-        }
-      ]
+      knowledge: knowledgeConfig.getKnowledgeArticles().slice(0, 3) // 获取前3篇文章
     },
 
     // 加载状态
@@ -388,9 +367,46 @@ Page({
     try {
       const { id } = e.currentTarget.dataset;
       if (typeof uiEnhancer.hapticFeedback === 'function') uiEnhancer.hapticFeedback('light');
-      wx.navigateTo({ url: `/pages/data-explanation/data-explanation?from=home&id=${id}` });
+      
+      // 获取文章信息
+      const article = knowledgeConfig.getArticleById(id);
+      
+      if (article && article.type === 'external') {
+        // 外部链接，显示提示并复制链接
+        knowledgeConfig.openArticleInBrowser(article);
+      } else {
+        // 内部页面，跳转到详情页
+        wx.navigateTo({ 
+          url: `/pages/knowledge-detail/knowledge-detail?id=${id}`,
+          fail: () => {
+            // 如果新页面不存在，跳转到现有的 data-explanation 页面
+            wx.navigateTo({
+              url: `/pages/data-explanation/data-explanation?from=home&id=${id}`,
+              fail: () => {
+                uiEnhancer.showToast('页面开发中', 'none');
+              }
+            });
+          }
+        });
+      }
     } catch (err) {
       console.error('打开文章失败:', err);
+      uiEnhancer.showToast('页面开发中', 'none');
+    }
+  },
+
+  // 新增：知识板块“更多”按钮
+  onKnowledgeMore() {
+    try {
+      if (typeof uiEnhancer.hapticFeedback === 'function') uiEnhancer.hapticFeedback('light');
+      wx.navigateTo({
+        url: '/pages/knowledge/knowledge',
+        fail: () => {
+          uiEnhancer.showToast('页面开发中', 'none');
+        }
+      });
+    } catch (err) {
+      console.error('打开知识列表失败:', err);
       uiEnhancer.showToast('页面开发中', 'none');
     }
   },

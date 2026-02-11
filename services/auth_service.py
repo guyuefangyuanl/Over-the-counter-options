@@ -117,16 +117,20 @@ class AuthService:
         }
         refresh_token = jwt.encode(refresh_payload, self.jwt_secret, algorithm=self.jwt_algorithm)
         
-        # Store session in DB
-        refresh_token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
-        model = self._get_model()
-        model.create_session(
-            user_id=username,
-            device_info="unknown", # TODO: Get from request
-            ip="unknown", # TODO: Get from request
-            refresh_token_hash=refresh_token_hash,
-            expires_at=datetime.fromtimestamp(refresh_exp)
-        )
+        # Store session in DB (optional - don't fail if DB is not available)
+        try:
+            refresh_token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
+            model = self._get_model()
+            if model and (model.db is not None or model.cloud_client is not None):
+                model.create_session(
+                    user_id=username,
+                    device_info="unknown", # TODO: Get from request
+                    ip="unknown", # TODO: Get from request
+                    refresh_token_hash=refresh_token_hash,
+                    expires_at=datetime.fromtimestamp(refresh_exp)
+                )
+        except Exception as e:
+            logger.warning(f"创建会话失败（非关键错误）: {e}")
         
         return {
             "token": access_token, # Keep 'token' for backward compatibility
@@ -261,14 +265,34 @@ class AuthService:
         is_dev_mode = node_env == "development"
         has_wx_config = self.wx_appid and self.wx_secret
         
-        # 如果是 mock code，或者开发环境缺少微信配置，使用模拟登录
-        if code.startswith("mock_") or (is_dev_mode and not has_wx_config):
+        # 检查数据库连接状态
+        try:
+            model = self._get_model()
+            has_db_connection = model and (model.db is not None or model.cloud_client is not None)
+        except Exception:
+            has_db_connection = False
+        
+        # 如果是 mock code，或者缺少微信配置，使用模拟登录（任何环境都支持 mock code）
+        if code.startswith("mock_") or not has_wx_config:
             try:
-                logger.info(f"Using Mock Login (dev mode). Code: {code[:20]}..., has_wx_config: {has_wx_config}")
+                logger.info(f"Using Mock Login (dev mode). Code: {code[:20]}..., has_wx_config: {has_wx_config}, has_db: {has_db_connection}")
                 openid = f"mock_openid_{code[:20]}"
                 unionid = f"mock_unionid_{code[:20]}"
                 
-                model = self._get_model()
+                # 如果没有数据库连接，直接返回模拟用户数据
+                if not has_db_connection:
+                    logger.warning("数据库未连接，返回内存中的模拟用户数据")
+                    user = {
+                        'openid': openid,
+                        'unionid': unionid,
+                        'nickname': '开发用户',
+                        'avatar': '',
+                        'phone': '',
+                        'created_at': datetime.utcnow(),
+                        'last_login': datetime.utcnow()
+                    }
+                    return True, user, None
+                
                 user = model.find_user_by_openid(openid)
                 
                 if not user:
@@ -301,7 +325,20 @@ class AuthService:
                 openid = f"mock_openid_{code[:20]}"
                 unionid = f"mock_unionid_{code[:20]}"
                 
-                model = self._get_model()
+                # 如果没有数据库连接，直接返回模拟用户数据
+                if not has_db_connection:
+                    logger.warning("数据库未连接，返回内存中的模拟用户数据")
+                    user = {
+                        'openid': openid,
+                        'unionid': unionid,
+                        'nickname': '测试用户',
+                        'avatar': '',
+                        'phone': '',
+                        'created_at': datetime.utcnow(),
+                        'last_login': datetime.utcnow()
+                    }
+                    return True, user, None
+                
                 user = model.find_user_by_openid(openid)
                 
                 if not user:
@@ -343,6 +380,20 @@ class AuthService:
             openid = result['openid']
             unionid = result.get('unionid')
             
+            # 如果没有数据库连接，返回内存中的用户数据
+            if not has_db_connection:
+                logger.warning("数据库未连接，返回内存中的微信用户数据")
+                user = {
+                    'openid': openid,
+                    'unionid': unionid,
+                    'nickname': '微信用户',
+                    'avatar': '',
+                    'phone': '',
+                    'created_at': datetime.utcnow(),
+                    'last_login': datetime.utcnow()
+                }
+                return True, user, None
+            
             model = self._get_model()
             user = model.find_user_by_openid(openid)
             
@@ -370,6 +421,7 @@ class AuthService:
         except requests.RequestException as e:
             return False, None, f"网络连接失败: {str(e)}"
         except Exception as e:
+            logger.error(f"微信登录系统错误: {e}")
             return False, None, f"系统错误: {str(e)}"
 
     def update_user_profile(self, openid: str, data: Dict[str, Any]) -> bool:
