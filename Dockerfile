@@ -40,6 +40,9 @@ COPY --from=frontend-builder /app/admin-ui/dist ./admin-ui/dist
 # 复制项目文件
 COPY . .
 
+# 删除开发环境配置文件，强制使用 .env.production
+RUN rm -f .env .env.local
+
 # 暴露端口 (微信云托管默认监听 80 端口)
 EXPOSE 80
 
