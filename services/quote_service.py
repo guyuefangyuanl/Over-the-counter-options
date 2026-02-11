@@ -52,36 +52,18 @@ class QuoteService:
         # but StockService.get_stock_realtime_data fetches all and filters.
         # It's better to fetch once and filter.
         
-        # Optimization: Fetch all spot data once
-        import akshare as ak
+        # 使用 StockService 获取数据（云托管环境返回模拟数据）
         try:
-            # Check if we can cache this call or if StockService has caching
-            # For now, let's call akshare directly here for batch processing to avoid N calls
-            stock_data = ak.stock_zh_a_spot_em()
-            
             for member in members:
                 code = member.get('stock_code')
                 if not code:
                     continue
                     
-                # Filter from stock_data
-                filtered = stock_data[stock_data['代码'] == code]
-                if not filtered.empty:
-                    row = filtered.iloc[0]
-                    quote = {
-                        "code": row['代码'],
-                        "name": row['名称'],
-                        "price": float(row['最新价']) if row['最新价'] != '-' else 0.0,
-                        "change_percent": float(row['涨跌幅'].strip('%')) if row['涨跌幅'] != '-' else 0.0,
-                        "volume": int(row['成交量']) if row['成交量'] != '-' else 0,
-                        "amount": float(row['成交额']) if row['成交额'] != '-' else 0.0,
-                        "open": float(row['今开']) if row['今开'] != '-' else 0.0,
-                        "high": float(row['最高']) if row['最高'] != '-' else 0.0,
-                        "low": float(row['最低']) if row['最低'] != '-' else 0.0,
-                        "pre_close": float(row['昨收']) if row['昨收'] != '-' else 0.0,
-                        "market": member.get('market', '')
-                    }
-                    quotes.append(quote)
+                # 通过 StockService 获取数据
+                stock_data = StockService.get_stock_realtime_data(code)
+                if stock_data:
+                    stock_data['market'] = member.get('market', '')
+                    quotes.append(stock_data)
                 else:
                     # Fallback or indicate missing
                     quotes.append({

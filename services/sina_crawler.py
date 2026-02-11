@@ -1,4 +1,4 @@
-import akshare as ak
+# import akshare as ak  # 云托管环境暂不需要
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 import logging
 
@@ -8,32 +8,9 @@ logger = logging.getLogger(__name__)
 
 
 def get_all_stock_codes() -> List[str]:
-    """
-    获取所有 A 股股票代码
-    """
-    try:
-        # 尝试 1: 使用 akshare 获取所有 A 股实时行情 (东财接口)
-        logger.info("正在尝试从 ak.stock_zh_a_spot_em 获取股票列表...")
-        df = ak.stock_zh_a_spot_em()
-        if not df.empty:
-            codes = df["代码"].tolist()
-            logger.info(f"成功获取 {len(codes)} 条 A 股股票代码 (source: spot_em)")
-            return codes
-    except Exception as e:
-        logger.warning(f"从 stock_zh_a_spot_em 获取 A 股列表失败: {e}")
-
-    try:
-        # 尝试 2: 使用备用接口 (证券代码和简称)
-        logger.info("正在尝试从 ak.stock_info_a_code_name 获取股票列表...")
-        df = ak.stock_info_a_code_name()
-        if not df.empty:
-            codes = df["code"].tolist()
-            logger.info(f"成功获取 {len(codes)} 条 A 股股票代码 (source: code_name)")
-            return codes
-    except Exception as e:
-        logger.error(f"从 stock_info_a_code_name 获取 A 股列表失败: {e}")
-
-    return []
+    """获取所有 A 股股票代码（云托管环境返回模拟数据）"""
+    logger.info("返回模拟股票代码列表")
+    return ["000001", "000002", "000333", "000858", "002415", "002594", "300750", "600000", "600519", "601318"]
 
 
 def _is_suspended(q: SinaQuote) -> bool:
