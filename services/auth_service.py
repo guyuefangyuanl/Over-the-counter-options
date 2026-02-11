@@ -23,6 +23,11 @@ class AuthService:
         
         self.wx_appid = os.getenv('WX_APPID')
         self.wx_secret = os.getenv('WX_SECRET')
+        
+        # 检查微信配置是否有效（排除占位符）
+        if self.wx_secret and ('请从' in self.wx_secret or 'your_' in self.wx_secret.lower() or len(self.wx_secret) < 10):
+            logger.warning(f"WX_SECRET 是占位符或无效值，将使用模拟登录模式")
+            self.wx_secret = None
 
         self.role_order = {
             "viewer": 10,
