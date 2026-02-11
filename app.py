@@ -43,12 +43,13 @@ default_env_path = os.path.join(env_dir, ".env")
 # 检查系统环境变量中的 NODE_ENV
 system_node_env = os.environ.get('NODE_ENV', 'development')
 
-if os.path.exists(local_env_path):
+# 优先加载生产环境配置（如果存在）
+if os.path.exists(prod_env_path):
+    load_dotenv(prod_env_path, override=True)
+    logger.info(f"已加载生产环境配置: {prod_env_path}")
+elif os.path.exists(local_env_path):
     load_dotenv(local_env_path, override=True)
     logger.info(f"已从 {local_env_path} 加载环境变量")
-elif system_node_env == 'production' and os.path.exists(prod_env_path):
-    load_dotenv(prod_env_path, override=True)
-    logger.info(f"生产环境：已从 {prod_env_path} 加载环境变量")
 elif os.path.exists(default_env_path):
     load_dotenv(default_env_path, override=True)
     logger.info(f"已从 {default_env_path} 加载环境变量")
