@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # 复制依赖文件并安装
 COPY requirements.txt .
-RUN pip install --no-cache-dir --default-timeout=300 -r requirements.txt
+RUN pip install --no-cache-dir Flask Flask-Cors pymongo requests python-dotenv gunicorn PyJWT
 
 # 复制项目文件
 COPY . .

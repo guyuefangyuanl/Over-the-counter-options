@@ -7,7 +7,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
-import akshare as ak
+# import akshare as ak  # 云托管环境暂不需要
 from services.cloud_db import CloudDbClient, CloudDbConfigError
 from flask.json.provider import DefaultJSONProvider
 from bson import ObjectId
