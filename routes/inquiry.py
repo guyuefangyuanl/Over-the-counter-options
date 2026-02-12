@@ -124,7 +124,7 @@ def admin_batch_update_inquiries():
 @inquiry_bp.route('/admin/inquiries/export', methods=['GET'])
 @require_auth
 def admin_export_inquiries():
-    """导出询价列表"""
+    """导出询价列表（云托管简化版，返回JSON）"""
     try:
         status = request.args.get('status')
         # 导出限制1000条
@@ -133,10 +133,6 @@ def admin_export_inquiries():
         if not items:
             return flask_error_response("没有数据可导出", 404)
 
-        import pandas as pd
-        from io import BytesIO
-        from flask import send_file
-        
         # 格式化数据
         export_data = []
         for item in items:
@@ -156,19 +152,13 @@ def admin_export_inquiries():
                 "状态": item.get('status'),
                 "备注": item.get('remark')
             })
-            
-        df = pd.DataFrame(export_data)
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False)
-        output.seek(0)
         
-        return send_file(
-            output, 
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            download_name=f"inquiries_{status or 'all'}.xlsx", 
-            as_attachment=True
-        )
+        # 云托管环境返回JSON格式数据
+        return jsonify({
+            "success": True,
+            "data": export_data,
+            "count": len(export_data)
+        })
     except Exception as e:
         logger.error(f"导出失败: {e}")
         return flask_error_response(str(e), 500)
