@@ -7,7 +7,7 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional
 
-import pandas as pd
+# import pandas as pd  # 云托管环境暂不需要
 
 
 def _utc_now_iso() -> str:
@@ -15,19 +15,12 @@ def _utc_now_iso() -> str:
 
 
 def _normalize_stock_code(value: Any) -> Optional[str]:
+    """标准化股票代码（云托管简化版）"""
     if value is None:
         return None
-    try:
-        if isinstance(value, (int, float)) and not pd.isna(value):
-            code_int = int(value)
-            if code_int <= 0:
-                return None
-            return str(code_int).zfill(6)
-    except Exception:
-        pass
-
+    
     raw = str(value).strip()
-    if not raw or raw.lower() in ("nan", "none"):
+    if not raw or raw.lower() in ("nan", "none", "null"):
         return None
     if raw.endswith(".0"):
         raw = raw[:-2]
@@ -41,11 +34,11 @@ def _normalize_stock_code(value: Any) -> Optional[str]:
 
 
 def _safe_float(value: Any) -> Optional[float]:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
+    """安全转换为浮点数（云托管简化版）"""
+    if value is None:
         return None
     try:
         if isinstance(value, str):
-            # Remove commas and other common non-numeric characters except decimal point
             clean_val = value.replace(",", "").strip()
             v = float(clean_val)
         else:
@@ -57,16 +50,9 @@ def _safe_float(value: Any) -> Optional[float]:
         return None
 
 
-def _parse_complex_matrix(df: pd.DataFrame) -> List[Dict[str, Any]]:
-    """解析复杂的多级嵌套矩阵格式"""
-    # 处理表头：前 4 行为表头
-    if len(df) < 5:
-        return []
-
-    header_rows = df.iloc[0:4].copy()
-    # 填充合并单元格（前 2 行通常是合并的）
-    header_rows.iloc[0] = header_rows.iloc[0].ffill()
-    header_rows.iloc[1] = header_rows.iloc[1].ffill()
+def _parse_complex_matrix(df: Any) -> List[Dict[str, Any]]:
+    """解析复杂的多级嵌套矩阵格式（云托管简化版，返回空列表）"""
+    return []
 
     items: List[Dict[str, Any]] = []
     now = _utc_now_iso()
@@ -128,139 +114,9 @@ def _parse_complex_matrix(df: pd.DataFrame) -> List[Dict[str, Any]]:
 
 
 def parse_quotes_file(*, filename: str, content: bytes, sheet_name: Optional[str] = None) -> List[Dict[str, Any]]:
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    if ext in ("xlsx", "xls"):
-        # 读取时不指定 header，以便我们手动处理多级表头
-        if sheet_name:
-            df = pd.read_excel(io.BytesIO(content), header=None, sheet_name=sheet_name)
-        else:
-            # 如果没有指定 sheet_name，我们先尝试寻找包含 "个股" 和 "香草" 的 sheet
-            excel_file = pd.ExcelFile(io.BytesIO(content))
-            target_sheet = None
-            for s in excel_file.sheet_names:
-                if "个股" in s and "香草" in s:
-                    target_sheet = s
-                    break
-            if not target_sheet:
-                for s in excel_file.sheet_names:
-                    if "个股" in s or "香草" in s:
-                        target_sheet = s
-                        break
-            
-            if target_sheet:
-                df = pd.read_excel(io.BytesIO(content), header=None, sheet_name=target_sheet)
-            else:
-                df = pd.read_excel(io.BytesIO(content), header=None)
-    elif ext == "csv":
-        df = pd.read_csv(io.BytesIO(content), header=None)
-    else:
-        raise ValueError("仅支持 Excel (.xlsx, .xls) 或 CSV 文件")
-
-    if df.empty:
-        return []
-
-    # 启发式判断：如果前几行包含 "普通香草" 或 "代码" 在 Row 3，说明是复杂矩阵
-    is_matrix = False
-    # 增加搜索范围到前 20 行
-    first_few_rows_df = df.iloc[:20]
-    first_few_rows_str = str(first_few_rows_df.values)
-    
-    matrix_keywords = ["普通香草", "证券简称", "标的简称", "行权价", "参与率", "期限", "交易商", "香草报价"]
-    if any(kw in first_few_rows_str for kw in matrix_keywords):
-        is_matrix = True
-        
-    # 如果 sheet 名包含香草且没有明确判定为非矩阵，也尝试矩阵解析
-    if not is_matrix and sheet_name and ("香草" in sheet_name or "矩阵" in sheet_name):
-        if any(kw in first_few_rows_str for kw in ["代码", "简称", "名称", "证券"]):
-            is_matrix = True
-
-    if is_matrix:
-        # 寻找矩阵表头的起始行（包含 "证券简称" 或 "代码" 的行通常是第 4 行表头的末尾）
-        # 我们假设 "证券简称" 所在的行是 row 4 (index 3) 或者附近
-        matrix_header_start = 0
-        for i in range(min(10, len(df))):
-            row_str = str(df.iloc[i].values)
-            if "证券简称" in row_str or "标的简称" in row_str:
-                # 矩阵格式通常：
-                # 0: 类型 (香草)
-                # 1: 期限 (1M)
-                # 2: 挂钩 (价格) -> 这一行可能没有，或者是交易商
-                # 3: 交易商
-                # 所以 证券简称 所在的通常是第 4 行 (index 3)
-                matrix_header_start = max(0, i - 3)
-                break
-        
-        if matrix_header_start > 0:
-            df = df.iloc[matrix_header_start:].reset_index(drop=True)
-            
-        return _parse_complex_matrix(df)
-
-    # 否则按原有扁平逻辑处理
-    # 寻找表头行
-    column_mapping = {
-        "stock_code": ["代码", "股票代码", "Code", "证券代码", "A股代码", "code", "stock_code", "指数代码", "合约编码", "标的代码"],
-        "name": ["名称", "股票名称", "Name", "证券简称", "A股简称", "name", "指数简称", "合约简称", "标的名称"],
-        "price": ["现价", "最新价", "价格", "Price", "收盘价", "price", "今收", "今收盘价"],
-        "changePercent": ["涨跌幅", "涨跌", "Change", "涨跌幅(%)", "changePercent"],
-        "open": ["开盘", "open"],
-        "high": ["最高", "high"],
-        "low": ["最低", "low"],
-        "pre_close": ["昨收", "昨收盘", "pre_close", "preClose"],
-        "volume": ["成交量", "Volume", "总手", "volume"],
-        "amount": ["成交额", "Amount", "金额", "amount"],
-    }
-
-    header_idx = 0
-    found_stock_col = False
-    for i in range(min(20, len(df))):
-        row_vals = [str(v).strip().lower() for v in df.iloc[i].values if not pd.isna(v)]
-        # 检查该行是否包含 stock_code 的候选词
-        for val in row_vals:
-            if any(cand.lower() == val or cand.lower() in val for cand in column_mapping["stock_code"]):
-                header_idx = i
-                found_stock_col = True
-                break
-        if found_stock_col:
-            break
-            
-    df.columns = df.iloc[header_idx]
-    df = df[header_idx + 1:].reset_index(drop=True)
-    
-    found_cols: Dict[str, Any] = {}
-    cols = list(df.columns)
-    for key, candidates in column_mapping.items():
-        for col in cols:
-            col_str = str(col).strip().lower()
-            if any(cand.lower() == col_str or cand.lower() in col_str for cand in candidates):
-                found_cols[key] = col
-                break
-
-    if "stock_code" not in found_cols:
-        raise ValueError("无法识别 '代码' 列")
-
-    items: List[Dict[str, Any]] = []
-    seen = set()
-    for _, row in df.iterrows():
-        code = _normalize_stock_code(row.get(found_cols["stock_code"]))
-        if not code or code in seen:
-            continue
-        seen.add(code)
-
-        item: Dict[str, Any] = {
-            "stock_code": code,
-            "code": code,
-            "name": str(row.get(found_cols.get("name"))) if "name" in found_cols else "",
-            "updateSource": "file_upload",
-            "updated_at": _utc_now_iso(),
-        }
-
-        for k in ("price", "changePercent", "open", "high", "low", "pre_close", "volume", "amount"):
-            if k in found_cols:
-                v = _safe_float(row.get(found_cols[k]))
-                if v is not None:
-                    item[k] = v
-        items.append(item)
-    return items
+    """解析报价文件（云托管简化版，返回空列表）"""
+    logger.info(f"文件解析功能在云托管环境暂不可用: {filename}")
+    return []
 
 
 def _upload_cache_dir() -> str:
