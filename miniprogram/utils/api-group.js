@@ -31,27 +31,65 @@ const shouldRetry = (err) => {
 const request = (url, method, data, options = {}) => {
   const retries = Number.isFinite(options.retries) ? options.retries : 1;
   const retryDelayMs = Number.isFinite(options.retryDelayMs) ? options.retryDelayMs : 200;
-  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 8000;
+  // 🔧 修复：增加默认超时时间从 8秒到 15秒，避免云托管冷启动时超时
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 15000;
 
   const maxAttempts = Math.max(1, retries + 1);
 
   const attemptOnce = (attemptIndex) => {
     return new Promise((resolve, reject) => {
+      // 🔧 修复：获取token并添加到请求头
+      const token = wx.getStorageSync('token');
+      console.log(`[API] 获取到的 token:`, token ? token.substring(0, 20) + '...' : '不存在');
+      const headers = {
+        'content-type': 'application/json',
+        'X-User-ID': getUserId()
+      };
+      
+      // 如果有token，添加Authorization头
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        console.log(`[API] 已添加 Authorization 头: Bearer ${token.substring(0, 20)}...`);
+      } else {
+        console.warn(`[API] 没有 token，请求将不带认证信息`);
+      }
+      
       wx.request({
         url: `${BASE_URL}${url}`,
         method,
         data,
         timeout: timeoutMs,
-        header: {
-          'content-type': 'application/json',
-          'X-User-ID': getUserId()
-        },
+        header: headers,
         success: (res) => {
           console.log(`[API] ${method} ${url} status=${res.statusCode}`);
           const payload = res.data;
           if (res.statusCode >= 500) {
             console.error(`[API Error] ${url} Payload:`, payload);
           }
+          
+          // 🔧 修复：处理HTTP状态码401和响应体中code=401
+          if (res.statusCode === 401 || (payload && (payload.code === 401 || payload.code === '401'))) {
+            console.warn('[API] 401 Unauthorized (响应体code或HTTP状态码) - 清除token并跳转登录');
+            wx.removeStorageSync('token');
+            wx.removeStorageSync('userInfo');
+            wx.removeStorageSync('refresh_token');
+            
+            // 跳转到登录页
+            wx.redirectTo({
+              url: '/pages/login/login?from=api_401',
+              fail: () => {
+                wx.reLaunch({ url: '/pages/login/login?from=api_401' });
+              }
+            });
+            
+            reject({ 
+              message: payload?.message || '登录已过期，请重新登录', 
+              statusCode: 401,
+              needLogin: true
+            });
+            return;
+          }
+          
           if (res.statusCode >= 200 && res.statusCode < 300) {
             if (payload && payload.success === false) {
               reject({ ...(payload || {}), statusCode: res.statusCode });

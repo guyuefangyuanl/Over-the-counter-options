@@ -130,7 +130,8 @@ function request(url, method = 'GET', data = {}, header = {}, options = {}) {
   const { 
     enableCache = false, 
     cacheKey, 
-    timeout = 10000,
+    // 🔧 修复：增加默认超时时间到 15秒，避免云托管冷启动时超时
+    timeout = 15000,
     retries = retryConfig.maxRetries,
     priority = 'normal', // normal, high, low
     dedupe = false, // 是否去重
@@ -198,21 +199,25 @@ function redirectToLogin() {
   const pages = getCurrentPages();
   const currentPage = pages[pages.length - 1];
   
-  // 如果当前已经是登录页，就不再跳转
+  // 🔧 修复：如果当前已经是登录页，就不再跳转
   if (currentPage && currentPage.route.includes('pages/login/login')) {
+    console.log('当前已在登录页，不重复跳转');
     return;
   }
 
-  wx.navigateTo({
+  // 🔧 修复：使用 redirectTo 而不是 navigateTo，避免页面栈过深
+  wx.redirectTo({
     url: '/pages/login/login',
-    fail: () => {
-      // 如果 navigateTo 失败（可能是因为在 tabbar 页面），尝试 switchTab 到我的页面
-      wx.switchTab({
-        url: '/pages/profile/profile',
-        fail: () => {
-          // 如果还是失败，尝试 redirectTo
-          wx.redirectTo({
-            url: '/pages/login/login'
+    fail: (err) => {
+      console.error('跳转登录页失败:', err);
+      // 如果 redirectTo 失败（可能是因为在 tabbar 页面），尝试 reLaunch
+      wx.reLaunch({
+        url: '/pages/login/login',
+        fail: (err2) => {
+          console.error('reLaunch也失败:', err2);
+          wx.showToast({
+            title: '请手动返回登录页',
+            icon: 'none'
           });
         }
       });
@@ -401,8 +406,16 @@ async function performRequestWithRetry(url, method, data, header, timeout, retri
             console.log(`API请求成功 ${method} ${url}:`, res.data);
           }
           
-          // 处理HTTP状态码
+          // 🔧 修复：处理HTTP状态码和响应体中的code字段
           if (res.statusCode === 200 || res.statusCode === 201) {
+            // 检查响应体中的code字段（后端可能返回HTTP 200但body中code为401）
+            if (res.data && (res.data.code === 401 || res.data.code === '401')) {
+              console.warn('[API] 响应体中code=401，视为未授权');
+              handleUnauthorized();
+              reject(new Error(res.data.message || '登录已过期，请重新登录'));
+              return;
+            }
+            
             resolve(res.data);
           } else if (res.statusCode === 401) {
             // token失效，尝试刷新或跳转登录

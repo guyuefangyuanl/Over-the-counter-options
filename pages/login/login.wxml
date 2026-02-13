@@ -19,9 +19,10 @@
     <view class="tab-item {{currentTab === 'wechat' ? 'active' : ''}}" bindtap="switchTab" data-tab="wechat">
       <text>微信登录</text>
     </view>
-    <view class="tab-item {{currentTab === 'qq' ? 'active' : ''}}" bindtap="switchTab" data-tab="qq">
+    <!-- QQ登录暂不支持 -->
+    <!-- <view class="tab-item {{currentTab === 'qq' ? 'active' : ''}}" bindtap="switchTab" data-tab="qq">
       <text>QQ登录</text>
-    </view>
+    </view> -->
     <view class="tab-item {{currentTab === 'phone' ? 'active' : ''}}" bindtap="switchTab" data-tab="phone">
       <text>手机登录</text>
     </view>

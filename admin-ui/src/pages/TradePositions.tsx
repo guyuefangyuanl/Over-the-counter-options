@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { Card, Table, message, Button, Space, Typography, Tag, Input, Modal, Form, Select, InputNumber, Switch, Popconfirm, App } from 'antd';
-import { ReloadOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Space, Typography, Tag, Input, Modal, Form, Select, InputNumber, Switch, Popconfirm, App } from 'antd';
+import { ReloadOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons';
 import api, { getApiErrorMessage, type ApiResponse } from '../utils/api';
 import PageState from '../components/PageState';
 
@@ -35,7 +35,7 @@ const TradePositions: React.FC = () => {
   
   // Auto refresh
   const [autoRefresh, setAutoRefresh] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);

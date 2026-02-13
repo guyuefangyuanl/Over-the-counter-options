@@ -20,7 +20,17 @@ Page({
     // Check login
     auth.checkSession().then(isLoggedIn => {
         if (!isLoggedIn) {
-            wx.navigateTo({ url: '/pages/login/login' });
+            // 🔧 修复：使用redirectTo避免页面栈过深
+            wx.redirectTo({ 
+              url: '/pages/login/login?from=inquiry',
+              fail: (err) => {
+                console.error('跳转登录页失败:', err);
+                wx.showToast({
+                  title: '请先登录',
+                  icon: 'none'
+                });
+              }
+            });
         } else {
             const userInfo = wx.getStorageSync('userInfo');
             this.setData({

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Table, Button, Tag, App, Space, Popconfirm, Input, Modal, Form, Select } from 'antd';
-import { ReloadOutlined, PlusOutlined, DeleteOutlined, SearchOutlined, EditOutlined } from '@ant-design/icons';
+import { ReloadOutlined, PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import api, { getApiErrorMessage, ApiResponse } from '../utils/api';
+import api, { getApiErrorMessage, type ApiResponse } from '../utils/api';
 import PageState from '../components/PageState';
 
 interface Customer {

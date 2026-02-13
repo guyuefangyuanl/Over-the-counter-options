@@ -387,8 +387,26 @@ Page({
 
   // 处理登录成功
   handleLoginSuccess: function(result, loginType) {
+    console.log('[Login] handleLoginSuccess 接收到的数据:', result);
+    
     // 确保 userInfo 对象存在
     const rawUserInfo = result.userInfo || {};
+    
+    // 🔧 修复：提取 token（可能是字符串或对象）
+    let token = result.token || result.access_token || result.accessToken;
+    
+    // 如果 token 是对象，提取其中的 token 字段
+    if (typeof token === 'object' && token !== null) {
+      console.log('[Login] token 是对象，提取内部字段:', token);
+      token = token.token || token.access_token || token.accessToken;
+    }
+    
+    // 确保 token 是字符串
+    if (token && typeof token !== 'string') {
+      token = String(token);
+    }
+    
+    console.log('[Login] 最终提取的 token:', token ? token.substring(0, 30) + '...' : '无', '类型:', typeof token);
     
     // 保存用户信息和token
     const userInfo = {
@@ -404,7 +422,23 @@ Page({
     };
 
     wx.setStorageSync('userInfo', userInfo);
-    wx.setStorageSync('token', result.token);
+    
+    // 🔧 修复：保存字符串格式的 token
+    if (token) {
+      wx.setStorageSync('token', token);
+      console.log('[Login] Token 已保存为字符串');
+    } else {
+      console.error('[Login] 警告：没有提取到有效的 token');
+    }
+    
+    // 保存 refresh_token（如果有）
+    let refreshToken = result.refresh_token || result.refreshToken;
+    if (!refreshToken && result.token && typeof result.token === 'object') {
+      refreshToken = result.token.refresh_token || result.token.refreshToken;
+    }
+    if (refreshToken) {
+      wx.setStorageSync('refresh_token', String(refreshToken));
+    }
 
     this.setData({ isLoading: false });
     

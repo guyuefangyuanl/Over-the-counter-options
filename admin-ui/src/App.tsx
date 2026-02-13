@@ -12,7 +12,15 @@ import Settings from './pages/Settings';
 import FeeList from './pages/FeeList';
 import FeeStatistics from './pages/FeeStatistics';
 import CustomerList from './pages/CustomerList';
+import CustomerGroups from './pages/CustomerGroups';
 import BoardList from './pages/BoardList';
+import TradeOrders from './pages/TradeOrders';
+import TradeInquiries from './pages/TradeInquiries';
+import TradePositions from './pages/TradePositions';
+import MessageList from './pages/MessageList';
+import MessageTemplates from './pages/MessageTemplates';
+import ConfigSystem from './pages/ConfigSystem';
+import ConfigUsers from './pages/ConfigUsers';
 
 function App() {
   return (

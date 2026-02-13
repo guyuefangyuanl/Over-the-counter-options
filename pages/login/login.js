@@ -24,15 +24,18 @@ Page({
 
   onLoad: function (options) {
     console.log('登录页面加载');
-    // 检查是否有传入的登录方式
+    
+    // 先设置页面数据，快速显示
     if (options.type) {
       this.setData({
         currentTab: options.type
       });
     }
     
-    // 检查用户是否已登录
-    this.checkLoginStatus();
+    // 🔧 修复：不再自动检查登录状态并跳转
+    // 登录页面应该让用户主动选择登录方式，而不是自动跳转
+    // 如果需要提示用户已登录，可以在页面显示提示信息
+    this.checkAndShowLoginTip();
   },
 
   onUnload: function () {
@@ -42,15 +45,36 @@ Page({
     }
   },
 
-  // 检查登录状态
-  checkLoginStatus: function() {
+  // 检查登录状态（仅用于显示提示，不自动跳转）
+  checkAndShowLoginTip: function() {
     const userInfo = wx.getStorageSync('userInfo');
     const token = wx.getStorageSync('token');
     
     if (userInfo && userInfo.isLoggedIn && token) {
-      // 已登录，直接跳转
-      wx.switchTab({
-        url: '/pages/index/index'
+      // 已登录，显示提示但不强制跳转
+      wx.showModal({
+        title: '您已登录',
+        content: `当前账号：${userInfo.nickname || '微信用户'}\n是否返回首页？`,
+        confirmText: '返回首页',
+        cancelText: '重新登录',
+        success: (res) => {
+          if (res.confirm) {
+            // 用户选择返回首页
+            wx.switchTab({
+              url: '/pages/index/index'
+            });
+          } else {
+            // 用户选择重新登录，清除当前登录状态
+            wx.removeStorageSync('userInfo');
+            wx.removeStorageSync('token');
+            wx.removeStorageSync('refresh_token');
+            
+            wx.showToast({
+              title: '已退出登录，请重新登录',
+              icon: 'none'
+            });
+          }
+        }
       });
     }
   },
@@ -316,6 +340,14 @@ Page({
 
   // 游客登录
   onGuestLogin: function() {
+    if (!this.data.agreedToTerms) {
+      wx.showToast({
+        title: '请先同意用户协议',
+        icon: 'none'
+      });
+      return;
+    }
+
     wx.showModal({
       title: '游客模式',
       content: '游客模式下功能受限，部分交易功能无法使用。建议您注册登录获得完整体验。',
@@ -328,34 +360,49 @@ Page({
             loadingText: '进入游客模式...'
           });
 
-          // 创建游客账户
-          const guestInfo = {
-            isLoggedIn: true,
-            isGuest: true,
-            nickname: '游客用户',
-            avatar: '',
-            userId: `guest_${Date.now()}`,
-            loginTime: new Date().toISOString(),
-            loginType: 'guest'
-          };
+          // 调用后端游客登录接口
+          api.post('/auth/guest/login', {})
+            .then(result => {
+              // 保存游客信息
+              const guestInfo = {
+                isLoggedIn: true,
+                isGuest: true,
+                nickname: result.nickname || '游客用户',
+                avatar: '',
+                userId: result.userId,
+                role: 'guest',
+                loginTime: new Date().toISOString(),
+                loginType: 'guest'
+              };
 
-          // 保存游客信息
-          wx.setStorageSync('userInfo', guestInfo);
+              wx.setStorageSync('userInfo', guestInfo);
+              wx.setStorageSync('token', result.token || result.access_token);
+              if (result.refresh_token) {
+                wx.setStorageSync('refresh_token', result.refresh_token);
+              }
 
-          setTimeout(() => {
-            this.setData({ isLoading: false });
-            wx.showToast({
-              title: '进入游客模式',
-              icon: 'success'
-            });
-
-            // 跳转到首页
-            setTimeout(() => {
-              wx.switchTab({
-                url: '/pages/index/index'
+              this.setData({ isLoading: false });
+              
+              wx.showToast({
+                title: '进入游客模式',
+                icon: 'success'
               });
-            }, 1500);
-          }, 1000);
+
+              setTimeout(() => {
+                wx.switchTab({
+                  url: '/pages/index/index'
+                });
+              }, 1500);
+            })
+            .catch(error => {
+              console.error('游客登录失败:', error);
+              this.setData({ isLoading: false });
+              
+              wx.showToast({
+                title: error.message || '游客登录失败',
+                icon: 'none'
+              });
+            });
         }
       }
     });
@@ -398,23 +445,68 @@ Page({
 
   // 处理登录成功
   handleLoginSuccess: function(result, loginType) {
+    console.log('[Login] handleLoginSuccess 接收到的数据:', result);
+    
+    // 🔧 修复：兼容多种 token 字段名和响应结构
+    // 后端返回格式：{ success: true, data: { token: '...', ... } }
+    let resultData = result.data || result;
+    
+    // 如果 resultData 是字符串，尝试解析
+    if (typeof resultData === 'string') {
+      try {
+        resultData = JSON.parse(resultData);
+      } catch (e) {
+        resultData = { token: resultData };
+      }
+    }
+    
+    console.log('[Login] 提取的 resultData:', resultData);
+    
+    // 提取 token（可能在多个字段中）
+    let token = resultData.token || resultData.access_token || resultData.accessToken;
+    
+    // 如果 token 还是对象，尝试提取其中的 token 字段
+    if (typeof token === 'object' && token !== null) {
+      token = token.token || token.access_token || token.accessToken;
+    }
+    
+    console.log('[Login] 提取的 token:', token, '类型:', typeof token);
+    
+    if (!token) {
+      console.error('[Login] 登录结果中没有 token:', result);
+      wx.showToast({
+        title: '登录失败：未获取到身份令牌',
+        icon: 'none'
+      });
+      this.setData({ isLoading: false });
+      return;
+    }
+    
+    // 确保 token 是字符串
+    const tokenStr = String(token);
+    
     // 保存用户信息和token
     const userInfo = {
       isLoggedIn: true,
       isGuest: false,
-      userId: result.openid,
-      openid: result.openid,
-      nickname: result.nickname || '微信用户',
-      avatar: result.avatar || '',
+      userId: resultData.openid || resultData.userId,
+      openid: resultData.openid || resultData.userId,
+      nickname: resultData.nickname || resultData.nickName || '微信用户',
+      avatar: resultData.avatar || resultData.avatarUrl || '',
       loginTime: new Date().toISOString(),
       loginType: loginType
     };
 
     wx.setStorageSync('userInfo', userInfo);
-    // token is already set by auth.login but we can ensure consistency
-    if (result.token) {
-        wx.setStorageSync('token', result.token);
+    wx.setStorageSync('token', tokenStr);
+    
+    // 保存 refresh token
+    if (resultData.refresh_token || resultData.refreshToken) {
+      wx.setStorageSync('refresh_token', resultData.refresh_token || resultData.refreshToken);
     }
+    
+    console.log('[Login] 登录成功，已保存 token:', tokenStr.substring(0, 20) + '...');
+    console.log('[Login] 用户信息:', userInfo);
 
     this.setData({ isLoading: false });
     
@@ -451,17 +543,23 @@ Page({
 
   // 显示用户协议
   showUserAgreement: function() {
-    wx.showToast({
+    // TODO: 创建用户协议页面
+    wx.showModal({
       title: '用户协议',
-      icon: 'none'
+      content: '《场外期权交易平台用户协议》\n\n1. 服务条款\n2. 用户权利与义务\n3. 隐私保护\n4. 免责声明\n\n详细内容请访问官网查看。',
+      showCancel: false,
+      confirmText: '我知道了'
     });
   },
 
   // 显示隐私政策
   showPrivacyPolicy: function() {
-    wx.showToast({
+    // TODO: 创建隐私政策页面
+    wx.showModal({
       title: '隐私政策',
-      icon: 'none'
+      content: '《场外期权交易平台隐私政策》\n\n我们重视您的隐私保护：\n1. 信息收集范围\n2. 信息使用方式\n3. 信息安全保障\n4. 用户权利\n\n详细内容请访问官网查看。',
+      showCancel: false,
+      confirmText: '我知道了'
     });
   },
 

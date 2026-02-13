@@ -59,17 +59,18 @@ const Orders: React.FC = () => {
     }
   }, [message]);
 
-  const handleUpdateStatus = useCallback(async (id: string, status: string) => {
-    try {
-      const res = await api.put<ApiResponse<void>>(`/trade/orders/${id}/status`, { status });
-      if (res.success) {
-        message.success('状态更新成功');
-        void fetchOrders(pagination.current, pagination.pageSize);
-      }
-    } catch (err) {
-      message.error(getApiErrorMessage(err, '更新状态失败'));
-    }
-  }, [fetchOrders, message, pagination]);
+  // TODO: 实现订单状态更新功能
+  // const handleUpdateStatus = useCallback(async (_id: string, _status: string) => {
+  //   try {
+  //     const res = await api.put<ApiResponse<void>>(`/trade/orders/${_id}/status`, { status: _status });
+  //     if (res.success) {
+  //       message.success('状态更新成功');
+  //       void fetchOrders(pagination.current, pagination.pageSize);
+  //     }
+  //   } catch (err) {
+  //     message.error(getApiErrorMessage(err, '更新状态失败'));
+  //   }
+  // }, [fetchOrders, message, pagination]);
 
   useEffect(() => {
     void fetchOrders();

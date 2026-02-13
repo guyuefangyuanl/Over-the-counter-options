@@ -50,6 +50,30 @@ class AuthService:
     def _normalize_role(self, role: str) -> str:
         raw = (role or "").strip().lower()
         return raw if raw in self.role_order else "viewer"
+    
+    def _validate_password_strength(self, password: str) -> Tuple[bool, Optional[str]]:
+        """验证密码强度"""
+        import os
+        import re
+        
+        min_length = int(os.getenv("PASSWORD_MIN_LENGTH", "8"))
+        require_special = os.getenv("PASSWORD_REQUIRE_SPECIAL", "true").lower() == "true"
+        require_number = os.getenv("PASSWORD_REQUIRE_NUMBER", "true").lower() == "true"
+        require_uppercase = os.getenv("PASSWORD_REQUIRE_UPPERCASE", "true").lower() == "true"
+        
+        if len(password) < min_length:
+            return False, f"密码长度不能少于{min_length}位"
+        
+        if require_uppercase and not re.search(r'[A-Z]', password):
+            return False, "密码必须包含大写字母"
+        
+        if require_number and not re.search(r'\d', password):
+            return False, "密码必须包含数字"
+        
+        if require_special and not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+            return False, "密码必须包含特殊字符"
+        
+        return True, None
 
     def _hash_password(self, password: str, *, iterations: int = 200_000) -> str:
         salt = os.urandom(16)
@@ -119,13 +143,18 @@ class AuthService:
         
         # Store session in DB (optional - don't fail if DB is not available)
         try:
+            from flask import request
+            # 获取设备信息和IP地址
+            device_info = request.headers.get('User-Agent', 'unknown') if request else 'unknown'
+            ip = request.remote_addr if request else 'unknown'
+            
             refresh_token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
             model = self._get_model()
             if model and (model.db is not None or model.cloud_client is not None):
                 model.create_session(
                     user_id=username,
-                    device_info="unknown", # TODO: Get from request
-                    ip="unknown", # TODO: Get from request
+                    device_info=device_info,
+                    ip=ip,
                     refresh_token_hash=refresh_token_hash,
                     expires_at=datetime.fromtimestamp(refresh_exp)
                 )
@@ -207,14 +236,17 @@ class AuthService:
         if username == self.admin_username and self._verify_password(password, self.admin_password):
             return True, self._normalize_role(self.admin_role), None
 
-        # 2. Check DB Admin
-        model = self._get_model()
-        user = model.find_admin_user(username)
-        if user:
-            stored_hash = user.get("password_hash")
-            if isinstance(stored_hash, str) and self._verify_password(password, stored_hash):
-                role = self._normalize_role(str(user.get("role") or "viewer"))
-                return True, role, None
+        # 2. Check DB Admin (only if database is available)
+        try:
+            model = self._get_model()
+            user = model.find_admin_user(username)
+            if user:
+                stored_hash = user.get("password_hash")
+                if isinstance(stored_hash, str) and self._verify_password(password, stored_hash):
+                    role = self._normalize_role(str(user.get("role") or "viewer"))
+                    return True, role, None
+        except Exception as e:
+            logger.warning(f"数据库查询失败，仅使用环境变量配置的管理员: {e}")
         
         return False, None, "用户名或密码错误"
 
@@ -480,6 +512,11 @@ class AuthService:
             return False, None, "该手机号已注册"
         if email and model.find_user_by_email(email):
             return False, None, "该邮箱已注册"
+        
+        # 验证密码强度
+        is_valid, error_msg = self._validate_password_strength(password)
+        if not is_valid:
+            return False, None, error_msg
 
         password_hash = self._hash_password(password)
         

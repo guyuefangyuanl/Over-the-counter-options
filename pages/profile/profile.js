@@ -11,6 +11,8 @@ Page({
       vipId: '0000001',
       memberType: '会员'
     },
+    // 🔧 修复：添加页面跳转状态标志，防止重复点击
+    isNavigating: false,
     menuItems: [
       {
         id: 'member',
@@ -64,16 +66,28 @@ Page({
 
   // 加载用户信息
   loadUserInfo: function() {
-    // 尝试从本地存储获取用户信息
+    // 🔧 修复：同时验证userInfo和token
     try {
       const userInfo = wx.getStorageSync('userInfo');
-      if (userInfo) {
+      const token = wx.getStorageSync('token');
+      
+      // 只有同时存在userInfo和token才认为已登录
+      if (userInfo && token) {
         this.setData({
           'userInfo.isLoggedIn': true,
           'userInfo.nickname': userInfo.nickname || 'NickName',
           'userInfo.avatar': userInfo.avatar || '',
           'userInfo.vipLevel': userInfo.vipLevel || 'V1',
           'userInfo.vipId': userInfo.vipId || '0000001'
+        });
+      } else {
+        // 如果userInfo或token缺失，清除登录状态
+        this.setData({
+          'userInfo.isLoggedIn': false,
+          'userInfo.nickname': 'NickName',
+          'userInfo.avatar': '',
+          'userInfo.vipLevel': 'V1',
+          'userInfo.vipId': '0000001'
         });
       }
     } catch (e) {
@@ -140,9 +154,29 @@ Page({
       return;
     }
 
-    // 跳转到专门的登录页面
-    wx.navigateTo({
-      url: '/pages/login/login?type=wechat'
+    // 🔧 修复：防止重复点击
+    if (this.data.isNavigating) {
+      console.log('[Profile] 页面正在跳转中，忽略重复点击');
+      return;
+    }
+    this.setData({ isNavigating: true });
+
+    console.log('[Profile] 准备跳转登录页...');
+
+    // 🔧 修复：使用 reLaunch 跳转到登录页（更稳定，清空页面栈）
+    wx.reLaunch({
+      url: '/pages/login/login?type=wechat&from=profile',
+      success: () => {
+        console.log('[Profile] 跳转登录页成功');
+      },
+      fail: (err) => {
+        console.error('[Profile] 跳转登录页失败:', err);
+        this.setData({ isNavigating: false });
+        wx.showToast({
+          title: '页面跳转失败，请重试',
+          icon: 'none'
+        });
+      }
     });
   },
 
@@ -230,8 +264,19 @@ Page({
       default:
         if (item.path) {
           if (this.isPageExists(item.path)) {
+            // 🔧 修复：添加错误处理和超时处理
             wx.navigateTo({
-              url: item.path
+              url: item.path,
+              success: () => {
+                console.log('[Profile] 页面跳转成功:', item.path);
+              },
+              fail: (err) => {
+                console.error('[Profile] 页面跳转失败:', err);
+                wx.showToast({
+                  title: '页面跳转失败，请重试',
+                  icon: 'none'
+                });
+              }
             });
           } else {
             wx.showToast({
@@ -284,8 +329,19 @@ Page({
 
   // 打开意见反馈
   openFeedback: function() {
+    // 🔧 修复：添加错误处理
     wx.navigateTo({
-      url: '/pages/feedback/feedback'
+      url: '/pages/feedback/feedback',
+      success: () => {
+        console.log('[Profile] 跳转意见反馈页成功');
+      },
+      fail: (err) => {
+        console.error('[Profile] 跳转意见反馈页失败:', err);
+        wx.showToast({
+          title: '页面跳转失败，请重试',
+          icon: 'none'
+        });
+      }
     });
   },
 
@@ -315,9 +371,29 @@ Page({
     }
     
     if (!this.data.userInfo.isLoggedIn) {
-      // 跳转到登录页面
-      wx.navigateTo({
-        url: '/pages/login/login?type=wechat'
+      // 🔧 修复：防止重复点击
+      if (this.data.isNavigating) {
+        console.log('[Profile] 页面正在跳转中，忽略重复点击');
+        return;
+      }
+      this.setData({ isNavigating: true });
+
+      console.log('[Profile] 准备跳转登录页（从头像）...');
+
+      // 🔧 修复：使用 reLaunch 跳转到登录页
+      wx.reLaunch({
+        url: '/pages/login/login?type=wechat&from=avatar',
+        success: () => {
+          console.log('[Profile] 跳转登录页成功');
+        },
+        fail: (err) => {
+          console.error('[Profile] 跳转登录页失败:', err);
+          this.setData({ isNavigating: false });
+          wx.showToast({
+            title: '请先登录',
+            icon: 'none'
+          });
+        }
       });
       return;
     }

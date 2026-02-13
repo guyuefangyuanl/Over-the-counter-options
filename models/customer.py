@@ -121,32 +121,36 @@ class CustomerModel:
             if not self.cloud_client:
                 return [], 0
 
-            where_parts = []
-            if status:
-                where_parts.append(f'status: "{status}"')
-            
-            if keyword:
-                # Cloud DB regex search for name
-                safe_kw = keyword.replace('"', '\\"').replace("'", "\\'")
-                where_parts.append(f'name: db.RegExp({{regexp: "{safe_kw}", options: "i"}})')
+            try:
+                where_parts = []
+                if status:
+                    where_parts.append(f'status: "{status}"')
+                
+                if keyword:
+                    # Cloud DB regex search for name
+                    safe_kw = keyword.replace('"', '\\"').replace("'", "\\'")
+                    where_parts.append(f'name: db.RegExp({{regexp: "{safe_kw}", options: "i"}})')
 
-            where_clause = ""
-            if where_parts:
-                where_clause = f'.where({{{", ".join(where_parts)}}})'
-            
-            # Count
-            count_query = f'db.collection("{self.collection_name}"){where_clause}.count()'
-            total = self.cloud_client.count(count_query)
+                where_clause = ""
+                if where_parts:
+                    where_clause = f'.where({{{", ".join(where_parts)}}})'
+                
+                # Count
+                count_query = f'db.collection("{self.collection_name}"){where_clause}.count()'
+                total = self.cloud_client.count(count_query)
 
-            # Query
-            skip = (page - 1) * page_size
-            query = f'db.collection("{self.collection_name}"){where_clause}.orderBy("createdAt", "desc").skip({skip}).limit({page_size}).get()'
-            
-            customers = self.cloud_client.query(query)
-            for c in customers:
-                if "_id" in c:
-                    c["_id"] = str(c["_id"])
-            return customers, total
+                # Query
+                skip = (page - 1) * page_size
+                query = f'db.collection("{self.collection_name}"){where_clause}.orderBy("createdAt", "desc").skip({skip}).limit({page_size}).get()'
+                
+                customers = self.cloud_client.query(query)
+                for c in customers:
+                    if "_id" in c:
+                        c["_id"] = str(c["_id"])
+                return customers, total
+            except CloudDbRequestError as e:
+                logger.warning(f"云数据库查询失败，返回空数据: {e}")
+                return [], 0
         else:
             if not self.collection:
                 return [], 0

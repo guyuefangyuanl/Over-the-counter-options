@@ -187,20 +187,25 @@ Page({
       return;
     }
 
-    wx.navigateTo({
+    // 使用 redirectTo 避免页面栈过深，登录成功后返回
+    wx.redirectTo({
       url: '/pages/login/login?type=wechat',
       success: () => {
-        wx.showToast({
-          title: '已打开登录页',
-          icon: 'none'
-        });
+        console.log('跳转登录页成功');
       },
       fail: (err) => {
         console.error('跳转登录页失败:', err);
-        wx.showModal({
-          title: '跳转失败',
-          content: '无法打开登录页，请稍后重试',
-          showCancel: false
+        // 如果 redirectTo 失败，尝试 reLaunch
+        wx.reLaunch({
+          url: '/pages/login/login?type=wechat',
+          fail: (err2) => {
+            console.error('reLaunch也失败:', err2);
+            wx.showModal({
+              title: '跳转失败',
+              content: '无法打开登录页，请稍后重试',
+              showCancel: false
+            });
+          }
         });
       }
     });

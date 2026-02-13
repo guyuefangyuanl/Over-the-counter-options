@@ -56,25 +56,29 @@ class OrderModel:
             if not self.cloud_client:
                 return [], 0
             
-            where_parts = []
-            if status:
-                where_parts.append(f'status: "{status}"')
-            if user_id:
-                where_parts.append(f'openid: "{user_id}"')
-            
-            where_clause = ""
-            if where_parts:
-                where_clause = f'.where({{{", ".join(where_parts)}}})'
-            
-            count_query = f'db.collection("{self.collection_name}"){where_clause}.count()'
-            total = self.cloud_client.count(count_query)
-            
-            query = f'db.collection("{self.collection_name}"){where_clause}.orderBy("createdAt", "desc").skip({skip}).limit({limit}).get()'
-            items = self.cloud_client.query(query)
-            for item in items:
-                if "_id" in item:
-                    item["_id"] = str(item["_id"])
-            return items, total
+            try:
+                where_parts = []
+                if status:
+                    where_parts.append(f'status: "{status}"')
+                if user_id:
+                    where_parts.append(f'openid: "{user_id}"')
+                
+                where_clause = ""
+                if where_parts:
+                    where_clause = f'.where({{{", ".join(where_parts)}}})'
+                
+                count_query = f'db.collection("{self.collection_name}"){where_clause}.count()'
+                total = self.cloud_client.count(count_query)
+                
+                query = f'db.collection("{self.collection_name}"){where_clause}.orderBy("createdAt", "desc").skip({skip}).limit({limit}).get()'
+                items = self.cloud_client.query(query)
+                for item in items:
+                    if "_id" in item:
+                        item["_id"] = str(item["_id"])
+                return items, total
+            except CloudDbRequestError as e:
+                logger.warning(f"云数据库查询失败，返回空数据: {e}")
+                return [], 0
         else:
             if not self.collection:
                 return [], 0

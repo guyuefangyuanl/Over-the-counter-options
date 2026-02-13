@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Table, Button, Modal, Form, Input, App, Space, Popconfirm } from 'antd';
+import { Card, Table, Button, Modal, Form, Input, App, Space } from 'antd';
 import { ReloadOutlined, EditOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import api from '../utils/api';
