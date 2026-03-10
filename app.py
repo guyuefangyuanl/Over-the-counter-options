@@ -1,22 +1,25 @@
 # -*- coding: utf-8 -*-
 import os
 import time
+import json
+import random
 import logging
 from flask import Flask, jsonify, request, Blueprint, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
-from pymongo import MongoClient
-from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
+# ⚠️ 重要：本项目使用微信云托管，不使用 MongoDB
+# from pymongo import MongoClient
+# from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 # import akshare as ak  # 云托管环境暂不需要
 from services.cloud_db import CloudDbClient, CloudDbConfigError
 from flask.json.provider import DefaultJSONProvider
-from bson import ObjectId
 from datetime import datetime
 
 class CustomJSONProvider(DefaultJSONProvider):
     def default(self, obj):
-        if isinstance(obj, ObjectId):
-            return str(obj)
+        # 支持云数据库的 _id 字段（字符串格式）
+        if isinstance(obj, str) and obj.startswith('cloud://'):
+            return obj
         if isinstance(obj, datetime):
             return obj.isoformat()
         return super().default(obj)
@@ -62,30 +65,75 @@ if 'WX_CLOUD_ENV' in os.environ:
     val = os.environ['WX_CLOUD_ENV']
     logger.info(f"WX_CLOUD_ENV 长度: {len(val)}")
 
-# 数据库配置
-MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/option_data')
-DATABASE_NAME = os.getenv('DATABASE_NAME', 'option_trading')
+# 数据库配置（云环境优先使用微信云数据库）
+USE_MONGODB = os.getenv('USE_MONGODB', 'false').lower() == 'true'
 NODE_ENV = os.getenv('NODE_ENV', 'development')
 
-# 初始化MongoDB数据库连接
-def init_db():
-    if os.getenv("SKIP_DB_INIT") == "1" or NODE_ENV == "testing":
+# 初始化云数据库客户端（主数据源）
+def init_cloud_db():
+    """初始化微信云数据库客户端"""
+    try:
+        logger.info("=" * 60)
+        logger.info("开始初始化微信云数据库客户端")
+        logger.info("=" * 60)
+        cloud_db = CloudDbClient.from_env()
+        logger.info("✅ 微信云数据库客户端初始化成功")
+        
+        # 测试连接
+        try:
+            test_query = "db.collection('inquiries').limit(1).get()"
+            logger.info(f"测试查询: {test_query}")
+            test_result = cloud_db.query(test_query)
+            logger.info(f"✅ 云数据库连接测试成功，返回 {len(test_result)} 条记录")
+        except Exception as test_err:
+            logger.warning(f"⚠️ 云数据库连接测试失败: {test_err}")
+        
+        logger.info("=" * 60)
+        return cloud_db
+    except CloudDbConfigError as e:
+        logger.warning("=" * 60)
+        logger.warning(f"⚠️ 微信云数据库配置未就绪: {e}")
+        logger.warning("请检查以下环境变量：")
+        logger.warning("  - WX_CLOUD_ENV")
+        logger.warning("  - WX_APPID")
+        logger.warning("  - WX_SECRET")
+        logger.warning("=" * 60)
+        return None
+    except Exception as e:
+        logger.error("=" * 60)
+        logger.error(f"❌ 微信云数据库初始化失败: {e}")
+        logger.error("=" * 60)
         return None
 
-    mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/option_data')
-    db_name = os.getenv('DATABASE_NAME', 'option_trading')
+# MongoDB初始化（仅在明确启用时使用，云环境不需要）
+def init_mongodb():
+    """初始化MongoDB数据库连接（仅本地开发环境可选）"""
+    if not USE_MONGODB:
+        logger.info("⚠️ MongoDB已禁用（USE_MONGODB=false），使用微信云数据库")
+        return None
     
-    logger.info(f"正在尝试连接 MongoDB: {mongo_uri.split('@')[-1]}") # 隐藏敏感信息
+    if os.getenv("SKIP_DB_INIT") == "1" or NODE_ENV == "testing":
+        logger.info("⚠️ 跳过MongoDB初始化（SKIP_DB_INIT=1 或 testing环境）")
+        return None
+
     try:
+        from pymongo import MongoClient
+        mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/option_data')
+        db_name = os.getenv('DATABASE_NAME', 'option_trading')
+        
+        logger.info(f"正在尝试连接 MongoDB: {mongo_uri.split('@')[-1]}")  # 隐藏敏感信息
         # 设置较短的连接超时，避免阻塞启动
         client = MongoClient(mongo_uri, serverSelectionTimeoutMS=1000, connectTimeoutMS=1000)
         # 验证连接
         client.admin.command('ping')
         logger.info("✅ MongoDB数据库连接成功")
         return client[db_name]
+    except ImportError:
+        logger.warning("⚠️ pymongo未安装，跳过MongoDB连接")
+        return None
     except Exception as e:
-        logger.error(f"❌ MongoDB数据库连接失败: {e}")
-        logger.warning("⚠️ 服务将以无数据库模式运行，部分功能将受限")
+        logger.warning(f"⚠️ MongoDB数据库连接失败: {e}")
+        logger.info("ℹ️ 将使用微信云数据库作为主数据源")
         return None
 
 def resolve_port() -> int:
@@ -117,56 +165,35 @@ def create_app() -> Flask:
     flask_app = Flask(__name__)
     flask_app.json = CustomJSONProvider(flask_app)
     flask_app.config["NODE_ENV"] = NODE_ENV
-    flask_app.db = init_db()
     
-    # 初始化云数据库客户端
-    try:
-        logger.info("=" * 60)
-        logger.info("开始初始化微信云数据库客户端")
-        logger.info("=" * 60)
-        flask_app.cloud_db = CloudDbClient.from_env()
-        logger.info("✅ 微信云数据库客户端初始化成功")
-        # 测试连接
-        try:
-            test_query = "db.collection('inquiries').limit(1).get()"
-            logger.info(f"测试查询: {test_query}")
-            test_result = flask_app.cloud_db.query(test_query)
-            logger.info(f"✅ 云数据库连接测试成功，返回 {len(test_result)} 条记录")
-        except Exception as test_err:
-            logger.warning(f"⚠️ 云数据库连接测试失败: {test_err}")
-        logger.info("=" * 60)
-    except CloudDbConfigError as e:
-        flask_app.cloud_db = None
-        logger.warning("=" * 60)
-        logger.warning(f"⚠️ 微信云数据库配置未就绪: {e}")
-        logger.warning("请检查以下环境变量：")
-        logger.warning("  - WX_CLOUD_ENV")
-        logger.warning("  - WX_APPID")
-        logger.warning("  - WX_SECRET")
-        logger.warning("=" * 60)
-    except Exception as e:
-        flask_app.cloud_db = None
-        logger.error("=" * 60)
-        logger.error(f"❌ 微信云数据库初始化失败: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        logger.error("=" * 60)
+    # ✅ 优先初始化微信云数据库（主数据源）
+    flask_app.cloud_db = init_cloud_db()
+    
+    # 💾 可选：初始化MongoDB（仅在启用USE_MONGODB时）
+    flask_app.db = init_mongodb()
+    
+    # 检查数据库状态
+    if flask_app.cloud_db:
+        logger.info("✅ 主数据源：微信云数据库（已连接）")
+    elif flask_app.db:
+        logger.info("ℹ️ 主数据源：MongoDB（备用）")
+    else:
+        logger.warning("⚠️ 无可用数据库，部分功能将受限")
 
-    def ensure_db():
-        if flask_app.db is not None:
-            return flask_app.db
-        if os.getenv("SKIP_DB_INIT") == "1" or flask_app.config.get("NODE_ENV") == "testing":
-            return None
-        now = time.time()
-        last_attempt = getattr(flask_app, "_db_last_attempt_ts", 0)
-        if now - last_attempt < 10:
-            return None
-        flask_app._db_last_attempt_ts = now
-        flask_app.db = init_db()
-        return flask_app.db
-    flask_app.ensure_db = ensure_db
-
-    allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost,http://127.0.0.1').split(',')
+    # CORS配置
+    allowed_origins = os.getenv('ALLOWED_ORIGINS', '').split(',')
+    if not allowed_origins or allowed_origins == ['']:
+        # 默认允许本地开发环境
+        allowed_origins = [
+            'http://localhost:5173',
+            'http://localhost:3000',
+            'http://127.0.0.1:5173',
+            'http://127.0.0.1:3000'
+        ]
+        logger.info(f"使用默认CORS配置: {allowed_origins}")
+    else:
+        allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
+        logger.info(f"使用自定义CORS配置: {allowed_origins}")
 
     CORS(
         flask_app,
@@ -185,13 +212,41 @@ def create_app() -> Flask:
 
     @api_v1.route('/health', methods=['GET'])
     def health_check_v1():
-        db_status = "connected" if flask_app.db is not None else "disconnected"
+        # 检查数据库连接状态
+        db_status = "disconnected"
+        db_type = "none"
+        
+        # 优先检查微信云数据库
+        if flask_app.cloud_db:
+            try:
+                # 尝试查询测试
+                test_result = flask_app.cloud_db.query("db.collection('inquiries').limit(1).get()")
+                db_status = "connected"
+                db_type = "wechat_cloud"
+            except Exception as e:
+                logger.warning(f"云数据库健康检查失败: {e}")
+                db_status = "error"
+                db_type = "wechat_cloud"
+        # 备用：检查MongoDB
+        elif flask_app.db:
+            try:
+                flask_app.db.command('ping')
+                db_status = "connected"
+                db_type = "mongodb"
+            except Exception as e:
+                logger.warning(f"MongoDB健康检查失败: {e}")
+                db_status = "error"
+                db_type = "mongodb"
+        
         return flask_success_response(
             data={
                 "status": "healthy",
-                "db": db_status,
-                "version": "v1",
                 "service": "期权数据服务",
+                "version": "v1",
+                "database": {
+                    "type": db_type,
+                    "status": db_status
+                },
                 "environment": flask_app.config.get("NODE_ENV", "development"),
             },
             message="Flask API v1 运行正常",
@@ -259,29 +314,173 @@ def create_app() -> Flask:
 
     @flask_app.errorhandler(404)
     def not_found(error):
+        # 记录详细日志
+        logger.warning(f"404 错误: {request.method} {request.url} - {request.remote_addr}")
         return flask_error_response("请求的资源不存在", code=404)
 
     @flask_app.errorhandler(500)
     def internal_error(error):
         import traceback
-        logger.error(f"服务器 500 错误: {str(error)}")
-        logger.error(traceback.format_exc())
+        error_id = f"ERR-{int(time.time())}-{random.randint(1000, 9999)}"
+        
+        # 详细错误日志
+        error_info = {
+            'error_id': error_id,
+            'error_type': '500',
+            'error_message': str(error),
+            'method': request.method,
+            'url': request.url,
+            'remote_addr': request.remote_addr,
+            'user_agent': request.headers.get('User-Agent', 'Unknown'),
+            'timestamp': datetime.now().isoformat(),
+            'traceback': traceback.format_exc()
+        }
+        
+        logger.error(f"🚨 服务器 500 错误 [{error_id}]: {str(error)}")
+        logger.error(f"错误详情: {json.dumps(error_info, ensure_ascii=False)}")
+        
+        # 发送告警（如果配置了告警服务）
+        _send_alert_if_configured(error_info)
+        
         return flask_error_response(
             "服务器内部错误" if NODE_ENV == 'production' else str(error),
             code=500,
+            extra_data={'error_id': error_id} if NODE_ENV == 'production' else None
         )
 
     @flask_app.errorhandler(Exception)
     def handle_exception(error):
         import traceback
-        logger.error(f"未处理的异常: {str(error)}")
-        logger.error(traceback.format_exc())
+        error_id = f"ERR-{int(time.time())}-{random.randint(1000, 9999)}"
+        
+        # 分类错误类型
+        error_type = _classify_exception(error)
+        
+        error_info = {
+            'error_id': error_id,
+            'error_type': error_type,
+            'error_message': str(error),
+            'error_class': error.__class__.__name__,
+            'method': request.method,
+            'url': request.url,
+            'remote_addr': request.remote_addr,
+            'user_agent': request.headers.get('User-Agent', 'Unknown'),
+            'timestamp': datetime.now().isoformat(),
+            'traceback': traceback.format_exc()
+        }
+        
+        # 根据错误类型记录不同级别的日志
+        if error_type in ['database', 'auth', 'external_service']:
+            logger.error(f"🚨 严重错误 [{error_id}] ({error_type}): {str(error)}")
+        else:
+            logger.warning(f"⚠️ 一般错误 [{error_id}] ({error_type}): {str(error)}")
+        
+        logger.debug(f"错误详情: {json.dumps(error_info, ensure_ascii=False)}")
+        
+        # 发送告警（仅对严重错误）
+        if error_type in ['database', 'auth', 'external_service']:
+            _send_alert_if_configured(error_info)
+        
         return flask_error_response(
             "服务器错误" if NODE_ENV == 'production' else str(error),
             code=500,
+            extra_data={'error_id': error_id, 'error_type': error_type} if NODE_ENV == 'production' else None
         )
+    
+    # 注册请求性能监控
+    _register_performance_monitoring(flask_app)
 
     return flask_app
+
+
+def _classify_exception(error: Exception) -> str:
+    """分类异常类型"""
+    error_class = error.__class__.__name__
+    error_msg = str(error).lower()
+    
+    # 数据库错误
+    if any(kw in error_class.lower() for kw in ['mongo', 'pymongo', 'sqlalchemy', 'db', 'database']):
+        return 'database'
+    
+    # 认证错误
+    if any(kw in error_class.lower() for kw in ['auth', 'jwt', 'token', 'unauthorized']):
+        return 'auth'
+    
+    # 外部服务错误
+    if any(kw in error_msg for kw in ['wechat', 'cloud', 'api', 'http', 'timeout', 'connection']):
+        return 'external_service'
+    
+    # 配置错误
+    if any(kw in error_msg for kw in ['config', 'environment', 'env']):
+        return 'config'
+    
+    return 'unknown'
+
+
+def _send_alert_if_configured(error_info: dict):
+    """根据配置发送告警"""
+    # 检查是否配置了告警Webhook
+    alert_webhook = os.getenv('ALERT_WEBHOOK_URL')
+    if not alert_webhook:
+        return
+    
+    try:
+        import requests
+        
+        # 构建告警消息
+        alert_message = {
+            'msgtype': 'markdown',
+            'markdown': {
+                'title': f"🚨 期权系统错警 [{error_info['error_id']}]",
+                'text': f"""### 错误信息
+- **错误ID**: {error_info['error_id']}
+- **错误类型**: {error_info.get('error_type', 'unknown')}
+- **错误消息**: {error_info['error_message'][:200]}
+- **请求方法**: {error_info['method']}
+- **请求URL**: {error_info['url']}
+- **客户端IP**: {error_info['remote_addr']}
+- **发生时间**: {error_info['timestamp']}
+
+> 请及时检查系统日志并处理问题"""
+            }
+        }
+        
+        # 异步发送告警（不阻塞主流程）
+        def send_alert():
+            try:
+                requests.post(alert_webhook, json=alert_message, timeout=5)
+            except Exception as e:
+                logger.error(f"发送告警失败: {e}")
+        
+        import threading
+        threading.Thread(target=send_alert, daemon=True).start()
+        
+    except Exception as e:
+        logger.error(f"告警发送失败: {e}")
+
+
+def _register_performance_monitoring(flask_app):
+    """注册请求性能监控"""
+    from flask import g
+    import time
+    
+    @flask_app.before_request
+    def start_timer():
+        g.start_time = time.time()
+    
+    @flask_app.after_request
+    def log_performance(response):
+        if hasattr(g, 'start_time'):
+            duration = time.time() - g.start_time
+            
+            # 记录慢请求警告
+            if duration > 1.0:  # 超过1秒的请求
+                logger.warning(f"⏱️ 慢请求警告: {request.method} {request.path} 耗时 {duration:.3f}s")
+            
+            # 添加性能头部信息
+            response.headers['X-Response-Time'] = f"{duration:.3f}s"
+            
+        return response
 
 
 def start_background_scheduler(flask_app):

@@ -447,32 +447,50 @@ Page({
   handleLoginSuccess: function(result, loginType) {
     console.log('[Login] handleLoginSuccess 接收到的数据:', result);
     
-    // 🔧 修复：兼容多种 token 字段名和响应结构
-    // 后端返回格式：{ success: true, data: { token: '...', ... } }
-    let resultData = result.data || result;
+    // 统一响应处理：后端返回格式 { success: true, data: { ... }, message: '...' }
+    let responseData;
     
-    // 如果 resultData 是字符串，尝试解析
-    if (typeof resultData === 'string') {
+    if (typeof result === 'string') {
       try {
-        resultData = JSON.parse(resultData);
+        responseData = JSON.parse(result);
       } catch (e) {
-        resultData = { token: resultData };
+        console.error('[Login] 解析响应字符串失败:', e);
+        this.handleLoginError(new Error('登录响应格式错误'));
+        return;
       }
+    } else if (typeof result === 'object' && result !== null) {
+      responseData = result;
+    } else {
+      console.error('[Login] 无效的响应类型:', typeof result);
+      this.handleLoginError(new Error('登录响应无效'));
+      return;
     }
+    
+    // 检查后端返回的成功状态
+    if (responseData.success === false) {
+      console.error('[Login] 登录失败:', responseData.message);
+      this.handleLoginError(new Error(responseData.message || '登录失败'));
+      return;
+    }
+    
+    // 提取data字段（后端标准响应结构）
+    const resultData = responseData.data || responseData;
     
     console.log('[Login] 提取的 resultData:', resultData);
     
-    // 提取 token（可能在多个字段中）
-    let token = resultData.token || resultData.access_token || resultData.accessToken;
+    // 提取 token（支持多种字段名）
+    let accessToken = resultData.access_token || resultData.token || resultData.accessToken;
+    const refreshToken = resultData.refresh_token || resultData.refreshToken;
     
-    // 如果 token 还是对象，尝试提取其中的 token 字段
-    if (typeof token === 'object' && token !== null) {
-      token = token.token || token.access_token || token.accessToken;
+    // 如果 token 是对象，尝试提取
+    if (typeof accessToken === 'object' && accessToken !== null) {
+      accessToken = accessToken.token || accessToken.access_token;
     }
     
-    console.log('[Login] 提取的 token:', token, '类型:', typeof token);
+    console.log('[Login] 提取的 accessToken:', accessToken ? '已获取' : '未获取');
+    console.log('[Login] 提取的 refreshToken:', refreshToken ? '已获取' : '未获取');
     
-    if (!token) {
+    if (!accessToken) {
       console.error('[Login] 登录结果中没有 token:', result);
       wx.showToast({
         title: '登录失败：未获取到身份令牌',
@@ -483,7 +501,7 @@ Page({
     }
     
     // 确保 token 是字符串
-    const tokenStr = String(token);
+    const tokenStr = String(accessToken);
     
     // 保存用户信息和token
     const userInfo = {
@@ -491,18 +509,21 @@ Page({
       isGuest: false,
       userId: resultData.openid || resultData.userId,
       openid: resultData.openid || resultData.userId,
+      unionid: resultData.unionid || '',
       nickname: resultData.nickname || resultData.nickName || '微信用户',
       avatar: resultData.avatar || resultData.avatarUrl || '',
+      phone: resultData.phone || '',
       loginTime: new Date().toISOString(),
-      loginType: loginType
+      loginType: loginType,
+      tokenExpiry: Date.now() + (resultData.expires_in || 900) * 1000 // 默认15分钟
     };
 
     wx.setStorageSync('userInfo', userInfo);
     wx.setStorageSync('token', tokenStr);
     
     // 保存 refresh token
-    if (resultData.refresh_token || resultData.refreshToken) {
-      wx.setStorageSync('refresh_token', resultData.refresh_token || resultData.refreshToken);
+    if (refreshToken) {
+      wx.setStorageSync('refresh_token', String(refreshToken));
     }
     
     console.log('[Login] 登录成功，已保存 token:', tokenStr.substring(0, 20) + '...');

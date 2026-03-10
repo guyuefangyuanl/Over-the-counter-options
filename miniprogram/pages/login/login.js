@@ -12,7 +12,7 @@ Page({
     // 手机号登录表单
     phoneForm: {
       phone: '',
-      code: ''
+      smsCode: ''  // 短信验证码
     },
     
     // 验证码相关
@@ -227,9 +227,9 @@ Page({
   },
 
   // 验证码输入
-  onCodeInput: function(e) {
+  onSmsCodeInput: function(e) {
     this.setData({
-      'phoneForm.code': e.detail.value
+      'phoneForm.smsCode': e.detail.value
     });
   },
 
@@ -248,14 +248,22 @@ Page({
     }
 
     wx.showLoading({ title: '发送中...' });
-    setTimeout(() => {
-      wx.hideLoading();
-      wx.showToast({
-        title: '验证码已发送',
-        icon: 'success'
+    loginService.sendSmsCode(this.data.phoneForm.phone, 'login')
+      .then(() => {
+        wx.hideLoading();
+        wx.showToast({
+          title: '验证码已发送',
+          icon: 'success'
+        });
+        this.startCountdown();
+      })
+      .catch((error) => {
+        wx.hideLoading();
+        wx.showToast({
+          title: error && error.message ? error.message : '发送失败',
+          icon: 'none'
+        });
       });
-      this.startCountdown();
-    }, 500);
   },
 
   // 手机号登录
@@ -276,12 +284,10 @@ Page({
       return;
     }
     
-    // Check password if we are using password login mode
-    // For now, assuming current UI still uses code field for password or code
-    // The backend expects 'password' for phone login
-    if (!this.data.phoneForm.code) {
+    // 验证码校验
+    if (!this.data.phoneForm.smsCode || this.data.phoneForm.smsCode.length !== 6) {
       wx.showToast({
-        title: '请输入密码',
+        title: '请输入6位短信验证码',
         icon: 'none'
       });
       return;
@@ -292,9 +298,8 @@ Page({
       loadingText: '验证登录中...'
     });
 
-    // 调用手机号登录接口
-    // Note: Reuse 'code' field as password for now, or need UI update to explicit password field
-    loginService.phoneLogin(this.data.phoneForm.phone, this.data.phoneForm.code)
+    // 调用手机号验证码登录接口
+    loginService.phoneLogin(this.data.phoneForm.phone, this.data.phoneForm.smsCode)
       .then(result => {
         this.handleLoginSuccess(result, 'phone');
       })

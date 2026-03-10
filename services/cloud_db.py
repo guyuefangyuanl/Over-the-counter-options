@@ -123,24 +123,45 @@ class CloudDbClient:
         self._env_id = env_id.strip()
         self._token_provider = token_provider
         self._timeout = timeout
-        # 配置连接池大小以匹配并发工作线程数
+        # 🚀 优化连接池配置：动态调整大小，支持更多并发场景
         if session is None:
             from requests.adapters import HTTPAdapter
             session = requests.Session()
             max_workers = self._load_max_inflight()
+            # 连接池大小设置为工作线程数的2倍，避免连接汲取
+            pool_connections = max_workers * 2
+            pool_maxsize = max_workers * 2
+            # 启用连接重试机制
+            from urllib3.util.retry import Retry
+            retry_strategy = Retry(
+                total=3,
+                backoff_factor=0.3,
+                status_forcelist=[429, 500, 502, 503, 504],
+                allowed_methods=["HEAD", "GET", "OPTIONS", "POST"]
+            )
             adapter = HTTPAdapter(
-                pool_connections=max_workers,
-                pool_maxsize=max_workers,
-                max_retries=0,
+                pool_connections=pool_connections,
+                pool_maxsize=pool_maxsize,
+                max_retries=retry_strategy,
                 pool_block=False
             )
             session.mount('https://', adapter)
             session.mount('http://', adapter)
+            logger.info(f"🔗 连接池配置: pool_connections={pool_connections}, pool_maxsize={pool_maxsize}, max_retries=3")
         self._session = session
         self._verify = verify
         self._thread_local = threading.local()
         self._request_semaphore = threading.BoundedSemaphore(self._load_max_inflight())
         self._max_retries = self._load_max_retries()
+        # 📊 连接池性能指标
+        self._metrics = {
+            'total_requests': 0,
+            'successful_requests': 0,
+            'failed_requests': 0,
+            'retried_requests': 0,
+            'timeout_requests': 0
+        }
+        self._metrics_lock = threading.Lock()
 
     @staticmethod
     def _load_max_inflight() -> int:
@@ -489,19 +510,33 @@ class CloudDbClient:
         return processed, errors
 
     def _post_api(self, api_path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        发送API请求并处理重试
+        
+        重试策略：
+        1. 限流错误(429/QPS)：使用指数退避，最大延迟3秒
+        2. 服务器错误(5xx)：立即重试，最多3次
+        3. 连接超时：使用线性退避，最大延迟2秒
+        4. 其他错误：简单线性退避
+        """
         access_token = self._token_provider.get_access_token()
         url = f"https://api.weixin.qq.com/{api_path}?access_token={access_token}"
 
         last_err: Optional[str] = None
+        
+        with self._metrics_lock:
+            self._metrics['total_requests'] += 1
+        
         for attempt in range(self._max_retries):
             try:
                 acquired = self._request_semaphore.acquire(timeout=max(0.1, float(self._timeout)))
                 if not acquired:
+                    with self._metrics_lock:
+                        self._metrics['timeout_requests'] += 1
                     raise CloudDbRequestError("云数据库请求繁忙，请稍后重试")
 
                 session = getattr(self._thread_local, "session", None)
                 if session is None:
-                    # 使用共享的配置好的 session
                     session = self._session
                     self._thread_local.session = session
 
@@ -522,16 +557,80 @@ class CloudDbClient:
                                 f"云数据库集合不存在。请确保已在微信云开发控制台中创建名为该请求所使用的集合。详情: {errmsg}"
                             )
                         raise CloudDbRequestError(errmsg)
+                    
+                    # 记录成功请求
+                    with self._metrics_lock:
+                        self._metrics['successful_requests'] += 1
+                    
+                    # 记录重试次数
+                    if attempt > 0:
+                        with self._metrics_lock:
+                            self._metrics['retried_requests'] += 1
+                        logger.info(f"🔄 请求重试成功 (第{attempt+1}次尝试)")
+                    
                     return data
                 finally:
                     self._request_semaphore.release()
+                    
             except Exception as e:
                 last_err = str(e)
+                error_type = self._classify_error(last_err)
+                
                 if attempt < (self._max_retries - 1):
-                    raw = (last_err or "").lower()
-                    jitter = random.random() * 0.15
-                    if "rate" in raw or "qps" in raw or "freq" in raw or "too many" in raw:
-                        time.sleep(min(3.0, 0.6 * (2**attempt) + jitter))
-                    else:
-                        time.sleep(min(2.0, 0.3 * (2**attempt) + jitter))
+                    delay = self._calculate_retry_delay(error_type, attempt)
+                    logger.warning(f"⚠️ 请求失败 ({attempt+1}/{self._max_retries}): {error_type}, {delay:.2f}s后重试...")
+                    time.sleep(delay)
+                else:
+                    # 最后一次尝试失败
+                    with self._metrics_lock:
+                        self._metrics['failed_requests'] += 1
+                    logger.error(f"❌ 请求失败 (已重试{self._max_retries}次): {last_err}")
+                    
         raise CloudDbRequestError(last_err or "云数据库请求失败")
+    
+    def _classify_error(self, error_msg: str) -> str:
+        """分类错误类型"""
+        error_lower = error_msg.lower()
+        if any(kw in error_lower for kw in ['rate', 'qps', 'freq', 'too many', 'limit']):
+            return 'rate_limit'
+        elif any(kw in error_lower for kw in ['timeout', 'timed out']):
+            return 'timeout'
+        elif any(kw in error_lower for kw in ['connection', 'refused', 'reset']):
+            return 'connection'
+        elif any(kw in error_lower for kw in ['5', 'server', 'internal']):
+            return 'server_error'
+        else:
+            return 'unknown'
+    
+    def _calculate_retry_delay(self, error_type: str, attempt: int) -> float:
+        """根据错误类型计算重试延迟"""
+        jitter = random.random() * 0.15
+        
+        if error_type == 'rate_limit':
+            # 限流错误：指数退避，最大3秒
+            return min(3.0, 0.6 * (2 ** attempt) + jitter)
+        elif error_type == 'timeout':
+            # 超时错误：线性退避，最大2秒
+            return min(2.0, 0.5 * (attempt + 1) + jitter)
+        elif error_type == 'connection':
+            # 连接错误：简单退避，最大1.5秒
+            return min(1.5, 0.3 * (attempt + 1) + jitter)
+        else:
+            # 其他错误：基础退避，最大1秒
+            return min(1.0, 0.2 * (attempt + 1) + jitter)
+    
+    def get_metrics(self) -> Dict[str, int]:
+        """获取连接池性能指标"""
+        with self._metrics_lock:
+            return self._metrics.copy()
+    
+    def reset_metrics(self):
+        """重置性能指标"""
+        with self._metrics_lock:
+            self._metrics = {
+                'total_requests': 0,
+                'successful_requests': 0,
+                'failed_requests': 0,
+                'retried_requests': 0,
+                'timeout_requests': 0
+            }

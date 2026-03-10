@@ -19,6 +19,7 @@
     "pages/position/position",
     "pages/search/search",
     "pages/search-stock/search-stock",
+    "pages/inquiry/detail/detail",
     "pages/test/test"
   ],
   "window": {
@@ -70,7 +71,7 @@
     "audio"
   ],
   "networkTimeout": {
-    "request": 10000,
+    "request": 60000,
     "downloadFile": 10000
   },
   "debug": false,

@@ -21,6 +21,13 @@ const retryConfig = {
   exponentialBackoff: true
 };
 
+// API超时配置（毫秒）
+const API_TIMEOUT = {
+  default: 30000,    // 默认30秒
+  short: 10000,      // 短超时10秒（用于快速查询）
+  long: 60000        // 长超时60秒（用于复杂操作）
+};
+
 // API统计信息
 const apiStats = {
   totalRequests: 0,
@@ -43,7 +50,7 @@ function request(url, method = 'GET', data = {}, header = {}, options = {}) {
   const { 
     enableCache = false, 
     cacheKey, 
-    timeout = 10000,
+    timeout = API_TIMEOUT.default,  // 使用默认30秒超时
     retries = retryConfig.maxRetries,
     priority = 'normal', // normal, high, low
     dedupe = false, // 是否去重
@@ -334,7 +341,7 @@ async function performRequestWithRetry(url, method, data, header, timeout, retri
  * @param {string} url 请求路径
  * @param {object} params 查询参数
  * @param {object} header 请求头
- * @param {object} options 选项 (enableCache, cacheKey等)
+ * @param {object} options 选项 (enableCache, cacheKey, timeoutType等)
  * @returns {Promise}
  */
 function get(url, params = {}, header = {}, options = {}) {
@@ -345,8 +352,22 @@ function get(url, params = {}, header = {}, options = {}) {
   
   const requestUrl = queryString ? `${url}?${queryString}` : url;
   
+  // 根据timeoutType设置超时时间
+  let timeout = API_TIMEOUT.default;
+  if (options.timeoutType === 'short') {
+    timeout = API_TIMEOUT.short;
+  } else if (options.timeoutType === 'long') {
+    timeout = API_TIMEOUT.long;
+  } else if (options.timeout) {
+    timeout = options.timeout;
+  }
+  
   // 默认启用GET请求缓存
-  const requestOptions = { enableCache: true, ...options };
+  const requestOptions = { 
+    enableCache: true, 
+    timeout,
+    ...options 
+  };
   
   return request(requestUrl, 'GET', {}, header, requestOptions);
 }
@@ -567,5 +588,6 @@ module.exports = {
   getApiStats,
   resetApiStats,
   configureRetry,
-  configureConcurrency
+  configureConcurrency,
+  API_TIMEOUT
 };

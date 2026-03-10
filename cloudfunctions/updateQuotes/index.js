@@ -55,6 +55,52 @@ function fetchStockData(codes) {
   })
 }
 
+/**
+ * 性能指标收集器
+ */
+class PerformanceMetrics {
+  constructor() {
+    this.startTime = Date.now()
+    this.metrics = {
+      totalStocks: 0,
+      successCount: 0,
+      failCount: 0,
+      fetchRetries: 0,
+      dbRetries: 0,
+      fetchTime: 0,
+      dbTime: 0
+    }
+  }
+  
+  recordFetchSuccess(count, duration) {
+    this.metrics.successCount += count
+    this.metrics.fetchTime += duration
+  }
+  
+  recordFetchFail(count) {
+    this.metrics.failCount += count
+  }
+  
+  recordRetry(type) {
+    if (type === 'fetch') this.metrics.fetchRetries++
+    if (type === 'db') this.metrics.dbRetries++
+  }
+  
+  recordDbTime(duration) {
+    this.metrics.dbTime += duration
+  }
+  
+  getSummary() {
+    const totalTime = Date.now() - this.startTime
+    return {
+      ...this.metrics,
+      totalTime,
+      avgFetchTime: this.metrics.fetchTime / Math.max(1, this.metrics.successCount),
+      successRate: (this.metrics.successCount / Math.max(1, this.metrics.totalStocks) * 100).toFixed(2) + '%'
+    }
+  }
+}
+
 // 解析新浪返回
 function parseSinaData(rawData) {
   const lines = rawData.split('\n')
@@ -93,15 +139,20 @@ function parseSinaData(rawData) {
 /* ---------------- 云函数入口 ---------------- */
 
 exports.main = async (event, context) => {
+  const perfMetrics = new PerformanceMetrics()
+  
   try {
     const triggerName = event?.TriggerName || ''
     const updatePreClose =
       event?.updatePreClose === true || /daily/i.test(triggerName)
 
-    /* 1️⃣ P0-1: 流式 Pipeline 处理（避免 OOM） */
+    /* 1️⃣ P0-1: 流式Pipeline处理（避免OOM） */
     const countRes = await db.collection('quotes').count()
     const total = countRes.total
     if (total === 0) return { success: true, msg: 'No stocks found' }
+
+    perfMetrics.metrics.totalStocks = total
+    console.log(`📈 开始更新 ${total} 支股票行情...`)
 
     const PAGE_SIZE = 200
     const pages = Math.ceil(total / PAGE_SIZE)
@@ -110,6 +161,8 @@ exports.main = async (event, context) => {
 
     // 按页处理，处理完即释放内存
     for (let i = 0; i < pages; i++) {
+      console.log(`📋 处理第 ${i + 1}/${pages} 页...`)
+      
       // 1. 读取当前页
       const res = await db.collection('quotes')
         .skip(i * PAGE_SIZE)
@@ -123,19 +176,26 @@ exports.main = async (event, context) => {
       const codes = pageStocks.map(s => s.code).filter(Boolean)
       const pageUpdatesMap = {}
 
-      // 2. 分批请求新浪行情（当前页内部分批）
+      // 2. 分批请求新浪行情（当前页内部分批）+ 重试机制
       const FETCH_BATCH = 50
       for (let j = 0; j < codes.length; j += FETCH_BATCH) {
         const batchCodes = codes.slice(j, j + FETCH_BATCH)
         try {
-          const raw = await fetchStockData(batchCodes)
-          Object.assign(pageUpdatesMap, parseSinaData(raw))
+          const fetchStart = Date.now()
+          const raw = await fetchStockDataWithRetry(batchCodes, 3, 1000)
+          const fetchDuration = Date.now() - fetchStart
+          
+          const parsed = parseSinaData(raw)
+          Object.assign(pageUpdatesMap, parsed)
+          
+          perfMetrics.recordFetchSuccess(batchCodes.length, fetchDuration)
         } catch (e) {
-          console.error('Fetch batch failed:', batchCodes, e.message)
+          console.error(`❌ 批次最终失败: ${batchCodes.slice(0,3).join(',')}, 错误: ${e.message}`)
+          perfMetrics.recordFetchFail(batchCodes.length)
         }
       }
 
-      // 3. 并发写库（仅处理当前页）
+      // 3. 并发写库（仅处理当前页）+ 重试机制
       const writeTasks = pageStocks
         .map(stock => {
           const data = pageUpdatesMap[stock.code]
@@ -149,31 +209,41 @@ exports.main = async (event, context) => {
           if (updatePreClose) updateData.preClose = data.preClose
 
           return async () => {
-            await db.collection('quotes').doc(stock._id).update({
-              data: updateData
-            })
+            const dbStart = Date.now()
+            await updateDocWithRetry(db, stock._id, updateData, 2)
+            perfMetrics.recordDbTime(Date.now() - dbStart)
           }
         })
         .filter(Boolean)
 
       if (writeTasks.length > 0) {
-        // P0-3: 提高写并发到 50，以加速大批量存储（分钟级目标）
+        // P0-3: 提高写并发到50，以加速大批量存储（分钟级目标）
         await withConcurrency(writeTasks, 50, task => task())
         updatedCount += writeTasks.length
       }
+      
+      // 页间延迟，避免请求过于频繁
+      if (i < pages - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
     }
+    
+    const summary = perfMetrics.getSummary()
+    console.log('🏁 更新完成，性能指标:', JSON.stringify(summary, null, 2))
 
     return {
       success: true,
       updatedCount,
-      updatePreClose
+      updatePreClose,
+      performance: summary
     }
 
   } catch (err) {
-    console.error(err)
+    console.error('❌ 云函数执行错误:', err)
     return {
       success: false,
-      error: err.message || String(err)
+      error: err.message || String(err),
+      performance: perfMetrics.getSummary()
     }
   }
 }

@@ -86,7 +86,7 @@ const CustomerList: React.FC = () => {
   // 初始加载
   useEffect(() => {
     void fetchCustomers(1, 10, '');
-  }, []);
+  }, [fetchCustomers]);
 
   const handleSearch = (value: string) => {
       setKeyword(value);

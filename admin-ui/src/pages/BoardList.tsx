@@ -37,6 +37,12 @@ const BoardList: React.FC = () => {
   const [currentGroup, setCurrentGroup] = useState<Group | null>(null);
   const [memberForm] = Form.useForm();
 
+  const isFormValidationError = (error: unknown) => {
+    if (!error || typeof error !== 'object') return false;
+    const fields = (error as { errorFields?: unknown }).errorFields;
+    return Array.isArray(fields);
+  };
+
   const fetchGroups = useCallback(async () => {
     setLoading(true);
     try {
@@ -70,10 +76,8 @@ const BoardList: React.FC = () => {
       setEditingGroup(null);
       void fetchGroups();
     } catch (err) {
-        // Form validation error or API error
-        if (err instanceof Error || (err as any).response) {
-            message.error(getApiErrorMessage(err, '操作失败'));
-        }
+      if (isFormValidationError(err)) return;
+      message.error(getApiErrorMessage(err, '操作失败'));
     }
   };
 
@@ -105,9 +109,8 @@ const BoardList: React.FC = () => {
               }
           }
       } catch (err) {
-           if (err instanceof Error || (err as any).response) {
-            message.error(getApiErrorMessage(err, '添加成员失败'));
-        }
+        if (isFormValidationError(err)) return;
+        message.error(getApiErrorMessage(err, '添加成员失败'));
       }
   }
 

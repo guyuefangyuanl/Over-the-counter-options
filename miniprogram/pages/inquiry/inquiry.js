@@ -1,4 +1,4 @@
-// miniprogram/pages/inquiry/inquiry.js
+﻿// miniprogram/pages/inquiry/inquiry.js
 const FAVORITES_STORAGE_KEY = 'INQUIRY_FAVORITES_V1';
 const CUSTOM_GROUPS_STORAGE_KEY = 'INQUIRY_CUSTOM_GROUPS_V1';
 const api = require('../../utils/api.js');
@@ -47,13 +47,13 @@ Page({
     // 是否正在提交
     isSubmitting: false,
     
-    // 市场指数
+    // 市场指数（初始占位，由 fetchMarketIndexes() 在 onLoad 中动态更新）
     marketIndexes: [
-      { name: '上证指数', value: '3002.64', changePercent: -0.42 },
-      { name: '深证成指', value: '9064.84', changePercent: -1.07 },
-      { name: '创业板指', value: '1755.88', changePercent: -1.26 },
-      { name: '沪深300', value: '3508.71', changePercent: -0.55 },
-      { name: '中证500', value: '5198.01', changePercent: -0.89 },
+      { name: '上证指数', value: '-', changePercent: 0 },
+      { name: '深证成指', value: '-', changePercent: 0 },
+      { name: '创业板指', value: '-', changePercent: 0 },
+      { name: '沪深300',   value: '-', changePercent: 0 },
+      { name: '中证500',   value: '-', changePercent: 0 },
     ],
 
     // Tab 状态
@@ -128,15 +128,6 @@ Page({
     showAddFavoritesPopup: false,  // 是否显示添加自选弹窗
     addFavoritesSearch: '',        // 添加自选搜索关键词
     addFavoritesCategory: 'all',   // 当前选中的分类
-    
-    // 快捷按钮拖动相关状态
-    quickActionsPosition: { x: 0, y: 0 },  // 当前位置
-    quickActionsStartPos: { x: 0, y: 0 },  // 拖动起始位置
-    isDraggingQuickActions: false,         // 是否正在拖动
-    quickActionsAnimation: {},              // 动画对象
-    dragStartPosition: { x: 0, y: 0 },     // 记录拖动开始时的位置，用于判断是否为有效拖动
-    longPressTimer: null,                  // 长按定时器
-    canDragAfterLongPress: false,          // 长按后是否可以拖动
     addFavoritesStockList: [],     // 添加自选股票列表
   },
 
@@ -147,29 +138,8 @@ Page({
     this.updateCurrentTime();
     this.computeGroupCounts();
     this.setData({ canEditFavorites: (this.data.groupCountsById.all || 0) > 0 });
-    
-    // 初始化快捷按钮位置（右下角）
-    const systemInfo = wx.getWindowInfo();
-    const initialX = systemInfo.windowWidth - 110; // 距离右边 110px
-    const initialY = systemInfo.windowHeight - 400; // 距离底部 400px
-    this.setData({
-      'quickActionsPosition.x': initialX,
-      'quickActionsPosition.y': initialY
-    });
-    
-    // 首次使用时显示拖动提示
-    const hasShownDragTip = wx.getStorageSync('hasShownQuickActionsDragTip');
-    if (!hasShownDragTip) {
-      setTimeout(() => {
-        wx.showToast({
-          title: '长按可拖动按钮位置',
-          icon: 'none',
-          duration: 3000
-        });
-        wx.setStorageSync('hasShownQuickActionsDragTip', true);
-      }, 1000);
-    }
-    
+    this.fetchMarketIndexes(); // 动态获取市场指数
+      
     // 每分钟更新时间
     this.timer = setInterval(() => {
       this.updateCurrentTime();
@@ -207,25 +177,44 @@ Page({
     });
   },
 
-  // 加载收藏数据
+  // 加载收藏数据（优先从云端拉取，降级用本地）
   loadFavorites() {
+    // 先用本地录快速显示
     try {
-      const fav = wx.getStorageSync(FAVORITES_STORAGE_KEY);
-      if (fav) {
-        this.setData({ favoritesById: fav });
+      const local = wx.getStorageSync(FAVORITES_STORAGE_KEY);
+      if (local) this.setData({ favoritesById: local });
+    } catch (e) { /* ignore */ }
+
+    // 异步拉取云端最新数据
+    api.request('/groups/favorites', 'GET').then(res => {
+      if (res && res.data && typeof res.data === 'object') {
+        this.setData({ favoritesById: res.data });
+        // 回写本地保持同步
+        try {
+          wx.setStorageSync(FAVORITES_STORAGE_KEY, res.data);
+        } catch (e) { /* ignore */ }
       }
-    } catch (e) {
-      console.error('加载收藏失败', e);
-    }
+    }).catch(err => {
+      console.warn('云端自选获取失败，使用本地数据', err);
+    });
   },
 
-  // 保存收藏数据
+  // 保存收藏数据（本地+云端同步）
   saveFavorites() {
+    const favoritesById = this.data.favoritesById;
+    // 本地先保
     try {
-      wx.setStorageSync(FAVORITES_STORAGE_KEY, this.data.favoritesById);
+      wx.setStorageSync(FAVORITES_STORAGE_KEY, favoritesById);
     } catch (e) {
-      console.error('保存收藏失败', e);
+      console.error('本地保存收藏失败', e);
     }
+    // 异步同步云端（防抖策略：500ms）
+    if (this._saveFavTimer) clearTimeout(this._saveFavTimer);
+    this._saveFavTimer = setTimeout(() => {
+      api.request('/groups/favorites', 'PUT', { favoritesById }).catch(err => {
+        console.warn('云端自选同步失败', err);
+      });
+    }, 500);
   },
 
   // 加载自定义分组
@@ -251,6 +240,18 @@ Page({
     } catch (e) {
       console.error('保存自定义分组失败', e);
     }
+  },
+
+  // 动态获取市场指数
+  fetchMarketIndexes() {
+    api.request('/stock/market-indexes', 'GET').then(res => {
+      if (res && res.data && Array.isArray(res.data)) {
+        this.setData({ marketIndexes: res.data });
+      }
+    }).catch(err => {
+      // 接口失败不影响主流程，保留默认占位数据
+      console.warn('市场指数获取失败，使用默认数据', err);
+    });
   },
 
   // 更新时间
@@ -1228,107 +1229,7 @@ Page({
     });
   },
 
-  // 快捷按钮拖动相关方法
-  onQuickActionsTouchStart(e) {
-    const touchX = e.touches[0].clientX;
-    const touchY = e.touches[0].clientY;
-    
-    this.setData({ 
-      isDraggingQuickActions: false,
-      quickActionsStartPos: {
-        x: touchX - this.data.quickActionsPosition.x,
-        y: touchY - this.data.quickActionsPosition.y
-      },
-      dragStartPosition: {
-        x: touchX,
-        y: touchY
-      }
-    });
-    
-    // 设置长按定时器（500ms后进入拖动模式）
-    const longPressTimer = setTimeout(() => {
-      this.setData({ 
-        isDraggingQuickActions: true 
-      });
-      // 震动反馈（如果支持）
-      if (wx.vibrateShort) {
-        wx.vibrateShort();
-      }
-    }, 500);
-    
-    this.setData({ longPressTimer });
-  },
-
-  onQuickActionsTouchMove(e) {
-    // 如果没有进入拖动模式，直接返回
-    if (!this.data.isDraggingQuickActions) return;
-    
-    const systemInfo = wx.getWindowInfo();
-    const windowWidth = systemInfo.windowWidth;
-    const windowHeight = systemInfo.windowHeight;
-    
-    // 将rpx转换为px（1rpx = windowWidth / 750 px）
-    const rpxToPx = windowWidth / 750;
-    const buttonWidth = 86 * rpxToPx; // 按钮宽度
-    const buttonHeight = 180 * rpxToPx; // 两个按钮的总高度
-    
-    let newX = e.touches[0].clientX - this.data.quickActionsStartPos.x;
-    let newY = e.touches[0].clientY - this.data.quickActionsStartPos.y;
-    
-    // 边界检测，确保按钮不会超出屏幕
-    newX = Math.max(0, Math.min(newX, windowWidth - buttonWidth));
-    newY = Math.max(0, Math.min(newY, windowHeight - buttonHeight));
-    
-    this.setData({
-      'quickActionsPosition.x': newX,
-      'quickActionsPosition.y': newY
-    });
-  },
-
-  onQuickActionsTouchEnd(e) {
-    // 清除长按定时器
-    if (this.data.longPressTimer) {
-      clearTimeout(this.data.longPressTimer);
-      this.setData({ longPressTimer: null });
-    }
-    
-    const wasDragging = this.data.isDraggingQuickActions;
-    
-    this.setData({ 
-      isDraggingQuickActions: false 
-    });
-    
-    // 如果在拖动状态，添加吸附到边缘的逻辑
-    if (wasDragging) {
-      const systemInfo = wx.getWindowInfo();
-      const windowWidth = systemInfo.windowWidth;
-      const rpxToPx = windowWidth / 750;
-      const buttonWidth = 86 * rpxToPx;
-      const currentX = this.data.quickActionsPosition.x;
-      
-      // 如果靠近边缘（50px内），吸附到边缘
-      if (currentX < 50) {
-        this.setData({
-          'quickActionsPosition.x': 10
-        });
-      } else if (currentX > windowWidth - buttonWidth - 50) {
-        this.setData({
-          'quickActionsPosition.x': windowWidth - buttonWidth - 10
-        });
-      }
-    }
-  },
-
-  onQuickActionsTap(e) {
-    if (this.data.isDraggingQuickActions) {
-      return;
-    }
-  },
-
   onQuickActionItemTap(e) {
-    if (this.data.isDraggingQuickActions) {
-      return;
-    }
     const type = e.currentTarget.dataset.type;
     if (type === 'calculator') {
       this.goToCalculator();
@@ -1337,3 +1238,4 @@ Page({
     }
   }
 });
+

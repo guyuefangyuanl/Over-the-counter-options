@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 股票API路由模块
 提供股票数据相关的API接口
@@ -350,3 +350,53 @@ def get_stock_list():
     except Exception as e:
         logger.error(f"获取股票列表时发生未知异常: {str(e)}")
         return jsonify(error_response("服务器内部错误", 500)), 500
+
+
+# 市场指数默认字典（当数据源不可用时的备用返回）
+MARKET_INDEX_DEFAULTS = [
+    {'code': '000001', 'name': '上证指数', 'value': '-', 'changePercent': 0.0},
+    {'code': '399001', 'name': '深证成指', 'value': '-', 'changePercent': 0.0},
+    {'code': '399006', 'name': '创业板指', 'value': '-', 'changePercent': 0.0},
+    {'code': '000300', 'name': '沪深300',   'value': '-', 'changePercent': 0.0},
+    {'code': '000905', 'name': '中证500',   'value': '-', 'changePercent': 0.0},
+]
+
+
+@stock_bp.route('/market-indexes', methods=['GET'])
+def get_market_indexes():
+    """获取主要市场指数实时行情（自动降级：akshare->默认占位数据）"""
+    try:
+        import akshare as ak
+        import pandas as pd
+
+        index_codes = [
+            ('000001', '上证指数'),
+            ('399001', '深证成指'),
+            ('399006', '创业板指'),
+            ('000300', '沪深300'),
+            ('000905', '中证500'),
+        ]
+
+        df = ak.stock_zh_index_spot_em()
+        df_indexed = df.set_index('代码') if '代码' in df.columns else pd.DataFrame()
+
+        result = []
+        for code, name in index_codes:
+            if not df_indexed.empty and code in df_indexed.index:
+                row = df_indexed.loc[code]
+                value = f"{float(row.get('最新价', 0)):.2f}"
+                change_pct = round(float(row.get('涨跌幅', 0)), 2)
+            else:
+                value = '-'
+                change_pct = 0.0
+            result.append({'code': code, 'name': name,
+                           'value': value, 'changePercent': change_pct})
+
+        return flask_success_response(data=result, message='获取成功')
+
+    except ImportError:
+        logger.warning('akshare 未安装，返回默认市场指数')
+        return flask_success_response(data=MARKET_INDEX_DEFAULTS, message='默认数据')
+    except Exception as e:
+        logger.error(f'获取市场指数失败: {str(e)}')
+        return flask_success_response(data=MARKET_INDEX_DEFAULTS, message='默认数据')

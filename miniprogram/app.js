@@ -4,6 +4,7 @@ const loginService = require('./utils/loginService.js');
 const performanceOptimizer = require('./utils/performance-optimizer.js');
 const storageManager = require('./utils/storage-manager.js');
 const uiEnhancer = require('./utils/user-experience-enhancer.js');
+const { getErrorReporter } = require('./utils/error-reporter.js');
 
 App({
   globalData: {
@@ -20,10 +21,25 @@ App({
       startTime: Date.now(),
       pageLoadTimes: {},
       errorCount: 0
-    }
+    },
+    // 🔐 加密密钥配置
+    // 注意：生产环境必须替换为真实的密钥！
+    // 密钥生成方法：node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+    encryptionKey: 'CHANGE_ME_IN_PRODUCTION_ENV_32CHARS!!', // 32字节密钥
+    
+    // 🚫 Mock登录控制（安全配置）
+    // true = 允许开发环境使用Mock登录（默认）
+    // false = 禁止所有Mock登录，强制使用真实认证
+    allowMockLogin: true,
+    
+    // ⚠️ 当前是否处于Mock模式（运行时设置）
+    isMockMode: false
   },
   onLaunch: function() {
     console.log('小程序启动');
+
+    // 初始化错误上报器
+    this.errorReporter = getErrorReporter();
 
     if (!wx.cloud) {
       console.error('请使用 2.2.3 或以上的基础库以使用云能力')
@@ -39,6 +55,51 @@ App({
     this.updateAppLogs();
     this.checkAutoLogin();
     this.initPerformanceMonitoring();
+    
+    // 初始化错误处理
+    this.initErrorHandling();
+  },
+  
+  // 初始化错误处理
+  initErrorHandling: function() {
+    const self = this;
+    
+    // 重写全局错误处理
+    const originalOnError = this.onError;
+    this.onError = function(error) {
+      console.error('小程序错误:', error);
+      self.globalData.performance.errorCount++;
+      
+      // 使用错误上报器
+      if (self.errorReporter) {
+        self.errorReporter.report({
+          type: 'runtime_error',
+          message: error,
+          stack: error.stack || '',
+          timestamp: Date.now(),
+          page: self.getCurrentPageRoute(),
+          systemInfo: wx.getSystemInfoSync()
+        });
+      }
+    };
+    
+    // 监听未处理的Promise异常
+    wx.onUnhandledRejection((res) => {
+      if (self.errorReporter) {
+        self.errorReporter.onUnhandledRejection(res);
+      }
+    });
+    
+    console.log('错误处理初始化完成');
+  },
+  
+  // 获取当前页面路径
+  getCurrentPageRoute: function() {
+    const pages = getCurrentPages();
+    if (pages.length > 0) {
+      return pages[pages.length - 1].route;
+    }
+    return 'unknown';
   },
   
   // 初始化核心服�?
@@ -213,10 +274,105 @@ App({
   },
   
   // 错误上报
-  reportError: function(error) {
-    // 模拟错误上报
-    console.log('错误已上报', error);
-  }
+  reportError: function(errorInfo) {
+    try {
+      // 构建错误报告
+      const reportData = {
+        // 错误基本信息
+        type: errorInfo.type || 'unknown',
+        message: typeof errorInfo.message === 'string' ? errorInfo.message : String(errorInfo.message),
+        stack: errorInfo.stack || '',
+        timestamp: errorInfo.timestamp || Date.now(),
+        
+        // 页面信息
+        page: errorInfo.page || this.getCurrentPageRoute(),
+        
+        // 用户信息
+        userInfo: this.globalData.userInfo || null,
+        
+        // 系统信息
+        systemInfo: errorInfo.systemInfo || null,
+        
+        // 性能信息
+        performance: {
+          errorCount: this.globalData.performance.errorCount,
+          memory: wx.getSystemInfoSync().memorySize || 0
+        },
+        
+        // 环境信息
+        env: {
+          version: wx.getAccountInfoSync()?.miniProgram?.version || 'unknown',
+          envVersion: wx.getAccountInfoSync()?.miniProgram?.envVersion || 'unknown'
+        }
+      };
+      
+      console.log('📝 错误上报数据:', reportData);
+      
+      // 保存到本地缓存（如果上报失败可以重试）
+      this._saveErrorToCache(reportData);
+      
+      // 尝试发送到服务器
+      this._sendErrorToServer(reportData);
+      
+    } catch (e) {
+      console.error('错误上报失败:', e);
+    }
+  },
+  
+  // 保存错误到本地缓存
+  _saveErrorToCache: function(errorData) {
+    try {
+      const errorCache = wx.getStorageSync('error_cache') || [];
+      errorCache.push({
+        ...errorData,
+        cachedAt: Date.now()
+      });
+      // 保留最近50条错误
+      if (errorCache.length > 50) {
+        errorCache.shift();
+      }
+      wx.setStorageSync('error_cache', errorCache);
+    } catch (e) {
+      console.error('保存错误缓存失败:', e);
+    }
+  },
+  
+  // 发送错误到服务器
+  _sendErrorToServer: function(errorData) {
+    // reportError 云函数未创建，改为本地存储错误日志
+    try {
+      const errorCache = wx.getStorageSync('error_cache') || [];
+      errorCache.push({ ...errorData, cachedAt: Date.now() });
+      // 保留最近 50 条，防止占用过多本地存储
+      wx.setStorageSync('error_cache', errorCache.slice(-50));
+    } catch (e) {
+      console.error('错误日志本地存储失败:', e);
+    }
+  },
+  
+  // 发送缓存的错误（预留接口，后续可对接后端日志接口）
+  _sendCachedErrors: function() {
+    try {
+      const errorCache = wx.getStorageSync('error_cache') || [];
+      if (errorCache.length === 0) return;
+      // 预留：待 reportError 云函数或后端接口就绪后可在此上报
+      console.log(`[错误缓存] 共 ${errorCache.length} 条未上报错误`);
+    } catch (e) {
+      console.error('读取错误缓存失败:', e);
+    }
+  },
+  
+  // 捕获Promise未处理的异常
+  onUnhandledRejection: function(res) {
+    console.error('未处理的Promise异常:', res);
+    this.reportError({
+      type: 'unhandled_rejection',
+      message: res.reason || 'Unknown rejection',
+      stack: res.stack || '',
+      timestamp: Date.now(),
+      page: this.getCurrentPageRoute()
+    });
+  },
 });
 
 

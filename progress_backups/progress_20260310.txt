@@ -1,0 +1,12 @@
+timestamp | issue_id | status | description | summary
+2026-03-10T00:00:00 | P0-1 | 已修复 | inquiry详情页不存在 | 新增 miniprogram/pages/inquiry/detail/detail 四个页面文件以支持详情页跳转
+2026-03-10T00:01:00 | P0-2 | 已修复 | app.json 未注册 search 页面 | pages 数组添加 pages/search/search
+2026-03-10T00:02:00 | TASK-LINT-1 | 已修复 | admin-ui lint 问题修复 | 消除 any 与 hooks 依赖警告
+2026-03-10T00:03:00 | P0-3 | 已修复 | 云函数 Token 与后端不兼容 | 云函数改为调用后端 auth/wechat/login
+2026-03-10T00:04:00 | P0-4 | 已修复 | app.json 网络超时过短 | networkTimeout.request 调整为 60000
+2026-03-10T00:05:00 | P1-1 | 已修复 | sendSmsCode 假实现 | 改为调用 loginService.sendSmsCode
+2026-03-10T00:06:00 | P1-2 | 已修复 | 手机号登录 UI 与逻辑不一致 | UI 改为密码登录并修正登录接口路径
+2026-03-10T00:07:00 | P1-3 | 已修复 | 手机号登录返回字段不一致 | phoneLogin 统一注入 userInfo 与 userId
+2026-03-10T00:08:00 | P1-4 | 已修复 | 短信验证码校验接口路径不一致 | 后端新增 /auth/verify-sms-code
+2026-03-10T00:09:00 | P1-5 | 已修复 | 短信验证码发送返回值不一致 | 统一返回 phone 与 expiresIn 开发环境含 code
+2026-03-10T00:10:00 | P1-6 | 已修复 | 密码重置缺少验证码校验与存储 | 新增验证码内存存储并用于校验

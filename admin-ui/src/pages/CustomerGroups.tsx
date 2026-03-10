@@ -19,6 +19,12 @@ const CustomerGroups: React.FC = () => {
   const [editingName, setEditingName] = useState<string | null>(null);
   const [form] = Form.useForm();
 
+  const isFormValidationError = (error: unknown) => {
+    if (!error || typeof error !== 'object') return false;
+    const fields = (error as { errorFields?: unknown }).errorFields;
+    return Array.isArray(fields);
+  };
+
   const fetchGroups = useCallback(async () => {
     setLoading(true);
     try {
@@ -50,9 +56,8 @@ const CustomerGroups: React.FC = () => {
           setEditingName(null);
           void fetchGroups();
       } catch (err) {
-           if (err instanceof Error || (err as any).response) {
-            message.error(getApiErrorMessage(err, '重命名失败'));
-        }
+        if (isFormValidationError(err)) return;
+        message.error(getApiErrorMessage(err, '重命名失败'));
       }
   }
 

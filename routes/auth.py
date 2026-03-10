@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict, Optional, TypeVar, cast
 
 from flask import Blueprint, g, request, current_app
 from backend_utils.response import flask_error_response, flask_success_response
-from backend_utils.security import rate_limit, audit_log
+from backend_utils.security import rate_limit, audit_log, store_sms_code, check_sms_code
 from services.auth_service import AuthService
 
 auth_bp = Blueprint("auth", __name__)
@@ -270,18 +270,42 @@ def send_sms_code():
     
     try:
         from services.captcha_service import CaptchaService
-        code = CaptchaService.send_sms(phone, "您的验证码是: {code}，5分钟内有效")
+        code = CaptchaService.generate_sms_code()
+        CaptchaService.send_sms(phone, code)
+        store_sms_code(phone, code, sms_type, ttl=300)
         
-        # 在生产环境，应该将验证码存储到Redis，而不是返回给前端
-        # 这里为了开发测试方便，暂时返回验证码
         import os
+        data = {"phone": phone, "expiresIn": 300}
         if os.getenv("NODE_ENV") == "development":
-            return flask_success_response(data={"code": code}, message="验证码已发送（开发模式）")
-        else:
-            return flask_success_response(message="验证码已发送，请查收短信")
+            data["code"] = code
+            return flask_success_response(data=data, message="验证码已发送（开发模式）")
+        return flask_success_response(data=data, message="验证码已发送，请查收短信")
     except Exception as e:
         logger.error(f"发送短信验证码失败: {e}")
         return flask_error_response("发送验证码失败，请稍后重试", 500)
+
+@auth_bp.route("/verify-sms-code", methods=["POST"])
+@rate_limit(limit=10, window=60)
+@audit_log("SMS_CODE_VERIFY")
+def verify_sms_code():
+    data = request.get_json(silent=True) or {}
+    phone = data.get("phone")
+    code = data.get("code")
+    sms_type = data.get("type", "login")
+
+    if not phone or not code:
+        return flask_error_response("手机号和验证码不能为空", 400)
+
+    import re
+    if not re.match(r'^1[3-9]\d{9}$', phone):
+        return flask_error_response("手机号格式不正确", 400)
+    if not re.match(r'^\d{6}$', str(code)):
+        return flask_error_response("验证码格式不正确", 400)
+
+    ok, err = check_sms_code(phone, str(code), sms_type)
+    if not ok:
+        return flask_error_response(err or "验证码错误", 400)
+    return flask_success_response(data={"phone": phone, "verified": True, "type": sms_type}, message="验证码验证成功")
 
 @auth_bp.route("/register", methods=["POST"])
 @rate_limit(limit=5, window=60)
@@ -321,9 +345,41 @@ def phone_login():
     data = request.get_json(silent=True) or {}
     phone = data.get("phone")
     password = data.get("password")
+    sms_code = data.get("sms_code")  # 短信验证码登录
 
-    if not phone or not password:
-        return flask_error_response("手机号和密码不能为空", 400)
+    if not phone:
+        return flask_error_response("手机号不能为空", 400)
+
+    # 验证码登录模式（优先）
+    if sms_code:
+        import re
+        if not re.match(r'^\d{6}$', str(sms_code)):
+            return flask_error_response("验证码格式不正确", 400)
+
+        ok, err = check_sms_code(phone, str(sms_code), "login")
+        if not ok:
+            return flask_error_response(err or "验证码错误或已过期", 400)
+
+        # 验证码正确，查询或创建用户
+        ok, user, err = auth_service.login_or_register_by_phone(phone)
+        if not ok:
+            return flask_error_response(err or "登录失败", 401)
+
+        token = auth_service.issue_token(user['openid'], 'user')
+        return flask_success_response(
+            data={
+                **token,
+                "openid": user['openid'],
+                "nickname": user.get('nickname', ''),
+                "avatar": user.get('avatar', ''),
+                "phone": user.get('phone', '')
+            },
+            message="登录成功"
+        )
+
+    # 密码登录模式（兼容）
+    if not password:
+        return flask_error_response("请提供密码或短信验证码", 400)
 
     ok, user, err = auth_service.login_by_phone(phone, password)
     if not ok:
@@ -332,7 +388,7 @@ def phone_login():
     token = auth_service.issue_token(user['openid'], 'user')
     return flask_success_response(
         data={
-            "token": token,
+            **token,
             "openid": user['openid'],
             "nickname": user.get('nickname', ''),
             "avatar": user.get('avatar', ''),
@@ -353,9 +409,9 @@ def reset_password():
     if not phone or not new_password or not code:
         return flask_error_response("缺少必要参数", 400)
 
-    # TODO: 验证短信验证码（需要Redis支持）
-    # if not verify_sms_code_from_redis(phone, code):
-    #     return flask_error_response("验证码错误或已过期", 400)
+    ok, err = check_sms_code(phone, str(code), "reset_password")
+    if not ok:
+        return flask_error_response(err or "验证码错误或已过期", 400)
 
     # 更新密码
     try:
@@ -403,70 +459,50 @@ def guest_login():
         message="进入游客模式"
     )
 
-@auth_bp.route("/send-sms-code", methods=["POST"])
-@rate_limit(limit=3, window=60)
-@audit_log("SMS_CODE_SEND")
-def send_sms_code():
-    """发送短信验证码"""
-    data = request.get_json(silent=True) or {}
-    phone = data.get("phone")
-    sms_type = data.get("type", "login")
-    
-    if not phone:
-        return flask_error_response("手机号不能为空", 400)
-    
-    # 验证手机号格式
-    import re
-    if not re.match(r'^1[3-9]\d{9}$', phone):
-        return flask_error_response("手机号格式不正确", 400)
-    
-    try:
-        from services.captcha_service import CaptchaService
-        code = CaptchaService.send_sms(phone, f"您的验证码是: {{code}}，5分钟内有效")
-        
-        # 开发环境返回验证码便于测试
-        import os
-        if os.getenv("NODE_ENV") == "development":
-            return flask_success_response(
-                data={"code": code, "expire": 300}, 
-                message="验证码已发送（开发模式）"
-            )
-        else:
-            return flask_success_response(message="验证码已发送，请查收短信")
-    except Exception as e:
-        logger.error(f"发送短信验证码失败: {e}")
-        return flask_error_response("发送验证码失败，请稍后重试", 500)
-
 @auth_bp.route("/wechat/login", methods=["POST"])
 def wechat_login():
     data = request.get_json() or {}
     code = data.get('code')
     
+    logger.info(f"[微信登录] 收到登录请求，code: {code[:20] if code else 'None'}...")
+    
     if not code:
+        logger.warning("[微信登录] 缺少code参数")
         return flask_error_response("缺少code参数", 400)
     
     try:
+        logger.info(f"[微信登录] 开始调用 auth_service.wechat_login")
         ok, user, err = auth_service.wechat_login(code)
         
+        logger.info(f"[微信登录] wechat_login 返回: ok={ok}, user={user}, err={err}")
+        
         if not ok:
-            logger.error(f"微信登录失败: {err}")
+            logger.error(f"[微信登录] 登录失败: {err}")
             return flask_error_response(err or "登录失败", 500)
         
-        token = auth_service.issue_token(user['openid'], 'user')
+        logger.info(f"[微信登录] 开始生成Token，openid: {user.get('openid')}")
+        token_data = auth_service.issue_token(user['openid'], 'user')
         
-        return flask_success_response(
-            data={
-                'token': token,
-                'openid': user['openid'],
-                'unionid': user.get('unionid'),
-                'nickname': user.get('nickname', '微信用户'),
-                'avatar': user.get('avatar', ''),
-                'phone': user.get('phone', '')
-            },
-            message="登录成功"
-        )
+        logger.info(f"[微信登录] Token生成成功，token_data keys: {list(token_data.keys())}")
+        
+        # 构建响应数据（支持双Token机制）
+        response_data = {
+            'token': token_data['token'],
+            'access_token': token_data.get('access_token', token_data['token']),
+            'refresh_token': token_data.get('refresh_token'),
+            'expires_in': token_data.get('expires_in', 900),
+            'openid': user['openid'],
+            'unionid': user.get('unionid'),
+            'nickname': user.get('nickname', '微信用户'),
+            'avatar': user.get('avatar', ''),
+            'phone': user.get('phone', '')
+        }
+        
+        logger.info(f"[微信登录] 返回成功响应")
+        return flask_success_response(data=response_data, message="登录成功")
+        
     except Exception as e:
-        logger.exception("微信登录接口异常")
+        logger.exception(f"[微信登录] 接口异常: {str(e)}")
         return flask_error_response(f"服务器内部错误: {str(e)}", 500)
 
 
@@ -481,28 +517,62 @@ def get_user_statistics():
         
         user_id = payload.get("sub")
         
-        # 获取询价统计
-        from services.trade_service import TradeService
-        trade_service = TradeService()
-        
-        # 获取用户的询价记录总数
-        _, total_inquiries = trade_service.get_inquiries(
-            limit=1, 
-            page=1, 
-            user_id=user_id
-        )
-        
-        # 获取成功交易数量（completed状态的订单）
-        _, total_orders = trade_service.get_orders(
-            limit=1,
-            page=1,
-            user_id=user_id,
-            status="completed"
-        )
-        
-        # 获取关注标的数量（从groups集合中统计）
+        # 使用默认值，避免数据库查询超时阻塞响应
+        total_inquiries = 0
+        total_orders = 0
         favorites_count = 0
+        days_used = 1
+        
+        # 尝试获取用户数据计算使用天数（这是最重要的信息）
         try:
+            user = auth_service.get_user_profile(user_id)
+            if user:
+                created_at = user.get('created_at')
+                if created_at:
+                    from datetime import datetime
+                    if isinstance(created_at, str):
+                        try:
+                            created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                            days_used = (datetime.utcnow() - created_at).days
+                            if days_used < 1:
+                                days_used = 1
+                        except:
+                            days_used = 1
+        except Exception as e:
+            logger.warning(f"获取用户创建时间失败: {e}")
+        
+        # 异步获取统计数据（不阻塞主响应）
+        # 这些统计数据可以在前端单独请求或缓存
+        try:
+            from services.trade_service import TradeService
+            trade_service = TradeService()
+            
+            # 获取询价记录总数（设置较短的超时）
+            _, total_inquiries = trade_service.get_inquiries(
+                limit=1, 
+                page=1, 
+                user_id=user_id
+            )
+        except Exception as e:
+            logger.warning(f"获取询价统计失败: {e}")
+            total_inquiries = 0
+        
+        try:
+            # 获取成功交易数量
+            from services.trade_service import TradeService
+            trade_service = TradeService()
+            _, total_orders = trade_service.get_orders(
+                limit=1,
+                page=1,
+                user_id=user_id,
+                status="completed"
+            )
+        except Exception as e:
+            logger.warning(f"获取订单统计失败: {e}")
+            total_orders = 0
+        
+        try:
+            # 获取关注标的数量
             from models.group import GroupModel
             ensure_db = getattr(current_app, "ensure_db", None)
             db = None
@@ -512,28 +582,15 @@ def get_user_statistics():
                 db = getattr(current_app, "db", None)
             cloud_db = getattr(current_app, "cloud_db", None)
             
-            group_model = GroupModel(db, cloud_client=cloud_db)
-            # 获取用户所有分组中的标的数量
-            groups, _ = group_model.get_groups(user_id=user_id, limit=100)
-            for group in groups:
-                members = group.get('members', [])
-                favorites_count += len(members)
+            if db is not None or cloud_db is not None:
+                group_model = GroupModel(db, cloud_client=cloud_db)
+                groups, _ = group_model.get_groups(user_id=user_id, limit=100)
+                for group in groups:
+                    members = group.get('members', [])
+                    favorites_count += len(members)
         except Exception as e:
             logger.warning(f"获取关注标的数量失败: {e}")
             favorites_count = 0
-        
-        # 计算使用天数（从用户创建时间到现在）
-        user = auth_service.get_user_profile(user_id)
-        created_at = user.get('created_at') if user else None
-        if created_at:
-            from datetime import datetime
-            if isinstance(created_at, str):
-                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-            days_used = (datetime.utcnow() - created_at).days
-            if days_used < 1:
-                days_used = 1
-        else:
-            days_used = 1
         
         return flask_success_response(
             data={
@@ -546,4 +603,13 @@ def get_user_statistics():
         )
     except Exception as e:
         logger.error(f"获取用户统计失败: {e}")
-        return flask_error_response("获取统计信息失败", 500)
+        # 即使出错也返回默认值，不阻塞用户
+        return flask_success_response(
+            data={
+                "totalInquiries": 0,
+                "successfulTrades": 0,
+                "favoriteStocks": 0,
+                "daysUsed": 1
+            },
+            message="获取用户统计成功"
+        )

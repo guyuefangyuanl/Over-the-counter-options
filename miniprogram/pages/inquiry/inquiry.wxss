@@ -381,6 +381,9 @@
   flex:             1;
   background-color: var(--white);
   margin-bottom:    140rpx; /* 为底部操作栏预留更大空间 */
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  padding-bottom:   20rpx;
 }
 
 .quotes-table {
@@ -426,6 +429,7 @@
   align-items: center;
   justify-content: center;
   gap:         12rpx;
+  min-height:  80rpx;
 }
 
 .fav-icon {
@@ -547,7 +551,7 @@
   flex-direction:  column;
   align-items:     center;
   justify-content: center;
-  padding:         100rpx 32rpx;
+  padding:         80rpx 32rpx;
 }
 
 .empty-icon {
@@ -1393,27 +1397,7 @@
   }
 }
 
-/* 优化表格滚动性能 */
-.quotes-table-wrapper {
-  -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
-}
-.cards-wrapper { /* 移除高度限制，允许内容区占满剩余空间 */ }
-
-/* 优化按钮点击区域 */
-.td-action {
-  min-height: 80rpx;
-}
-
-/* 确保最后一行不被遮挡 */
-.quotes-table-wrapper {
-  padding-bottom: 20rpx;
-}
-
-/* 优化空状态显示 */
-.empty-state {
-  padding: 80rpx 0;
-}
+/* cards-wrapper: 移除高度限制，允许内容区占满剩余空间（仅占位注释，实际定义在下方卡片区块）*/
 
 
 /* 超小屏幕特殊适配 */

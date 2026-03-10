@@ -68,29 +68,33 @@ class TradeService:
         return model.update_inquiry(inquiry_id, data)
 
     def get_inquiry_statistics(self) -> Dict[str, int]:
-        # This is a bit complex as it requires aggregation or multiple counts
-        # For Cloud DB, we might need multiple queries.
-        # For Mongo, aggregation.
-        # Let's implement a simple version relying on Model.
-        # The Model currently doesn't have a stats method.
-        # We can implement it in Service by calling get_inquiries with status filters if counts are needed.
-        # Or add stats method to Model.
-        # Given the previous route implementation did it manually or via simple count, let's stick to simple counts.
-        
         model = self._get_inquiry_model()
-        stats = {
-            "pending": 0,
-            "processing": 0,
-            "completed": 0,
-            "rejected": 0
-        }
-        
-        # This is inefficient if we do 4 calls.
-        # But for now it works.
-        for status in stats.keys():
-            _, count = model.get_inquiries(limit=1, status=status)
-            stats[status] = count
-            
+        target_statuses = ["pending", "processing", "completed", "rejected"]
+        stats: Dict[str, int] = {s: 0 for s in target_statuses}
+
+        if hasattr(model, 'collection') and model.collection is not None:
+            # MongoDB 路径：一次 aggregate 计数，避免 N+1
+            try:
+                pipeline = [
+                    {"$match": {"status": {"$in": target_statuses}}},
+                    {"$group": {"_id": "$status", "count": {"$sum": 1}}}
+                ]
+                for row in model.collection.aggregate(pipeline):
+                    s = row.get("_id")
+                    if s in stats:
+                        stats[s] = row.get("count", 0)
+                return stats
+            except Exception as e:
+                logger.warning(f"统计查询 aggregate 失败，降级单独计数: {e}")
+
+        # 云数据库路径：分别 count（云DB 暂不支持 aggregate）
+        for status in target_statuses:
+            try:
+                _, count = model.get_inquiries(limit=1, status=status)
+                stats[status] = count
+            except Exception as e:
+                logger.warning(f"获取 {status} 状态计数失败: {e}")
+
         return stats
 
     # --- Order Methods ---

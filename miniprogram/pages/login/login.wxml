@@ -41,7 +41,7 @@
     <view class="login-panel" wx:if="{{currentTab === 'phone'}}">
       <view class="panel-header">
         <text class="panel-title">手机号登录</text>
-        <text class="panel-desc">输入手机号获取验证码进行登录</text>
+        <text class="panel-desc">输入手机号和短信验证码登录</text>
       </view>
       <view class="form-section">
         <view class="input-group">
@@ -50,8 +50,10 @@
         </view>
         <view class="input-group">
           <image class="input-icon" src="/images/info.png" mode="widthFix"></image>
-          <input class="code-input" type="number" maxlength="6" placeholder="请输入验证码" bindinput="onCodeInput" value="{{phoneForm.code}}" />
-          <button class="send-code-btn {{!canSendCode ? 'disabled' : ''}}" bindtap="sendSmsCode" disabled="{{!canSendCode}}">{{codeButtonText}}</button>
+          <input class="code-input" type="number" maxlength="6" placeholder="请输入6位短信验证码" bindinput="onSmsCodeInput" value="{{phoneForm.smsCode}}" />
+          <button class="send-code-btn {{canSendCode ? '' : 'disabled'}}" bindtap="sendSmsCode" disabled="{{!canSendCode}}">
+            {{codeButtonText}}
+          </button>
         </view>
       </view>
       <button class="login-btn phone-btn" bindtap="onPhoneLogin">登录</button>

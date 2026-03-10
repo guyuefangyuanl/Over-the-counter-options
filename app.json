@@ -15,9 +15,9 @@
     "pages/option-matrix/option-matrix",
     "pages/data-explanation/data-explanation",
     "pages/position/position",
+    "pages/search/search",
     "pages/knowledge/knowledge",
-    "pages/knowledge-detail/knowledge-detail",
-    "pages/test/test"
+    "pages/knowledge-detail/knowledge-detail"
   ],
   "window": {
     "backgroundTextStyle": "light",
@@ -34,23 +34,33 @@
     "list": [
       {
         "pagePath": "pages/index/index",
-        "text": "首页"
+        "text": "首页",
+        "iconPath": "images/home.png",
+        "selectedIconPath": "images/home.png"
       },
       {
         "pagePath": "pages/workspace/workspace",
-        "text": "工作台"
+        "text": "工作台",
+        "iconPath": "images/analysis.png",
+        "selectedIconPath": "images/analysis.png"
       },
       {
         "pagePath": "pages/inquiry/inquiry",
-        "text": "询价"
+        "text": "询价",
+        "iconPath": "images/inquiry.png",
+        "selectedIconPath": "images/inquiry.png"
       },
       {
         "pagePath": "pages/account/account",
-        "text": "账户"
+        "text": "账户",
+        "iconPath": "images/account-active.png",
+        "selectedIconPath": "images/account-active.png"
       },
       {
         "pagePath": "pages/profile/profile",
-        "text": "我的"
+        "text": "我的",
+        "iconPath": "images/profile.png",
+        "selectedIconPath": "images/profile.png"
       }
     ]
   },
@@ -61,7 +71,7 @@
   },
   "requiredBackgroundModes": ["audio"],
   "networkTimeout": {
-    "request": 10000,
+    "request": 60000,
     "downloadFile": 10000
   },
   "debug": false,

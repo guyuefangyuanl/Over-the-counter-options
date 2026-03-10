@@ -266,3 +266,86 @@ def get_group_quotes(group_id):
     except Exception as e:
         current_app.logger.error(f"获取分组行情失败: {e}")
         return flask_error_response(str(e), 500)
+
+
+# ─────────────────────────────────────────────
+# 自选收藏云端同步接口（P2-6）
+# 存储格式: 云数据库 favorites 集合，每条文档 = {openid, favoritesById: {...}}
+# ─────────────────────────────────────────────
+
+@group_bp.route('/favorites', methods=['GET'])
+@require_auth
+def get_favorites():
+    """获取当前用户在云端保存的自选收藏数据"""
+    try:
+        creator_id = get_current_user_id()
+        if not creator_id:
+            return flask_error_response("未授权", 401)
+
+        model = get_model()
+        # 尝试从云数据库查询
+        if model.cloud_client:
+            result = model.cloud_client.get_by_field(
+                'favorites', 'openid', creator_id
+            )
+            if result and len(result) > 0:
+                return flask_success_response(
+                    data=result[0].get('favoritesById', {}),
+                    message='获取成功'
+                )
+        # MongoDB 路径
+        if model.db is not None:
+            doc = model.db['favorites'].find_one({'openid': creator_id})
+            if doc:
+                return flask_success_response(
+                    data=doc.get('favoritesById', {}),
+                    message='获取成功'
+                )
+        return flask_success_response(data={}, message='无数据')
+    except Exception as e:
+        current_app.logger.error(f'获取自选失败: {e}')
+        return flask_success_response(data={}, message='默认空')
+
+
+@group_bp.route('/favorites', methods=['PUT'])
+@require_auth
+def save_favorites():
+    """将自选收藏数据同步到云端（全量覆写）"""
+    try:
+        creator_id = get_current_user_id()
+        if not creator_id:
+            return flask_error_response("未授权", 401)
+
+        data = request.get_json(silent=True) or {}
+        favorites_by_id = data.get('favoritesById', {})
+
+        model = get_model()
+        if model.cloud_client:
+            existing = model.cloud_client.get_by_field(
+                'favorites', 'openid', creator_id
+            )
+            if existing and len(existing) > 0:
+                doc_id = existing[0].get('_id')
+                model.cloud_client.update(
+                    'favorites', doc_id,
+                    {'favoritesById': favorites_by_id}
+                )
+            else:
+                model.cloud_client.insert(
+                    'favorites',
+                    {'openid': creator_id, 'favoritesById': favorites_by_id}
+                )
+            return flask_success_response(message='同步成功')
+
+        if model.db is not None:
+            model.db['favorites'].update_one(
+                {'openid': creator_id},
+                {'$set': {'favoritesById': favorites_by_id, 'openid': creator_id}},
+                upsert=True
+            )
+            return flask_success_response(message='同步成功')
+
+        return flask_error_response('数据库未连接', 503)
+    except Exception as e:
+        current_app.logger.error(f'保存自选失败: {e}')
+        return flask_error_response(str(e), 500)

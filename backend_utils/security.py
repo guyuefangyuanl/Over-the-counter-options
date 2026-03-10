@@ -13,6 +13,7 @@ _RATE_LIMIT_STORE = {}
 # Simple in-memory account lock store
 # Key: IP_Account, Value: {"attempts": int, "lock_until": float}
 _ACCOUNT_LOCK_STORE = {}
+_SMS_CODE_STORE = {}
 
 def rate_limit(limit=5, window=60):
     """
@@ -114,3 +115,29 @@ def audit_log(action: str):
                 raise e
         return wrapper
     return decorator
+
+def store_sms_code(phone: str, code: str, sms_type: str, ttl: int = 300):
+    key = f"{phone}:{sms_type}"
+    _SMS_CODE_STORE[key] = {
+        "code": str(code),
+        "expires_at": time.time() + ttl,
+        "attempts": 0
+    }
+
+def check_sms_code(phone: str, code: str, sms_type: str, max_attempts: int = 5):
+    key = f"{phone}:{sms_type}"
+    record = _SMS_CODE_STORE.get(key)
+    if not record:
+        return False, "验证码已过期或不存在"
+    if time.time() > record.get("expires_at", 0):
+        _SMS_CODE_STORE.pop(key, None)
+        return False, "验证码已过期或不存在"
+    if record.get("attempts", 0) >= max_attempts:
+        _SMS_CODE_STORE.pop(key, None)
+        return False, "验证码错误次数过多"
+    if str(code) != str(record.get("code")):
+        record["attempts"] = record.get("attempts", 0) + 1
+        _SMS_CODE_STORE[key] = record
+        return False, "验证码错误"
+    _SMS_CODE_STORE.pop(key, None)
+    return True, None

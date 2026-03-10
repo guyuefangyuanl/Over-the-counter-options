@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { Card, Table, Button, Space, Typography, Tag, Input, Modal, Form, Select, InputNumber, Switch, Popconfirm, App } from 'antd';
 import { ReloadOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons';
+import type { ColumnsType } from 'antd/es/table';
 import api, { getApiErrorMessage, type ApiResponse } from '../utils/api';
 import PageState from '../components/PageState';
 
@@ -22,6 +23,17 @@ interface Position {
   currency?: string;
   market?: string;
   createdAt: string;
+}
+
+interface PositionPagination {
+  page: number;
+  per_page: number;
+  total: number;
+}
+
+interface PositionListPayload {
+  items: Position[];
+  pagination: PositionPagination;
 }
 
 const TradePositions: React.FC = () => {
@@ -49,7 +61,7 @@ const TradePositions: React.FC = () => {
   const fetchPositions = useCallback(async (page = 1, pageSize = 10, search = searchText) => {
     setLoading(true);
     try {
-      const params: any = { page, pageSize };
+      const params: Record<string, string | number> = { page, pageSize };
       if (search) {
           // Backend currently filters by customerId only for simple users.
           // For admin, we might need a general keyword search.
@@ -64,7 +76,7 @@ const TradePositions: React.FC = () => {
           params.customerId = search;
       }
       
-      const res = await api.get<ApiResponse<{ items: Position[]; pagination: any }>>('/trade/positions', {
+      const res = await api.get<ApiResponse<PositionListPayload>>('/trade/positions', {
         params
       });
       
@@ -86,13 +98,13 @@ const TradePositions: React.FC = () => {
   }, [antdMessage, searchText, autoRefresh]);
 
   useEffect(() => {
-    fetchPositions(1, pagination.pageSize);
-  }, []); // Initial load
+    void fetchPositions(1, pagination.pageSize);
+  }, [fetchPositions, pagination.pageSize]);
 
   useEffect(() => {
       if (autoRefresh) {
           timerRef.current = setInterval(() => {
-              fetchPositions(pagination.current, pagination.pageSize);
+              void fetchPositions(pagination.current, pagination.pageSize);
           }, 5000);
       } else {
           if (timerRef.current) clearInterval(timerRef.current);
@@ -100,10 +112,10 @@ const TradePositions: React.FC = () => {
       return () => {
           if (timerRef.current) clearInterval(timerRef.current);
       }
-  }, [autoRefresh, pagination.current, pagination.pageSize, fetchPositions]);
+  }, [autoRefresh, pagination, fetchPositions]);
 
   const handleSearch = () => {
-      fetchPositions(1, pagination.pageSize, searchText);
+      void fetchPositions(1, pagination.pageSize, searchText);
   };
 
   const handleExport = () => {
@@ -143,7 +155,7 @@ const TradePositions: React.FC = () => {
       try {
           await api.delete(`/trade/positions/${id}`);
           antdMessage.success('删除成功');
-          fetchPositions(pagination.current, pagination.pageSize);
+          void fetchPositions(pagination.current, pagination.pageSize);
       } catch (err) {
           antdMessage.error(getApiErrorMessage(err, '删除失败'));
       }
@@ -185,7 +197,7 @@ const TradePositions: React.FC = () => {
           }
           
           setIsModalOpen(false);
-          fetchPositions(pagination.current, pagination.pageSize);
+          void fetchPositions(pagination.current, pagination.pageSize);
       } catch (err) {
            if (err instanceof Error && err.name === 'ValidationError') return;
            antdMessage.error(getApiErrorMessage(err, currentPosition ? '更新失败' : '创建失败'));
@@ -194,14 +206,14 @@ const TradePositions: React.FC = () => {
       }
   };
 
-  const columns = [
+  const columns: ColumnsType<Position> = [
     { title: '持仓ID', dataIndex: '_id', key: '_id', width: 80, ellipsis: true },
     { title: '客户', dataIndex: 'customerName', key: 'customerName', width: 100, ellipsis: true },
     { 
         title: '产品', 
         key: 'product',
         width: 150,
-        render: (_: any, record: Position) => (
+        render: (_: unknown, record) => (
             <Space direction="vertical" size={0}>
                 <Text strong>{record.productName}</Text>
                 <Text type="secondary" style={{ fontSize: 12 }}>{record.productCode}</Text>
@@ -217,7 +229,7 @@ const TradePositions: React.FC = () => {
     { 
       title: '成本/现价', 
       key: 'price',
-      render: (_: any, record: Position) => (
+      render: (_: unknown, record) => (
           <Space direction="vertical" size={0}>
               <Text>成本: {record.price.toFixed(3)}</Text>
               {record.currentPrice && (
@@ -231,7 +243,7 @@ const TradePositions: React.FC = () => {
     { 
       title: '市值/盈亏', 
       key: 'marketValue',
-      render: (_: any, record: Position) => (
+      render: (_: unknown, record) => (
           <Space direction="vertical" size={0}>
               <Text>{record.marketValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
               <Text type={record.profitLoss >= 0 ? "success" : "danger"}>
@@ -245,7 +257,7 @@ const TradePositions: React.FC = () => {
         title: '市场/币种',
         key: 'market',
         width: 100,
-        render: (_: any, record: Position) => (
+        render: (_: unknown, record) => (
             <Space split="/">
                 <Text>{record.market || 'CN'}</Text>
                 <Text>{record.currency || 'CNY'}</Text>
@@ -257,13 +269,13 @@ const TradePositions: React.FC = () => {
       dataIndex: 'status', 
       key: 'status',
       width: 80,
-      render: (val: string) => <Tag color={val === 'active' ? 'blue' : 'default'}>{val === 'active' ? '持仓' : '已平'}</Tag>
+      render: (val: Position['status']) => <Tag color={val === 'active' ? 'blue' : 'default'}>{val === 'active' ? '持仓' : '已平'}</Tag>
     },
     { 
       title: '操作', 
       key: 'action',
       width: 150,
-      render: (_: any, record: Position) => (
+      render: (_: unknown, record) => (
         <Space>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)} />
           <Popconfirm title="确定删除吗？" onConfirm={() => handleDelete(record._id)}>
@@ -312,7 +324,7 @@ const TradePositions: React.FC = () => {
             pageSize: pagination.pageSize,
             total: pagination.total,
             showSizeChanger: true,
-            onChange: (page, size) => fetchPositions(page, size)
+        onChange: (page, size) => fetchPositions(page, size)
           }}
           scroll={{ x: 1000 }}
         />

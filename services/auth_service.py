@@ -233,8 +233,17 @@ class AuthService:
 
     def authenticate_admin(self, username: str, password: str) -> Tuple[bool, Optional[str], Optional[str]]:
         # 1. Check Env/Default Admin
-        if username == self.admin_username and self._verify_password(password, self.admin_password):
-            return True, self._normalize_role(self.admin_role), None
+        if username == self.admin_username:
+            # Support both plain text and hashed passwords
+            if self.admin_password.startswith("pbkdf2_sha256$"):
+                # Hashed password
+                password_match = self._verify_password(password, self.admin_password)
+            else:
+                # Plain text password (for development/first setup)
+                password_match = (password == self.admin_password)
+            
+            if password_match:
+                return True, self._normalize_role(self.admin_role), None
 
         # 2. Check DB Admin (only if database is available)
         try:
@@ -307,91 +316,40 @@ class AuthService:
         # 如果是 mock code，或者缺少微信配置，使用模拟登录（任何环境都支持 mock code）
         if code.startswith("mock_") or not has_wx_config:
             try:
-                logger.info(f"Using Mock Login (dev mode). Code: {code[:20]}..., has_wx_config: {has_wx_config}, has_db: {has_db_connection}")
+                logger.info(f"[Mock登录] 开始处理. Code: {code[:20]}..., has_wx_config: {has_wx_config}, has_db: {has_db_connection}")
+                
                 openid = f"mock_openid_{code[:20]}"
                 unionid = f"mock_unionid_{code[:20]}"
                 
-                # 如果没有数据库连接，直接返回模拟用户数据
-                if not has_db_connection:
-                    logger.warning("数据库未连接，返回内存中的模拟用户数据")
-                    user = {
-                        'openid': openid,
-                        'unionid': unionid,
-                        'nickname': '开发用户',
-                        'avatar': '',
-                        'phone': '',
-                        'created_at': datetime.utcnow(),
-                        'last_login': datetime.utcnow()
-                    }
-                    return True, user, None
+                logger.info(f"[Mock登录] 生成openid: {openid}, unionid: {unionid}")
                 
-                user = model.find_user_by_openid(openid)
+                # 模拟登录时，始终返回内存中的模拟用户数据，不依赖数据库
+                # 这样即使数据库连接失败（MongoDB 或云数据库），登录仍可正常工作
+                user = {
+                    'openid': openid,
+                    'unionid': unionid,
+                    'nickname': '开发用户',
+                    'avatar': '',
+                    'phone': '',
+                    'created_at': datetime.utcnow(),
+                    'last_login': datetime.utcnow()
+                }
                 
-                if not user:
-                    user_data = {
-                        'openid': openid,
-                        'unionid': unionid,
-                        'nickname': '开发用户',
-                        'avatar': '',
-                        'phone': '',
-                        'created_at': datetime.utcnow(),
-                        'last_login': datetime.utcnow()
-                    }
-                    model.create_user(user_data)
-                    user = user_data
-                else:
-                    model.update_user_login_time(openid)
+                logger.info(f"[Mock登录] 用户对象创建成功: {user}")
                 
-                # Sync Identity
-                self._sync_user_to_customer(user)
+                # 尝试同步到客户表（非阻塞，失败不影响登录）
+                try:
+                    logger.info(f"[Mock登录] 尝试同步用户到客户表...")
+                    self._sync_user_to_customer(user)
+                    logger.info(f"[Mock登录] 用户同步成功")
+                except Exception as sync_err:
+                    logger.warning(f"[Mock登录] 同步用户到客户表失败（不影响登录）: {sync_err}")
+                
+                logger.info(f"[Mock登录] 返回成功: openid={openid}")
                 return True, user, None
+                
             except Exception as e:
-                logger.error(f"Mock login failed: {e}")
-                return False, None, f"模拟登录失败: {str(e)}"
-
-        if not has_wx_config:
-            try:
-                logger.error("微信登录失败: 服务器未配置 WX_APPID 和 WX_SECRET")
-                # 生产环境也降级到模拟登录，方便测试
-                logger.warning("生产环境缺少微信配置，自动降级到模拟登录模式")
-                openid = f"mock_openid_{code[:20]}"
-                unionid = f"mock_unionid_{code[:20]}"
-                
-                # 如果没有数据库连接，直接返回模拟用户数据
-                if not has_db_connection:
-                    logger.warning("数据库未连接，返回内存中的模拟用户数据")
-                    user = {
-                        'openid': openid,
-                        'unionid': unionid,
-                        'nickname': '测试用户',
-                        'avatar': '',
-                        'phone': '',
-                        'created_at': datetime.utcnow(),
-                        'last_login': datetime.utcnow()
-                    }
-                    return True, user, None
-                
-                user = model.find_user_by_openid(openid)
-                
-                if not user:
-                    user_data = {
-                        'openid': openid,
-                        'unionid': unionid,
-                        'nickname': '测试用户',
-                        'avatar': '',
-                        'phone': '',
-                        'created_at': datetime.utcnow(),
-                        'last_login': datetime.utcnow()
-                    }
-                    model.create_user(user_data)
-                    user = user_data
-                else:
-                    model.update_user_login_time(openid)
-                
-                self._sync_user_to_customer(user)
-                return True, user, None
-            except Exception as e:
-                logger.error(f"Mock login (no config) failed: {e}")
+                logger.exception(f"[Mock登录] 失败: {e}")
                 return False, None, f"模拟登录失败: {str(e)}"
             
         url = 'https://api.weixin.qq.com/sns/jscode2session'
@@ -565,6 +523,38 @@ class AuthService:
             return True, user, None
             
         return False, None, "密码错误"
+
+    def login_or_register_by_phone(self, phone: str) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        """验证码登录：已注册则登录，未注册则自动创建账号"""
+        model = self._get_model()
+        user = model.find_user_by_phone(phone)
+
+        if user:
+            # 已注册，直接登录
+            model.update_user_login_time(user['openid'])
+            self._sync_user_to_customer(user)
+            return True, user, None
+
+        # 未注册，自动创建新账号
+        import uuid
+        user_data = {
+            'openid': str(uuid.uuid4()),
+            'unionid': None,
+            'nickname': f'用户{phone[-4:]}',
+            'avatar': '',
+            'phone': phone,
+            'email': None,
+            'password_hash': None,  # 验证码注册无密码
+            'created_at': datetime.utcnow(),
+            'last_login': datetime.utcnow(),
+            'role': 'user'
+        }
+        try:
+            model.create_user(user_data)
+            self._sync_user_to_customer(user_data)
+            return True, user_data, None
+        except Exception as e:
+            return False, None, str(e)
 
     def get_user_profile(self, openid: str) -> Optional[Dict[str, Any]]:
         model = self._get_model()
