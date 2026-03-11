@@ -31,6 +31,7 @@ class AuthService:
 
         self.role_order = {
             "viewer": 10,
+            "user": 15,   # 微信小程序登录用户
             "editor": 20,
             "admin": 30,
         }

@@ -2,5 +2,10 @@
   "navigationStyle": "custom",
   "enablePullDownRefresh": true,
   "backgroundColor": "#F5F7FA",
-  "usingComponents": {}
+  "usingComponents": {
+    "van-popup": "@vant/weapp/popup/index",
+    "van-icon": "@vant/weapp/icon/index",
+    "van-button": "@vant/weapp/button/index",
+    "van-field": "@vant/weapp/field/index"
+  }
 }

@@ -8,16 +8,16 @@
         <view class="account-trigger__icon {{showAccountSelector ? 'is-active' : ''}}"></view>
       </view>
     </view>
-    
+
     <!-- 账户选择下拉菜单 -->
     <view class="account-dropdown {{showAccountSelector ? 'is-visible' : ''}}">
       <view class="account-dropdown__mask" bindtap="toggleAccountSelector"></view>
       <view class="account-dropdown__list">
-        <view 
-          class="account-dropdown__item {{item.id === selectedAccount.id ? 'is-selected' : ''}}" 
-          wx:for="{{accounts}}" 
-          wx:key="id" 
-          data-id="{{item.id}}" 
+        <view
+          class="account-dropdown__item {{item.id === selectedAccount.id ? 'is-selected' : ''}}"
+          wx:for="{{accounts}}"
+          wx:key="id"
+          data-id="{{item.id}}"
           bindtap="switchAccount"
         >
           <text class="account-dropdown__text">{{item.name}}</text>
@@ -29,17 +29,28 @@
   </view>
 
   <!-- 页面主体内容 -->
-  <scroll-view class="main-content" scroll-y enable-back-to-top refresher-enabled bindrefresherrefresh="onPullDownRefresh">
-    
+  <scroll-view class="main-content" scroll-y enable-back-to-top refresher-enabled refresher-triggered="{{refresherTriggered}}" bindrefresherrefresh="onPullDownRefresh">
+
     <!-- 用户资料区域 -->
-    <view class="user-profile-card" wx:if="{{userInfo}}">
-        <button class="user-avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
-            <image class="user-avatar" src="{{userInfo.avatar || '/images/default-avatar.png'}}" mode="aspectFill"></image>
-        </button>
-        <view class="user-info-box">
-            <input type="nickname" class="user-nickname" placeholder="点击输入昵称" value="{{userInfo.nickname}}" bindblur="onNicknameChange" />
-            <text class="user-id">ID: {{userInfo.openid}}</text>
-        </view>
+    <view class="user-profile-card">
+      <button class="user-avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+        <image
+          class="user-avatar"
+          src="{{userInfo.avatar || '/images/default-avatar.png'}}"
+          mode="aspectFill"
+        ></image>
+      </button>
+      <view class="user-info-box">
+        <input
+          type="nickname"
+          class="user-nickname"
+          placeholder="点击输入昵称"
+          value="{{userInfo.nickname || ''}}"
+          bindblur="onNicknameChange"
+        />
+        <text class="user-id" wx:if="{{userInfo.openid}}">ID: {{userInfo.openid}}</text>
+        <text class="user-id user-id--placeholder" wx:else>登录后显示用户信息</text>
+      </view>
     </view>
 
     <!-- 资产概览卡片 -->
@@ -50,119 +61,230 @@
           <text>+ 录入</text>
         </view>
       </view>
-      <view class="asset-card__amount">{{overview.totalScale}}</view>
-      
-      <view class="asset-card__row">
-        <view class="asset-metric">
-          <text class="asset-metric__label">存续净收益</text>
-          <text class="asset-metric__value {{overview.totalProfit >= 0 ? 'color-profit' : 'color-loss'}}">
-            {{overview.totalProfit > 0 ? '+' : ''}}{{overview.totalProfit}}
-          </text>
-        </view>
-        <view class="asset-metric">
-          <text class="asset-metric__label">完结净收益</text>
-          <text class="asset-metric__value {{overview.completedProfit >= 0 ? 'color-profit' : 'color-loss'}}">
-            {{overview.completedProfit > 0 ? '+' : ''}}{{overview.completedProfit}}
-          </text>
-        </view>
-      </view>
 
-      <!-- 成本折叠区域 -->
-      <view class="cost-panel">
-        <view class="cost-panel__header" bindtap="toggleCostDetails">
-          <text class="cost-panel__title">投入成本: {{costDetails.total}}</text>
-          <view class="cost-panel__arrow {{isCostExpanded ? 'is-expanded' : ''}}"></view>
-        </view>
-        <view class="cost-panel__body {{isCostExpanded ? 'is-expanded' : ''}}">
-          <view class="cost-row">
-            <text class="cost-row__label">权利金</text>
-            <text class="cost-row__value">{{costDetails.optionFee}}</text>
-          </view>
-          <view class="cost-row">
-            <text class="cost-row__label">交易手续费</text>
-            <text class="cost-row__value">{{costDetails.commission}}</text>
-          </view>
-        </view>
+      <!-- 资产概览错误降级提示 -->
+      <view class="error-tip" wx:if="{{overviewError}}">
+        <text class="error-tip__text">资产数据暂时无法加载</text>
       </view>
+      <block wx:else>
+        <view class="asset-card__amount">{{overview.totalScale}}</view>
+        <view class="asset-card__row">
+          <view class="asset-metric">
+            <text class="asset-metric__label">存续净收益</text>
+            <text class="asset-metric__value {{overview.totalProfit >= 0 ? 'color-profit' : 'color-loss'}}">
+              {{overview.totalProfit > 0 ? '+' : ''}}{{overview.totalProfit}}
+            </text>
+          </view>
+          <view class="asset-metric">
+            <text class="asset-metric__label">完结净收益</text>
+            <text class="asset-metric__value {{overview.completedProfit >= 0 ? 'color-profit' : 'color-loss'}}">
+              {{overview.completedProfit > 0 ? '+' : ''}}{{overview.completedProfit}}
+            </text>
+          </view>
+        </view>
+
+        <!-- 成本折叠区域 -->
+        <view class="cost-panel">
+          <view class="cost-panel__header" bindtap="toggleCostDetails">
+            <text class="cost-panel__title">投入成本: {{costDetails.total}}</text>
+            <view class="cost-panel__arrow {{isCostExpanded ? 'is-expanded' : ''}}"></view>
+          </view>
+          <view class="cost-panel__body {{isCostExpanded ? 'is-expanded' : ''}}">
+            <view class="cost-row">
+              <text class="cost-row__label">权利金</text>
+              <text class="cost-row__value">{{costDetails.optionFee}}</text>
+            </view>
+            <view class="cost-row">
+              <text class="cost-row__label">交易手续费</text>
+              <text class="cost-row__value">{{costDetails.commission}}</text>
+            </view>
+          </view>
+        </view>
+      </block>
     </view>
 
     <!-- 持仓列表区域 -->
     <view class="positions-section">
       <view class="tabs">
-        <view 
-          class="tabs__item {{activeTab === 'continuing' ? 'is-active' : ''}}" 
-          data-tab="continuing" 
+        <view
+          class="tabs__item {{activeTab === 'continuing' ? 'is-active' : ''}}"
+          data-tab="continuing"
           bindtap="switchTab"
         >存续中</view>
-        <view 
-          class="tabs__item {{activeTab === 'expiring' ? 'is-active' : ''}}" 
-          data-tab="expiring" 
+        <view
+          class="tabs__item {{activeTab === 'expiring' ? 'is-active' : ''}}"
+          data-tab="expiring"
           bindtap="switchTab"
         >临近到期</view>
-        <view 
-          class="tabs__item {{activeTab === 'closed' ? 'is-active' : ''}}" 
-          data-tab="closed" 
+        <view
+          class="tabs__item {{activeTab === 'closed' ? 'is-active' : ''}}"
+          data-tab="closed"
           bindtap="switchTab"
         >已完结</view>
       </view>
 
-      <view class="positions-list" wx:if="{{filteredPositions.length > 0}}">
-        <view class="position-card" wx:for="{{filteredPositions}}" wx:key="id">
-          <view class="position-card__header">
-            <view class="position-card__name-box">
-              <text class="position-card__name">{{item.productName}}</text>
-              <text class="position-card__tag">{{item.dealer}}</text>
-            </view>
-            <text class="position-card__status {{item.status === 'CONTINUING' ? 'color-primary' : 'color-regular'}}">{{item.statusText}}</text>
-          </view>
+      <!-- 持仓错误降级提示 -->
+      <view class="error-tip" wx:if="{{positionsError}}">
+        <text class="error-tip__text">持仓数据暂时无法加载，下拉刷新重试</text>
+      </view>
 
-          <view class="position-card__body">
-            <view class="position-grid">
-              <view class="position-item">
-                <text class="position-item__label">名义本金</text>
-                <text class="position-item__value">{{item.notional}}</text>
+      <!-- 持仓列表 -->
+      <block wx:elif="{{filteredPositions.length > 0}}">
+        <view class="positions-list">
+          <view class="position-card" wx:for="{{filteredPositions}}" wx:key="id">
+            <view class="position-card__header">
+              <view class="position-card__name-box">
+                <text class="position-card__name">{{item.productName}}</text>
+                <text class="position-card__tag">{{item.dealer}}</text>
               </view>
-              <view class="position-item">
-                <text class="position-item__label">剩余天数</text>
-                <text class="position-item__value">{{item.daysLeft}}天</text>
-              </view>
-              <view class="position-item">
-                <text class="position-item__label">成交价</text>
-                <text class="position-item__value">{{item.fillPrice}}</text>
-              </view>
-              <view class="position-item">
-                <text class="position-item__label">当前价</text>
-                <text class="position-item__value">{{item.currentPrice}}</text>
-              </view>
-              <view class="position-item">
-                <text class="position-item__label">收益率</text>
-                <text class="position-item__value {{item.pnlRate >= 0 ? 'color-profit' : 'color-loss'}}">{{item.pnlRate}}%</text>
-              </view>
-              <view class="position-item">
-                <text class="position-item__label">账面盈亏</text>
-                <text class="position-item__value {{item.pnl >= 0 ? 'color-profit' : 'color-loss'}}">{{item.pnl}}</text>
+              <text class="position-card__status {{item.status === 'CONTINUING' ? 'color-primary' : 'color-regular'}}">{{item.statusText}}</text>
+            </view>
+
+            <view class="position-card__body">
+              <view class="position-grid">
+                <view class="position-item">
+                  <text class="position-item__label">名义本金</text>
+                  <text class="position-item__value">{{item.notional}}</text>
+                </view>
+                <view class="position-item">
+                  <text class="position-item__label">剩余天数</text>
+                  <text class="position-item__value">{{item.daysLeft}}天</text>
+                </view>
+                <view class="position-item">
+                  <text class="position-item__label">成交价</text>
+                  <text class="position-item__value">{{item.fillPrice}}</text>
+                </view>
+                <view class="position-item">
+                  <text class="position-item__label">当前价</text>
+                  <text class="position-item__value">{{item.currentPrice}}</text>
+                </view>
+                <view class="position-item">
+                  <text class="position-item__label">收益率</text>
+                  <text class="position-item__value {{item.pnlRate >= 0 ? 'color-profit' : 'color-loss'}}">{{item.pnlRate}}%</text>
+                </view>
+                <view class="position-item">
+                  <text class="position-item__label">账面盈亏</text>
+                  <text class="position-item__value {{item.pnl >= 0 ? 'color-profit' : 'color-loss'}}">{{item.pnl}}</text>
+                </view>
               </view>
             </view>
-          </view>
 
-          <view class="position-card__footer">
-            <view class="btn-group">
-              <view class="btn-small btn-outline" data-id="{{item.id}}" data-action="modify" bindtap="handlePositionAction">修改</view>
-              <view class="btn-small btn-outline" data-id="{{item.id}}" data-action="close" bindtap="handlePositionAction">平仓记账</view>
-              <view class="btn-small btn-primary" data-id="{{item.id}}" data-action="close-live" bindtap="handlePositionAction">平仓下单</view>
+            <view class="position-card__footer">
+              <view class="btn-group">
+                <view class="btn-small btn-outline" data-id="{{item.id}}" data-action="modify" bindtap="handlePositionAction">修改</view>
+                <view class="btn-small btn-outline" data-id="{{item.id}}" data-action="close" bindtap="handlePositionAction">平仓记账</view>
+                <view class="btn-small btn-primary" data-id="{{item.id}}" data-action="close-live" bindtap="handlePositionAction">平仓下单</view>
+              </view>
             </view>
           </view>
         </view>
-      </view>
+      </block>
 
       <!-- 空状态 -->
       <view class="empty-state" wx:else>
-        <image class="empty-state__image" src="/images/empty.svg" mode="aspectFit"></image>
-        <text class="empty-state__text">暂无相关持仓数据</text>
+        <view class="empty-state__icon">∅</view>
+        <text class="empty-state__text">
+          {{activeTab === 'continuing' ? '暂无存续中持仓' : (activeTab === 'expiring' ? '暂无临近到期持仓' : '暂无已完结持仓')}}
+        </text>
+        <view class="empty-state__action" bindtap="handleAddPosition" wx:if="{{activeTab === 'continuing'}}">
+          <text>点击录入持仓</text>
+        </view>
       </view>
     </view>
-    
+
     <!-- 底部安全距离 -->
     <view class="safe-area-bottom"></view>
   </scroll-view>
+
+  <!-- 持仓录入弹窗 (独立于询价功能， show 变量完全分离) -->
+  <van-popup
+    show="{{showAddPositionForm}}"
+    round
+    position="bottom"
+    custom-style="height: 80%;"
+    bind:close="hideAddPositionForm"
+  >
+    <view class="inquiry-form-popup">
+      <view class="form-header">
+        <text class="form-title">录入持仓</text>
+        <van-icon name="cross" bind:click="hideAddPositionForm" />
+      </view>
+
+      <scroll-view scroll-y class="form-content">
+        <!-- 标的信息 -->
+        <view class="form-section">
+          <view class="section-title">标的信息</view>
+          <van-field
+            label="标的代码"
+            placeholder="如 510050"
+            data-field="productCode"
+            bind:blur="onPositionFormInput"
+            error-message="{{positionFormErrors.productCode || ''}}"
+            required
+          />
+          <van-field
+            label="标的名称"
+            placeholder="如 上评50ETF"
+            data-field="productName"
+            bind:blur="onPositionFormInput"
+            error-message="{{positionFormErrors.productName || ''}}"
+            required
+          />
+        </view>
+
+        <!-- 持仓参数 -->
+        <view class="form-section">
+          <view class="section-title">持仓参数</view>
+          <van-field
+            label="名义本金"
+            placeholder="请输入名义本金"
+            type="number"
+            use-button-slot
+            data-field="quantity"
+            bind:blur="onPositionFormInput"
+            error-message="{{positionFormErrors.quantity || ''}}"
+            required
+          >
+            <view slot="button" class="field-unit">元</view>
+          </van-field>
+          <van-field
+            label="成本价"
+            placeholder="如 3.250"
+            type="digit"
+            data-field="price"
+            bind:blur="onPositionFormInput"
+            error-message="{{positionFormErrors.price || ''}}"
+            required
+          />
+          <van-field
+            label="交易商"
+            placeholder="可选，如 自营"
+            data-field="dealer"
+            bind:blur="onPositionFormInput"
+          />
+          <van-field
+            label="剩余天数"
+            placeholder="可选，默认 30 天"
+            type="number"
+            data-field="daysLeft"
+            bind:blur="onPositionFormInput"
+          />
+        </view>
+      </scroll-view>
+
+      <!-- 提交按鈕 -->
+      <view class="form-footer">
+        <van-button
+          type="primary"
+          round
+          block
+          bind:click="submitPositionForm"
+          loading="{{isSubmittingPosition}}"
+          disabled="{{isSubmittingPosition}}"
+        >
+          {{isSubmittingPosition ? '提交中...' : '确认录入'}}
+        </van-button>
+      </view>
+    </view>
+  </van-popup>
 </view>

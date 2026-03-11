@@ -98,14 +98,22 @@ def get_positions():
 
 @trade_bp.route('/positions', methods=['POST'])
 @require_auth
-@require_roles('admin')
 def create_position():
-    """创建持仓"""
+    """创建持仓（用户可自助录入，管理员可为任意客户创建）"""
     try:
         data = request.json
         if not data:
             return flask_error_response("数据为空", 400)
-            
+
+        current_user = getattr(g, 'admin', {})
+        role = current_user.get('role')
+
+        # 普通用户只能给自己录入持仓，强制覆盖 customerId 防止越权
+        if role == 'user':
+            data['customerId'] = current_user.get('sub')
+            data['customerName'] = current_user.get('nickname') or current_user.get('username') or '用户'
+        # admin/manager 可以在请求体中指定任意 customerId
+
         position_id = trade_service.create_position(data)
         if position_id:
             return flask_success_response(data={"id": position_id}, message="持仓创建成功")

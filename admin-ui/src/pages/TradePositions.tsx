@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { Card, Table, Button, Space, Typography, Tag, Input, Modal, Form, Select, InputNumber, Switch, Popconfirm, App } from 'antd';
-import { ReloadOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Space, Typography, Tag, Input, Modal, Form, Select, InputNumber, Switch, Popconfirm, App, Statistic, Row, Col } from 'antd';
+import { ReloadOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, RiseOutlined, FallOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import api, { getApiErrorMessage, type ApiResponse } from '../utils/api';
 import PageState from '../components/PageState';
@@ -36,11 +36,21 @@ interface PositionListPayload {
   pagination: PositionPagination;
 }
 
+interface PositionStatistics {
+  totalMarketValue: number;
+  totalProfitLoss: number;
+  totalCount: number;
+}
+
 const TradePositions: React.FC = () => {
   const { message: antdMessage } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Position[]>([]);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
+  
+  // 统计数据
+  const [statistics, setStatistics] = useState<PositionStatistics | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
   
   // Search state
   const [searchText, setSearchText] = useState('');
@@ -57,6 +67,20 @@ const TradePositions: React.FC = () => {
 
   // Helper to fetch customers for dropdown (simplified)
   // In a real app, we might search customers via API. For now, let's use a simple input for customerId.
+
+  const fetchStatistics = useCallback(async () => {
+    setStatsLoading(true);
+    try {
+      const res = await api.get<ApiResponse<PositionStatistics>>('/trade/positions/statistics');
+      if (res.success && res.data) {
+        setStatistics(res.data);
+      }
+    } catch {
+      // 统计加载失败不阻断主列表
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
 
   const fetchPositions = useCallback(async (page = 1, pageSize = 10, search = searchText) => {
     setLoading(true);
@@ -99,7 +123,8 @@ const TradePositions: React.FC = () => {
 
   useEffect(() => {
     void fetchPositions(1, pagination.pageSize);
-  }, [fetchPositions, pagination.pageSize]);
+    void fetchStatistics();
+  }, [fetchPositions, fetchStatistics, pagination.pageSize]);
 
   useEffect(() => {
       if (autoRefresh) {
@@ -156,6 +181,7 @@ const TradePositions: React.FC = () => {
           await api.delete(`/trade/positions/${id}`);
           antdMessage.success('删除成功');
           void fetchPositions(pagination.current, pagination.pageSize);
+          void fetchStatistics();
       } catch (err) {
           antdMessage.error(getApiErrorMessage(err, '删除失败'));
       }
@@ -198,6 +224,7 @@ const TradePositions: React.FC = () => {
           
           setIsModalOpen(false);
           void fetchPositions(pagination.current, pagination.pageSize);
+          void fetchStatistics();
       } catch (err) {
            if (err instanceof Error && err.name === 'ValidationError') return;
            antdMessage.error(getApiErrorMessage(err, currentPosition ? '更新失败' : '创建失败'));
@@ -288,6 +315,42 @@ const TradePositions: React.FC = () => {
 
   return (
     <Card>
+      {/* 盈亏统计汇总卡片（管理员可看到所有用户账户盈亏） */}
+      <Row gutter={16} style={{ marginBottom: 24 }}>
+        <Col span={8}>
+          <Card size="small" loading={statsLoading}>
+            <Statistic
+              title="持仓总市値"
+              value={statistics?.totalMarketValue ?? 0}
+              precision={2}
+              prefix="¥"
+              valueStyle={{ color: '#1677ff' }}
+            />
+          </Card>
+        </Col>
+        <Col span={8}>
+          <Card size="small" loading={statsLoading}>
+            <Statistic
+              title="总盈亏"
+              value={statistics?.totalProfitLoss ?? 0}
+              precision={2}
+              prefix={statistics && statistics.totalProfitLoss >= 0 ? <RiseOutlined /> : <FallOutlined />}
+              valueStyle={{ color: statistics && statistics.totalProfitLoss >= 0 ? '#3f8600' : '#cf1322' }}
+            />
+          </Card>
+        </Col>
+        <Col span={8}>
+          <Card size="small" loading={statsLoading}>
+            <Statistic
+              title="持仓总数"
+              value={statistics?.totalCount ?? 0}
+              suffix="笔"
+              valueStyle={{ color: '#1677ff' }}
+            />
+          </Card>
+        </Col>
+      </Row>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <Title level={4} style={{ margin: 0 }}>持仓管理</Title>
