@@ -1,0 +1,9 @@
+{
+  "name": "dataCleanup",
+  "version": "1.0.0",
+  "description": "定时清理过期数据（error_logs、import_jobs）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

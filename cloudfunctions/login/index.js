@@ -7,7 +7,7 @@ const http = require('http')
 const https = require('https')
 
 cloud.init({ 
-  env: 'develop-8gx7kh9g045e6c9a' // 使用配置的云环境ID
+  env: cloud.DYNAMIC_CURRENT_ENV
 })
 
 const db = cloud.database()

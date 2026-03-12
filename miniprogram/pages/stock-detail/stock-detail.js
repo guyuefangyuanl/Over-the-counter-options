@@ -1,5 +1,6 @@
 const OptionPricingSystem = require('../../utils/option-pricing.js');
 const api = require('../../utils/api.js');
+const { submitInquiry } = require('../../utils/inquiryService.js');
 
 const FAVORITES_STORAGE_KEY = 'INQUIRY_FAVORITES_V1';
 const CUSTOM_GROUPS_STORAGE_KEY = 'INQUIRY_CUSTOM_GROUPS_V1';
@@ -404,16 +405,9 @@ Page({
     
     console.log('转发图片同时提交询价数据:', submitData);
     
-    // 提交到云数据库
-    const db = wx.cloud.database();
-    db.collection('inquiries').add({
-      data: {
-        ...submitData,
-        createdAt: db.serverDate(),
-        updatedAt: db.serverDate()
-      }
-    }).then(res => {
-      console.log('询价数据提交成功，ID:', res._id);
+    // 通过云函数提交询价（静默，不影响图片生成流程）
+    submitInquiry(submitData).then(result => {
+      console.log('询价数据提交成功，ID:', result.data.inquiryId);
     }).catch(err => {
       console.error('询价数据提交失败:', err);
       // 静默失败，不影响图片生成流程

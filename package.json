@@ -10,6 +10,9 @@
     "dev:node-ui": "npm run dev:ui",
     "dev": "concurrently \"npm run dev:flask\" \"npm run dev:ui\"",
     "check:urls": "node scripts/check-hardcoded-urls.js",
+    "deploy:functions": "node scripts/deploy-cloudfunctions.js",
+    "monitor:functions": "node scripts/monitor-cloudfunctions.js",
+    "dashboard": "open admin-web/cloud-functions-dashboard.html",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

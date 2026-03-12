@@ -2,6 +2,7 @@
 const OptionPricingSystem = require('../../utils/option-pricing.js');
 const logic = require('../../utils/inquiry-logic.js');
 const api = require('../../utils/api-group.js');
+const { submitInquiry } = require('../../utils/inquiryService.js');
 
 const FAVORITES_STORAGE_KEY = 'INQUIRY_FAVORITES_V1';
 
@@ -1622,16 +1623,9 @@ Page({
     
     console.log('报价列表提交询价数据:', submitData);
     
-    // 提交到云数据库
-    const db = wx.cloud.database();
-    db.collection('inquiries').add({
-      data: {
-        ...submitData,
-        createdAt: db.serverDate(),
-        updatedAt: db.serverDate()
-      }
-    }).then(res => {
-      console.log('询价提交成功，ID:', res._id);
+    // 通过云函数提交询价
+    submitInquiry(submitData).then(result => {
+      console.log('询价提交成功，ID:', result.data.inquiryId);
       wx.hideLoading();
       wx.showToast({
         title: '询价已提交',
@@ -1649,7 +1643,7 @@ Page({
       console.error('询价提交失败:', err);
       wx.hideLoading();
       wx.showToast({
-        title: '提交失败：' + (err.errMsg || '请重试'),
+        title: '提交失败：' + (err.message || '请重试'),
         icon: 'none',
         duration: 3000
       });
@@ -1894,16 +1888,9 @@ Page({
     
     console.log('定价系统提交询价数据:', submitData);
     
-    // 提交到云数据库
-    const db = wx.cloud.database();
-    db.collection('inquiries').add({
-      data: {
-        ...submitData,
-        createdAt: db.serverDate(),
-        updatedAt: db.serverDate()
-      }
-    }).then(res => {
-      console.log('询价提交成功，ID:', res._id);
+    // 通过云函数提交询价
+    submitInquiry(submitData).then(result => {
+      console.log('询价提交成功，ID:', result.data.inquiryId);
       wx.hideLoading();
       wx.showToast({
         title: '询价已提交',
@@ -1913,13 +1900,13 @@ Page({
       
       // 跳转到询价详情页面
       wx.navigateTo({
-        url: '/pages/inquiry/inquiry?type=detail&id=' + res._id
+        url: '/pages/inquiry/inquiry?type=detail&id=' + result.data.inquiryId
       });
     }).catch(err => {
       console.error('询价提交失败:', err);
       wx.hideLoading();
       wx.showToast({
-        title: '提交失败：' + (err.errMsg || '请重试'),
+        title: '提交失败：' + (err.message || '请重试'),
         icon: 'none',
         duration: 3000
       });

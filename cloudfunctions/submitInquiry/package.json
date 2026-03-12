@@ -1,0 +1,9 @@
+{
+  "name": "submitInquiry",
+  "version": "1.0.0",
+  "description": "询价提交云函数，带服务端校验",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "^3.0.4"
+  }
+}

@@ -3,6 +3,7 @@
 const FAVORITES_STORAGE_KEY = 'INQUIRY_FAVORITES_V1';
 const INQUIRY_RECORDS_KEY = 'INQUIRY_RECORDS_V1';
 const API_BASE_URL = 'https://api.example.com'; // 实际API地址
+const { submitInquiry: submitInquiryToCloud } = require('../../utils/inquiryService.js');
 
 // 网络请求封装
 const http = {
@@ -864,10 +865,7 @@ Page({
     return new Promise((resolve, reject) => {
       console.log('[询价提交] 开始提交到云数据库', data);
       
-      // 获取云数据库实例
-      const db = wx.cloud.database();
-      
-      // 构造云数据库记录
+      // 构造询价记录
       const inquiryRecord = {
         // 产品信息
         productId: data.productId,
@@ -875,11 +873,11 @@ Page({
         productCode: data.productCode,
         
         // 期权参数
-        optionType: data.optionType || 'call', // call, put
+        optionType: data.optionType || 'call',
         structure: data.structure || 'vanilla',
         term: data.term || '1M',
-        notionalAmount: data.quantity || 100, // 名义本金（万元）
-        strikePrice: data.strikePrice || '100', // 行权价（%）
+        notionalAmount: data.quantity || 100,
+        strikePrice: data.strikePrice || '100',
         selectedDealers: data.dealers || [],
         
         // 联系人信息
@@ -888,37 +886,30 @@ Page({
         contactEmail: data.contactInfo.email || '',
         notes: data.contactInfo.notes || '',
         
-        // 状态和时间
-        status: 'pending', // pending, processing, completed, rejected
-        createdAt: db.serverDate(), // 使用服务器时间
-        updateTime: db.serverDate(),
-        
         // 用户信息
         userId: data.userId || '',
-        source: 'miniprogram' // 标记来源为小程序
+        source: 'miniprogram'
       };
       
-      // 写入云数据库
-      db.collection('inquiries').add({
-        data: inquiryRecord
-      }).then(res => {
-        console.log('[询价提交] 云数据库写入成功', res);
+      // 通过云函数提交询价
+      submitInquiryToCloud(inquiryRecord).then(cloudResult => {
+        console.log('[询价提交] 云函数写入成功', cloudResult);
         
         // 构造返回结果
         const result = {
           ...data,
-          inquiryId: res._id, // 使用云数据库返回的ID
+          inquiryId: cloudResult.data.inquiryId,
           inquiryNo: `XQ${Date.now().toString().slice(-8)}`,
           status: 'pending',
           createTime: new Date().toISOString(),
           estimatedResponseTime: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-          _id: res._id // 保存云数据库ID
+          _id: cloudResult.data.inquiryId
         };
         
         resolve(result);
       }).catch(err => {
-        console.error('[询价提交] 云数据库写入失败', err);
-        reject(new Error('询价提交失败: ' + (err.errMsg || err.message || '未知错误')));
+        console.error('[询价提交] 云函数写入失败', err);
+        reject(new Error('询价提交失败: ' + (err.message || '未知错误')));
       });
     });
   },

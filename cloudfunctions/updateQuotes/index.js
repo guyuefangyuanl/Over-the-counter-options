@@ -55,6 +55,42 @@ function fetchStockData(codes) {
   })
 }
 
+// 带重试的行情请求（指数退避）
+async function fetchStockDataWithRetry(codes, maxRetries = 3, delayMs = 1000) {
+  let lastError
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fetchStockData(codes)
+    } catch (err) {
+      lastError = err
+      if (attempt < maxRetries) {
+        const waitMs = Math.min(delayMs * Math.pow(2, attempt), 5000)
+        console.warn(`⚠️ 行情请求失败(第${attempt + 1}次), ${waitMs}ms后重试: ${err.message}`)
+        await new Promise(r => setTimeout(r, waitMs))
+      }
+    }
+  }
+  throw lastError
+}
+
+// 带重试的数据库更新（线性退避）
+async function updateDocWithRetry(db, docId, updateData, maxRetries = 2) {
+  let lastError
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await db.collection('quotes').doc(docId).update({ data: updateData })
+    } catch (err) {
+      lastError = err
+      if (attempt < maxRetries) {
+        const waitMs = 500 * (attempt + 1)
+        console.warn(`⚠️ DB更新失败(第${attempt + 1}次), ${waitMs}ms后重试: ${err.message}`)
+        await new Promise(r => setTimeout(r, waitMs))
+      }
+    }
+  }
+  throw lastError
+}
+
 /**
  * 性能指标收集器
  */
