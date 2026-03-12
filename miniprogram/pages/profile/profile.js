@@ -101,6 +101,12 @@ Page({
 
   // 加载用户统计数据
   loadUserStatistics: function() {
+    // 未登录或无token时不发起请求
+    const token = wx.getStorageSync('token');
+    if (!token) {
+      return;
+    }
+
     const api = require('../../utils/api.js');
     
     api.get('/auth/user/statistics')

@@ -510,3 +510,58 @@ page {
 .safe-area-bottom {
   height: env(safe-area-inset-bottom);
 }
+
+/* 错误降级提示 */
+.error-tip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl) 0;
+}
+
+.error-tip__text {
+  font-size: 26rpx;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.error-tip__retry {
+  font-size: 26rpx;
+  color: var(--primary);
+  padding: 8rpx 32rpx;
+  border: 1rpx solid var(--primary);
+  border-radius: 200rpx;
+  margin-top: var(--spacing-sm);
+}
+
+/* 用户 ID 占位文字 */
+.user-id--placeholder {
+  font-size: 24rpx;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* 持仓列表容器 */
+.positions-list {
+  padding-top: var(--spacing-xs);
+}
+
+/* 空状态图标 */
+.empty-state__icon {
+  font-size: 80rpx;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-md);
+  opacity: 0.4;
+  line-height: 1;
+}
+
+/* 空状态操作按钮 */
+.empty-state__action {
+  margin-top: var(--spacing-md);
+  font-size: 28rpx;
+  color: var(--primary);
+  padding: 14rpx 40rpx;
+  border: 1rpx solid var(--primary);
+  border-radius: 200rpx;
+}

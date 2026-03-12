@@ -344,8 +344,7 @@ def create_app() -> Flask:
         
         return flask_error_response(
             "服务器内部错误" if NODE_ENV == 'production' else str(error),
-            code=500,
-            extra_data={'error_id': error_id} if NODE_ENV == 'production' else None
+            code=500
         )
 
     @flask_app.errorhandler(Exception)
@@ -383,8 +382,7 @@ def create_app() -> Flask:
         
         return flask_error_response(
             "服务器错误" if NODE_ENV == 'production' else str(error),
-            code=500,
-            extra_data={'error_id': error_id, 'error_type': error_type} if NODE_ENV == 'production' else None
+            code=500
         )
     
     # 注册请求性能监控

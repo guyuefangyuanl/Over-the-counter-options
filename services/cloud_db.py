@@ -49,12 +49,11 @@ class AccessTokenProvider:
         self._timeout = timeout
         self._session = session or requests.Session()
         self._refresh_margin_seconds = max(0, int(refresh_margin_seconds))
-        # 🔧 修复：在云托管环境中，可能需要禁用 SSL 验证
-        # 检查环境变量以决定是否验证 SSL
-        ssl_verify_env = os.getenv('SSL_VERIFY', 'true').lower()
-        self._verify = verify if ssl_verify_env == 'true' else False
+        # 使用 WX_VERIFY_SSL 统一控制 SSL 验证（兼容 SSL_VERIFY）
+        ssl_verify_env = os.getenv('WX_VERIFY_SSL', os.getenv('SSL_VERIFY', 'true')).lower()
+        self._verify = verify if ssl_verify_env != 'false' else False
         if not self._verify:
-            logger.warning("SSL 验证已禁用（通过 SSL_VERIFY 环境变量）")
+            logger.warning("SSL 验证已禁用（WX_VERIFY_SSL=false）")
 
         self._lock = threading.Lock()
         self._access_token: Optional[str] = None

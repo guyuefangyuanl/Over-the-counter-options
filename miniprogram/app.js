@@ -44,11 +44,16 @@ App({
     if (!wx.cloud) {
       console.error('请使用 2.2.3 或以上的基础库以使用云能力')
     } else {
-      wx.cloud.init({
-        env: 'develop-8gx7kh9g045e6c9a',
-        traceUser: true,
-      })
-      console.log('云开发初始化成功，环境ID: develop-8gx7kh9g045e6c9a')
+      try {
+        wx.cloud.init({
+          env: 'develop-8gx7kh9g045e6c9a',
+          traceUser: true,
+        })
+        console.log('云开发初始化成功，环境ID: develop-8gx7kh9g045e6c9a')
+      } catch (e) {
+        // WACloud.js 在开发者工具缓存损坏时可能加载失败，catch 后不影响主业务逻辑
+        console.warn('[app] 云开发初始化失败（不影响主功能）:', e.message)
+      }
     }
 
     this.initializeCoreServices();

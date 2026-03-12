@@ -412,17 +412,23 @@ async function performRequestWithRetry(url, method, data, header, timeout, retri
             if (res.data && (res.data.code === 401 || res.data.code === '401')) {
               console.warn('[API] 响应体中code=401，视为未授权');
               handleUnauthorized();
-              reject(new Error(res.data.message || '登录已过期，请重新登录'));
+              const authError = new Error(res.data.message || '登录已过期，请重新登录');
+              authError.noRetry = true;
+              reject(authError);
               return;
             }
             
             resolve(res.data);
           } else if (res.statusCode === 401) {
-            // token失效，尝试刷新或跳转登录
+            // token失效，跳转登录，标记为不可重试
             handleUnauthorized();
-            reject(new Error('登录已过期，请重新登录'));
+            const authError = new Error('登录已过期，请重新登录');
+            authError.noRetry = true;
+            reject(authError);
           } else if (res.statusCode === 403) {
-            reject(new Error('没有权限访问该资源'));
+            const forbiddenError = new Error('没有权限访问该资源');
+            forbiddenError.noRetry = true;
+            reject(forbiddenError);
           } else if (res.statusCode === 404) {
             reject(new Error('请求的资源不存在'));
           } else if (res.statusCode >= 500) {
@@ -464,6 +470,11 @@ async function performRequestWithRetry(url, method, data, header, timeout, retri
     
     return result;
   } catch (error) {
+    // 认证错误等不可重试的错误，直接抛出
+    if (error.noRetry) {
+      throw error;
+    }
+
     // 重试逻辑
     if (retriesLeft > 0) {
       apiStats.retryCount++;

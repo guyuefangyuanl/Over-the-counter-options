@@ -17,12 +17,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2-dev \
     libxslt1-dev \
     zlib1g-dev \
+    ca-certificates \
+    && update-ca-certificates \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # 复制依赖文件并安装
 COPY requirements.txt .
-RUN pip install --no-cache-dir Flask Flask-Cors pymongo requests python-dotenv gunicorn PyJWT
+RUN pip install --no-cache-dir Flask Flask-Cors pymongo requests python-dotenv gunicorn PyJWT certifi
 
 # 复制项目文件
 COPY . .

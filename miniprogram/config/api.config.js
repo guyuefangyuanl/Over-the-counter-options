@@ -33,12 +33,12 @@ const CONFIG = {
     apiBaseUrl: CLOUD_API_URL,
     useCloud: true
   },
-  // 开发环境（优先使用本地，本地不可用时回退到云端）
+  // 开发环境（默认使用云端，需要本地调试时可通过 switchToLocal() 切换）
   development: {
-    apiBaseUrl: LOCAL_API_URL,  // 优先本地，确保 mock code 正常工作
-    localApiUrl: LOCAL_API_URL, // 备用本地地址
-    cloudApiUrl: CLOUD_API_URL, // 云端备用
-    useCloud: false
+    apiBaseUrl: CLOUD_API_URL,  // 默认云端，避免本地未启动时 ERR_CONNECTION_REFUSED
+    localApiUrl: LOCAL_API_URL, // 本地地址，可通过 switchToLocal() 启用
+    cloudApiUrl: CLOUD_API_URL, // 云端地址
+    useCloud: true
   },
   // 体验版
   trial: {

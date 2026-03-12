@@ -113,7 +113,12 @@ def admin_me():
     role = payload.get("role")
     
     if role == 'user':
-        user = auth_service.get_user_profile(username)
+        try:
+            user = auth_service.get_user_profile(username)
+        except Exception as e:
+            logger.warning(f"[/auth/me] 查询用户资料失败（DB不可用），降级返回Token数据: {e}")
+            user = None
+        
         if user:
             return flask_success_response(
                 data={
@@ -126,6 +131,17 @@ def admin_me():
                     "unionid": user.get('unionid')
                 }
             )
+        # DB 不可用时降级：用 Token payload 中的数据返回
+        return flask_success_response(
+            data={
+                "username": username,
+                "role": role,
+                "nickname": "微信用户",
+                "avatar": "",
+                "phone": "",
+                "openid": username
+            }
+        )
     
     return flask_success_response(
         data={

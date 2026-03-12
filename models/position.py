@@ -32,17 +32,21 @@ class PositionModel:
             
             where_clause = ""
             if customer_id:
-                where_clause = f'.where({{customerId: "{customer_id}"}})'
+                where_clause = f'.where({{customerId: "{customer_id}"}})'  
             
-            count_query = f'db.collection("{self.collection_name}"){where_clause}.count()'
-            total = self.cloud_client.count(count_query)
-            
-            query = f'db.collection("{self.collection_name}"){where_clause}.orderBy("createdAt", "desc").skip({skip}).limit({limit}).get()'
-            items = self.cloud_client.query(query)
-            for item in items:
-                if "_id" in item:
-                    item["_id"] = str(item["_id"])
-            return items, total
+            try:
+                count_query = f'db.collection("{self.collection_name}"){where_clause}.count()'
+                total = self.cloud_client.count(count_query)
+                
+                query = f'db.collection("{self.collection_name}"){where_clause}.orderBy("createdAt", "desc").skip({skip}).limit({limit}).get()'
+                items = self.cloud_client.query(query)
+                for item in items:
+                    if "_id" in item:
+                        item["_id"] = str(item["_id"])
+                return items, total
+            except Exception as e:
+                logger.warning(f"[get_positions] 云数据库查询失败，返回空数据: {e}")
+                return [], 0
         else:
             if not self.collection:
                 return [], 0
@@ -85,7 +89,12 @@ class PositionModel:
                 where_clause = f'.where({{status: "active", customerId: "{customer_id}"}})'
                 
             query = f'db.collection("{self.collection_name}"){where_clause}.limit(1000).get()'
-            items = self.cloud_client.query(query)
+            try:
+                items = self.cloud_client.query(query)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"[get_statistics] 云数据库查询失败，返回空统计: {e}")
+                return stats
             
             stats["totalCount"] = len(items)
             for item in items:
