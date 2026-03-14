@@ -1,6 +1,7 @@
 // 多端登录页面
 const loginService = require('../../utils/loginService');
 const api = require('../../utils/api');
+const realAvatarFetcher = require('../../utils/realAvatarFetcher'); // 🔧 引入真正的头像获取工具
 
 Page({
   data: {
@@ -73,70 +74,148 @@ Page({
       return;
     }
 
-    // 先获取用户授权信息（必须在用户点击事件中同步调用）
+    this.setData({
+      isLoading: true,
+      loadingText: '微信授权中...'
+    });
+
+    // 🔧 增强版登录流程：多重容错机制
+    this.robustWechatLogin();
+  },
+
+  // 🔧 增强版微信登录 - 多重容错机制
+  robustWechatLogin: function() {
+    // 第一步：获取登录凭证
+    wx.login({
+      success: (loginRes) => {
+        if (loginRes.code) {
+          console.log('获取登录凭证成功');
+          
+          // 第二步：尝试获取完整用户信息
+          this.tryGetFullUserProfile(loginRes.code);
+        } else {
+          this.handleLoginFailure('获取登录凭证失败');
+        }
+      },
+      fail: (err) => {
+        console.error('微信登录失败', err);
+        this.handleLoginFailure('微信登录失败');
+      }
+    });
+  },
+
+  // 🔧 尝试获取完整用户信息
+  tryGetFullUserProfile: function(loginCode) {
     wx.getUserProfile({
-      desc: '用于完善用户资料', // 声明获取用户个人信息后的用途
+      desc: '用于完善用户资料',
       success: (profileRes) => {
         console.log('获取用户信息成功');
         this.setData({
-          isLoading: true,
-          loadingText: '微信授权中...'
+          loadingText: '登录处理中...'
         });
         
-        // 获取用户信息成功后，再获取登录凭证
-        wx.login({
-          success: (loginRes) => {
-            if (loginRes.code) {
-              this.setData({
-                loadingText: '登录处理中...'
-              });
-              
-              // 调用登录服务，将 code 和 userInfo 一起发送到服务器
-              loginService.wechatLogin(loginRes.code, profileRes.userInfo)
-                .then(result => {
-                  this.handleLoginSuccess(result, 'wechat');
-                })
-                .catch(error => {
-                  this.handleLoginError(error);
-                });
-            } else {
-              this.setData({ isLoading: false });
-              wx.showToast({
-                title: '获取登录凭证失败',
-                icon: 'none'
-              });
-            }
-          },
-          fail: (err) => {
-            console.error('微信登录失败', err);
-            this.setData({ isLoading: false });
-            wx.showToast({
-              title: '微信登录失败',
-              icon: 'none'
-            });
-          }
-        });
+        // 验证头像URL有效性
+        const userInfo = profileRes.userInfo;
+        if (userInfo.avatarUrl && this.isAvatarUrlValid(userInfo.avatarUrl)) {
+          // 头像URL有效，正常使用
+          this.proceedWithLogin(loginCode, userInfo);
+        } else {
+          // 头像URL无效，使用默认头像
+          console.warn('头像URL无效，使用默认头像');
+          const cleanUserInfo = {
+            ...userInfo,
+            avatarUrl: '' // 清空无效头像URL
+          };
+          this.proceedWithLogin(loginCode, cleanUserInfo);
+        }
       },
       fail: (err) => {
         console.error('获取用户信息失败', err);
-        
-        if (err.errMsg && err.errMsg.includes('fail cancel')) {
-          wx.showToast({
-            title: '用户取消授权',
-            icon: 'none'
+        // 获取用户信息失败，使用最小化信息登录
+        this.fallbackToMinimalLogin(loginCode, err);
+      }
+    });
+  },
+
+  // 🔧 验证头像URL有效性
+  isAvatarUrlValid: function(avatarUrl) {
+    if (!avatarUrl || typeof avatarUrl !== 'string') {
+      return false;
+    }
+    
+    // 检查是否为空字符串或占位符
+    if (avatarUrl.trim() === '' || 
+        avatarUrl.includes('default') || 
+        avatarUrl.includes('placeholder') ||
+        avatarUrl.startsWith('data:image')) {
+      return false;
+    }
+    
+    // 检查URL格式
+    try {
+      new URL(avatarUrl);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  // 🔧 正常流程登录
+  proceedWithLogin: function(loginCode, userInfo) {
+    loginService.wechatLogin(loginCode, userInfo)
+      .then(result => {
+        this.handleLoginSuccess(result, 'wechat');
+      })
+      .catch(error => {
+        this.handleLoginError(error);
+      });
+  },
+
+  // 🔧 降级到最小化信息登录
+  fallbackToMinimalLogin: function(loginCode, originalError) {
+    console.log('降级到最小化登录信息');
+    
+    wx.showModal({
+      title: '温馨提示',
+      content: '获取用户详细信息失败，将使用基础信息继续登录',
+      confirmText: '继续登录',
+      cancelText: '取消',
+      success: (modalRes) => {
+        if (modalRes.confirm) {
+          this.setData({
+            loadingText: '登录处理中...'
           });
-        } else if (err.errMsg && err.errMsg.includes('user deny')) {
-          wx.showToast({
-            title: '需要授权才能登录',
-            icon: 'none'
-          });
+          
+          // 使用最小化用户信息
+          const minimalUserInfo = {
+            nickName: '微信用户',
+            avatarUrl: '', // 空头像
+            gender: 0,
+            city: '',
+            province: '',
+            country: 'CN'
+          };
+          
+          loginService.wechatLogin(loginCode, minimalUserInfo)
+            .then(result => {
+              this.handleLoginSuccess(result, 'wechat');
+            })
+            .catch(error => {
+              this.handleLoginError(error);
+            });
         } else {
-          wx.showToast({
-            title: '获取用户信息失败',
-            icon: 'none'
-          });
+          this.setData({ isLoading: false });
         }
       }
+    });
+  },
+
+  // 🔧 统一的登录失败处理
+  handleLoginFailure: function(errorMessage) {
+    this.setData({ isLoading: false });
+    wx.showToast({
+      title: errorMessage,
+      icon: 'none'
     });
   },
 

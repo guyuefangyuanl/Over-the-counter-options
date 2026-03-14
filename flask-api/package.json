@@ -1,0 +1,23 @@
+{
+  "name": "func-v2-template",
+  "version": "1.0.0",
+  "description": "函数型云托管示例代码",
+  "main": "index.js",
+  "author": "",
+  "license": "ISC",
+  "homepage": "https://docs.cloudbase.net/cbrf/intro",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "@cloudbase/functions-framework": "^1.3.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.7.0",
+    "@types/ws": "^8.5.14",
+    "openai": "^4.83.0",
+    "ws": "^8.18.0"
+  }
+}

@@ -130,6 +130,49 @@ Page({
     addFavoritesSearch: '',        // 添加自选搜索关键词
     addFavoritesCategory: 'all',   // 当前选中的分类
     addFavoritesStockList: [],     // 添加自选股票列表
+
+    // === 批量询价相关 ===
+    showBatchForm: false,
+    batchForm: {
+      optionType: 'call',
+      structure: 'vanilla',
+      term: '1M',
+      notionalAmount: '',
+      strikePrice: '100',
+      selectedDealers: ['CICC'],
+      contactName: '',
+      contactPhone: '',
+      contactEmail: '',
+      notes: ''
+    },
+    batchFormErrors: {},
+    batchProducts: [],
+    isBatchSubmitting: false,
+    batchProgress: 0,
+    batchTotal: 0,
+    batchSuccessCount: 0,
+    batchFailCount: 0,
+    showBatchResult: false,
+
+    // === 快速询价相关 ===
+    showQuickForm: false,
+    quickForm: {
+      productName: '',
+      productCode: '',
+      optionType: 'call',
+      structure: 'vanilla',
+      term: '1M',
+      notionalAmount: '',
+      strikePrice: '100',
+      selectedDealers: ['CICC'],
+      contactName: '',
+      contactPhone: '',
+      contactEmail: '',
+      notes: ''
+    },
+    quickFormErrors: {},
+    isQuickSubmitting: false,
+    quickSearchResults: []
   },
 
   onLoad() {
@@ -519,6 +562,29 @@ Page({
     }
     if (!inquiryForm.contactPhone) {
       errors.contactPhone = '请输入联系电话';
+    } else if (!/^1[3-9]\d{9}$/.test(inquiryForm.contactPhone)) {
+      errors.contactPhone = '手机号格式不正确';
+    }
+
+    // 名义本金范围校验
+    if (inquiryForm.notionalAmount) {
+      const amount = Number(inquiryForm.notionalAmount);
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 100000) {
+        errors.notionalAmount = '名义本金须为大于0的数值（单位万元）';
+      }
+    }
+
+    // 行权价范围校验
+    if (inquiryForm.strikePrice) {
+      const strike = Number(inquiryForm.strikePrice);
+      if (!Number.isFinite(strike) || strike < 50 || strike > 200) {
+        errors.strikePrice = '行权价须在50%~200%之间';
+      }
+    }
+
+    // 邮箱格式校验（可选字段）
+    if (inquiryForm.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inquiryForm.contactEmail)) {
+      errors.contactEmail = '邮箱格式不正确';
     }
     
     if (Object.keys(errors).length > 0) {
@@ -593,7 +659,7 @@ Page({
       }
     };
     
-    console.log('提交询价数据:', submitData);
+    console.log('提交询价:', { productCode: submitData.productCode, optionType: submitData.optionType, structure: submitData.structure, term: submitData.term });
     
     // 通过云函数提交询价（带服务端校验）
     submitInquiry(submitData).then(result => {
@@ -636,20 +702,346 @@ Page({
 
   // 批量询价
   batchInquiry() {
-    const { favoritesById, quoteList } = this.data;
-    const favoriteList = quoteList.filter(item => favoritesById[item.id]);
+    const { favoritesById, _fullQuoteList } = this.data;
+    const favoriteList = _fullQuoteList.filter(item => favoritesById[item.id]);
     
     if (favoriteList.length === 0) {
       wx.showToast({ title: '请先添加自选标的', icon: 'none' });
       return;
     }
     
-    wx.showToast({ title: '批量询价功能开发中', icon: 'none' });
+    this.setData({
+      batchProducts: favoriteList,
+      showBatchForm: true,
+      batchFormErrors: {},
+      batchProgress: 0,
+      batchTotal: favoriteList.length,
+      batchSuccessCount: 0,
+      batchFailCount: 0,
+      showBatchResult: false,
+      isBatchSubmitting: false
+    });
+  },
+
+  // 隐藏批量询价表单
+  hideBatchForm() {
+    this.setData({ showBatchForm: false });
+  },
+
+  // 批量表单输入
+  onBatchFormInput(e) {
+    const field = e.currentTarget.dataset.field;
+    const d = e && e.detail;
+    const val = typeof d === 'string' ? d : (d && d.value) || '';
+    if (!field) return;
+    const form = { ...this.data.batchForm };
+    form[field] = val;
+    const errors = { ...this.data.batchFormErrors };
+    if (errors[field]) delete errors[field];
+    this.setData({ batchForm: form, batchFormErrors: errors });
+  },
+
+  onBatchOptionTypeChange(e) {
+    this.setData({ 'batchForm.optionType': e.detail });
+  },
+  onBatchStructureChange(e) {
+    this.setData({ 'batchForm.structure': e.detail });
+  },
+  onBatchTermChange(e) {
+    this.setData({ 'batchForm.term': e.detail });
+  },
+  onBatchDealersChange(e) {
+    this.setData({ 'batchForm.selectedDealers': e.detail });
+  },
+
+  // 校验批量询价表单
+  _validateBatchForm() {
+    const errors = {};
+    const form = this.data.batchForm;
+    
+    if (!form.notionalAmount) {
+      errors.notionalAmount = '请输入名义本金';
+    } else {
+      const amount = Number(form.notionalAmount);
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 100000) {
+        errors.notionalAmount = '名义本金须为大于0的数值（单位万元）';
+      }
+    }
+    if (!form.strikePrice) {
+      errors.strikePrice = '请输入行权价';
+    } else {
+      const strike = Number(form.strikePrice);
+      if (!Number.isFinite(strike) || strike < 50 || strike > 200) {
+        errors.strikePrice = '行权价须在50%~200%之间';
+      }
+    }
+    if (!form.contactName) {
+      errors.contactName = '请输入联系人';
+    }
+    if (!form.contactPhone) {
+      errors.contactPhone = '请输入联系电话';
+    } else if (!/^1[3-9]\d{9}$/.test(form.contactPhone)) {
+      errors.contactPhone = '手机号格式不正确';
+    }
+    if (form.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contactEmail)) {
+      errors.contactEmail = '邮箱格式不正确';
+    }
+    
+    return errors;
+  },
+
+  // 提交批量询价
+  submitBatchInquiry() {
+    const errors = this._validateBatchForm();
+    if (Object.keys(errors).length > 0) {
+      this.setData({ batchFormErrors: errors });
+      wx.showToast({ title: '请完善信息', icon: 'none' });
+      return;
+    }
+
+    const { batchProducts, batchForm } = this.data;
+    this.setData({
+      isBatchSubmitting: true,
+      batchProgress: 0,
+      batchSuccessCount: 0,
+      batchFailCount: 0
+    });
+
+    const loginService = require('../../utils/loginService.js');
+    const currentUser = loginService.getCurrentUser() || {};
+    const storedUserInfo = wx.getStorageSync('userInfo') || {};
+
+    let successCount = 0;
+    let failCount = 0;
+    const total = batchProducts.length;
+
+    // 串行提交，避免云函数限流
+    const submitNext = (index) => {
+      if (index >= total) {
+        this.setData({
+          isBatchSubmitting: false,
+          showBatchResult: true,
+          batchSuccessCount: successCount,
+          batchFailCount: failCount
+        });
+        return;
+      }
+
+      const product = batchProducts[index];
+      const submitData = {
+        selectedProduct: { name: product.name, code: product.code, type: product.type || 'stock' },
+        productName: product.name,
+        productCode: product.code,
+        optionType: batchForm.optionType,
+        structure: batchForm.structure,
+        term: batchForm.term,
+        notionalAmount: batchForm.notionalAmount,
+        strikePrice: batchForm.strikePrice,
+        selectedDealers: batchForm.selectedDealers || [],
+        contactName: batchForm.contactName,
+        phone: batchForm.contactPhone,
+        contactPhone: batchForm.contactPhone,
+        contactEmail: batchForm.contactEmail || '',
+        notes: batchForm.notes || '',
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        userId: currentUser.userId || storedUserInfo.userId || 'anonymous_' + Date.now(),
+        userName: currentUser.nickName || storedUserInfo.nickName || batchForm.contactName || '匿名用户',
+        openid: currentUser.openid || storedUserInfo.openid || 'anonymous',
+        source: 'miniprogram_batch',
+        contactInfo: { name: batchForm.contactName, phone: batchForm.contactPhone, email: batchForm.contactEmail }
+      };
+
+      submitInquiry(submitData).then(() => {
+        successCount++;
+      }).catch(err => {
+        console.error('批量询价失败 [' + product.code + ']:', err.message);
+        failCount++;
+      }).finally(() => {
+        const progress = Math.round(((index + 1) / total) * 100);
+        this.setData({ batchProgress: progress, batchSuccessCount: successCount, batchFailCount: failCount });
+        // 200ms间隔防限流
+        setTimeout(() => submitNext(index + 1), 200);
+      });
+    };
+
+    submitNext(0);
+  },
+
+  // 关闭批量结果弹窗
+  closeBatchResult() {
+    this.setData({ showBatchResult: false, showBatchForm: false });
+  },
+
+  // 查看询价记录
+  goInquiryHistory() {
+    this.setData({ showBatchResult: false, showBatchForm: false });
+    wx.navigateTo({ url: '/pages/inquiry-history/inquiry-history' });
   },
 
   // 快速询价
   quickInquiry() {
-    wx.showToast({ title: '快速询价功能开发中', icon: 'none' });
+    this.setData({
+      showQuickForm: true,
+      quickFormErrors: {},
+      quickSearchResults: [],
+      isQuickSubmitting: false
+    });
+  },
+
+  // 隐藏快速询价表单
+  hideQuickForm() {
+    this.setData({ showQuickForm: false });
+  },
+
+  // 快速询价表单输入
+  onQuickFormInput(e) {
+    const field = e.currentTarget.dataset.field;
+    const d = e && e.detail;
+    const val = typeof d === 'string' ? d : (d && d.value) || '';
+    if (!field) return;
+    const form = { ...this.data.quickForm };
+    form[field] = val;
+    const errors = { ...this.data.quickFormErrors };
+    if (errors[field]) delete errors[field];
+    this.setData({ quickForm: form, quickFormErrors: errors });
+
+    // 产品名称/代码输入时触发模糊匹配
+    if (field === 'productName' || field === 'productCode') {
+      this._searchQuickProducts(val);
+    }
+  },
+
+  onQuickOptionTypeChange(e) {
+    this.setData({ 'quickForm.optionType': e.detail });
+  },
+  onQuickStructureChange(e) {
+    this.setData({ 'quickForm.structure': e.detail });
+  },
+  onQuickTermChange(e) {
+    this.setData({ 'quickForm.term': e.detail });
+  },
+  onQuickDealersChange(e) {
+    this.setData({ 'quickForm.selectedDealers': e.detail });
+  },
+
+  // 模糊搜索产品
+  _searchQuickProducts(keyword) {
+    if (!keyword || !keyword.trim()) {
+      this.setData({ quickSearchResults: [] });
+      return;
+    }
+    const k = keyword.trim().toLowerCase();
+    const results = this.data._fullQuoteList
+      .filter(item => item.name.toLowerCase().includes(k) || item.code.toLowerCase().includes(k))
+      .slice(0, 5);
+    this.setData({ quickSearchResults: results });
+  },
+
+  // 选择快速询价的产品
+  selectQuickProduct(e) {
+    const id = e.currentTarget.dataset.id;
+    const product = this.data._fullQuoteList.find(item => item.id === id);
+    if (product) {
+      this.setData({
+        'quickForm.productName': product.name,
+        'quickForm.productCode': product.code,
+        quickSearchResults: []
+      });
+    }
+  },
+
+  // 提交快速询价
+  submitQuickInquiry() {
+    const errors = {};
+    const form = this.data.quickForm;
+
+    if (!form.productName && !form.productCode) {
+      errors.productName = '请输入产品名称或代码';
+    }
+    if (!form.notionalAmount) {
+      errors.notionalAmount = '请输入名义本金';
+    } else {
+      const amount = Number(form.notionalAmount);
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 100000) {
+        errors.notionalAmount = '名义本金须为大于0的数值（单位万元）';
+      }
+    }
+    if (!form.strikePrice) {
+      errors.strikePrice = '请输入行权价';
+    } else {
+      const strike = Number(form.strikePrice);
+      if (!Number.isFinite(strike) || strike < 50 || strike > 200) {
+        errors.strikePrice = '行权价须在50%~200%之间';
+      }
+    }
+    if (!form.contactName) {
+      errors.contactName = '请输入联系人';
+    }
+    if (!form.contactPhone) {
+      errors.contactPhone = '请输入联系电话';
+    } else if (!/^1[3-9]\d{9}$/.test(form.contactPhone)) {
+      errors.contactPhone = '手机号格式不正确';
+    }
+    if (form.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contactEmail)) {
+      errors.contactEmail = '邮箱格式不正确';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      this.setData({ quickFormErrors: errors });
+      wx.showToast({ title: '请完善信息', icon: 'none' });
+      return;
+    }
+
+    this.setData({ isQuickSubmitting: true });
+
+    const loginService = require('../../utils/loginService.js');
+    const currentUser = loginService.getCurrentUser() || {};
+    const storedUserInfo = wx.getStorageSync('userInfo') || {};
+
+    const submitData = {
+      selectedProduct: { name: form.productName, code: form.productCode, type: 'stock' },
+      productName: form.productName,
+      productCode: form.productCode,
+      optionType: form.optionType,
+      structure: form.structure,
+      term: form.term,
+      notionalAmount: form.notionalAmount,
+      strikePrice: form.strikePrice,
+      selectedDealers: form.selectedDealers || [],
+      contactName: form.contactName,
+      phone: form.contactPhone,
+      contactPhone: form.contactPhone,
+      contactEmail: form.contactEmail || '',
+      notes: form.notes || '',
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      userId: currentUser.userId || storedUserInfo.userId || 'anonymous_' + Date.now(),
+      userName: currentUser.nickName || storedUserInfo.nickName || form.contactName || '匿名用户',
+      openid: currentUser.openid || storedUserInfo.openid || 'anonymous',
+      source: 'miniprogram_quick',
+      contactInfo: { name: form.contactName, phone: form.contactPhone, email: form.contactEmail }
+    };
+
+    submitInquiry(submitData).then(result => {
+      console.log('快速询价成功:', result.data.inquiryId);
+      wx.showToast({ title: '询价提交成功', icon: 'success', duration: 2000 });
+      this.setData({
+        quickForm: {
+          productName: '', productCode: '', optionType: 'call', structure: 'vanilla',
+          term: '1M', notionalAmount: '', strikePrice: '100', selectedDealers: ['CICC'],
+          contactName: '', contactPhone: '', contactEmail: '', notes: ''
+        }
+      });
+      this.hideQuickForm();
+    }).catch(err => {
+      console.error('快速询价失败:', err);
+      wx.showToast({ title: '提交失败：' + (err.message || '请重试'), icon: 'none', duration: 3000 });
+    }).finally(() => {
+      this.setData({ isQuickSubmitting: false });
+    });
   },
 
   /**

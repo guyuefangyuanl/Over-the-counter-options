@@ -1,10 +1,15 @@
 const accountService = require('../../utils/accountService.js');
+const avatarUtils = require('../../utils/avatarUtils.js');
 const app = getApp();
 
 Page({
   data: {
     // 用户信息
     userInfo: null,
+    
+    // 头像上传状态
+    isAvatarUploading: false,
+    showAvatarPreview: false,
 
     // 账户选择
     accounts: [
@@ -101,13 +106,112 @@ Page({
     wx.showToast({ title: '功能开发中', icon: 'none' });
   },
 
-  // 更新头像
-  onChooseAvatar(e) {
-    const { avatarUrl } = e.detail;
-    this.setData({ 'userInfo.avatar': avatarUrl });
-    accountService.updateUserProfile({ avatar: avatarUrl }).catch(err => {
-      console.warn('头像更新失败:', err.message);
-    });
+  // 更新头像 - 增强版（多重容错）
+  async onChooseAvatar(e) {
+    try {
+      const { avatarUrl: tempFilePath } = e.detail;
+      
+      // 🔧 增强验证：检查文件是否存在且可访问
+      if (!tempFilePath || typeof tempFilePath !== 'string') {
+        throw new Error('头像文件路径无效');
+      }
+
+      // 验证文件
+      const validationResult = avatarUtils.validateAvatarFile(tempFilePath);
+      if (!validationResult.valid) {
+        wx.showToast({
+          title: validationResult.message,
+          icon: 'none'
+        });
+        return;
+      }
+
+      // 显示上传状态
+      this.setData({ 
+        isAvatarUploading: true,
+        'userInfo.avatar': tempFilePath // 先显示本地预览
+      });
+
+      // 🔧 增强压缩：添加更多选项和错误处理
+      let compressedPath = tempFilePath; // 默认使用原图
+      try {
+        compressedPath = await avatarUtils.compressImage(tempFilePath, {
+          quality: 80,
+          maxWidth: 800,
+          maxHeight: 800
+        });
+      } catch (compressError) {
+        console.warn('图片压缩失败，使用原图:', compressError.message);
+        // 压缩失败时继续使用原图
+      }
+
+      // 🔧 增强上传：添加重试机制
+      let uploadedUrl;
+      let retryCount = 0;
+      const maxRetries = 2;
+      
+      while (retryCount <= maxRetries) {
+        try {
+          uploadedUrl = await avatarUtils.uploadAvatar(compressedPath, this.data.userInfo?.openid);
+          break; // 上传成功，跳出循环
+        } catch (uploadError) {
+          retryCount++;
+          if (retryCount > maxRetries) {
+            throw uploadError; // 超过重试次数，抛出错误
+          }
+          console.warn(`上传失败，第${retryCount}次重试:`, uploadError.message);
+          // 等待一段时间后重试
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+        }
+      }
+
+      // 更新用户信息
+      await accountService.updateUserProfile({ 
+        avatar: uploadedUrl,
+        nickname: this.data.userInfo?.nickname
+      });
+
+      // 更新本地数据
+      this.setData({
+        'userInfo.avatar': uploadedUrl
+      });
+
+      wx.showToast({
+        title: '头像更新成功',
+        icon: 'success'
+      });
+
+    } catch (error) {
+      console.error('头像上传失败:', error);
+      wx.showModal({
+        title: '头像更新失败',
+        content: error.message || '头像上传过程中出现问题，请稍后重试',
+        showCancel: false,
+        confirmText: '知道了'
+      });
+      
+      // 🔧 恢复之前的头像或默认头像
+      const previousAvatar = this.data.userInfo?.avatar;
+      this.setData({
+        'userInfo.avatar': previousAvatar && previousAvatar !== avatarUtils.getDefaultAvatar() 
+          ? previousAvatar 
+          : avatarUtils.getDefaultAvatar()
+      });
+    } finally {
+      this.setData({ isAvatarUploading: false });
+    }
+  },
+
+  // 头像点击预览
+  onAvatarTap() {
+    if (this.data.userInfo?.avatar) {
+      avatarUtils.previewAvatar(this.data.userInfo.avatar);
+    }
+  },
+
+  // 头像加载失败处理
+  onAvatarError(event) {
+    avatarUtils.onAvatarError(event, this, 'userInfo.avatar');
   },
 
   // 更新昵称

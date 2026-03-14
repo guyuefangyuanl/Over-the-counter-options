@@ -312,6 +312,7 @@
         <view class="form-section">
           <view class="section-title">联系信息</view>
           <van-field
+            label="联系人"
             value="{{inquiryForm.contactName}}"
             placeholder="请输入联系人姓名"
             data-field="contactName"
@@ -320,6 +321,7 @@
             required
           />
           <van-field
+            label="联系电话"
             value="{{inquiryForm.contactPhone}}"
             placeholder="请输入联系电话"
             type="tel"
@@ -329,6 +331,7 @@
             required
           />
           <van-field
+            label="邮箱"
             value="{{inquiryForm.contactEmail}}"
             placeholder="请输入邮箱地址（可选）"
             type="email"
@@ -337,6 +340,7 @@
             error-message="{{formErrors.contactEmail || ''}}"
           />
           <van-field
+            label="备注"
             value="{{inquiryForm.notes}}"
             placeholder="请输入备注信息（可选）"
             type="textarea"
@@ -438,6 +442,195 @@
       <!-- 底部关闭按钮 -->
       <view class="popup-footer">
         <van-button round block bind:click="hideAddFavoritesPopup">关闭</van-button>
+      </view>
+    </view>
+  </van-popup>
+
+  <!-- ==================== 批量询价表单弹窗 ==================== -->
+  <van-popup show="{{showBatchForm}}" 
+             round 
+             position="bottom" 
+             custom-style="height: 85%;" 
+             bind:close="hideBatchForm">
+    <view class="inquiry-form-popup">
+      <view class="form-header">
+        <text class="form-title">批量询价</text>
+        <van-icon name="cross" bind:click="hideBatchForm" />
+      </view>
+      
+      <scroll-view scroll-y class="form-content">
+        <!-- 批量摘要 -->
+        <view class="form-section">
+          <view class="section-title">批量标的</view>
+          <view class="batch-summary">
+            <van-tag type="primary" size="large">将对 {{batchProducts.length}} 个标的批量询价</van-tag>
+            <view class="batch-product-list">
+              <text wx:for="{{batchProducts}}" wx:key="id" class="batch-product-tag">{{item.name}}({{item.code}})</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 期权参数 -->
+        <view class="form-section">
+          <view class="section-title">期权参数</view>
+          <view class="form-item-label">期权类型</view>
+          <van-radio-group value="{{batchForm.optionType}}" bind:change="onBatchOptionTypeChange" direction="horizontal" class="form-radio-group">
+            <van-radio name="call">看涨 (Call)</van-radio>
+            <van-radio name="put">看跌 (Put)</van-radio>
+          </van-radio-group>
+
+          <view class="form-item-label">期权结构</view>
+          <van-dropdown-menu active-color="#1989fa">
+            <van-dropdown-item value="{{batchForm.structure}}" options="{{structureOptions}}" bind:change="onBatchStructureChange" />
+          </van-dropdown-menu>
+
+          <view class="form-item-label">期权期限</view>
+          <van-dropdown-menu active-color="#1989fa">
+            <van-dropdown-item value="{{batchForm.term}}" options="{{termOptions}}" bind:change="onBatchTermChange" />
+          </van-dropdown-menu>
+        </view>
+
+        <!-- 金额与价格 -->
+        <view class="form-section">
+          <view class="section-title">交易金额与价格</view>
+          <van-field label="名义本金" value="{{batchForm.notionalAmount}}" placeholder="请输入名义本金" type="number" use-button-slot data-field="notionalAmount" bind:change="onBatchFormInput" error-message="{{batchFormErrors.notionalAmount}}">
+            <view slot="button" class="field-unit">万元</view>
+          </van-field>
+          <van-field label="行权价" value="{{batchForm.strikePrice}}" placeholder="如: 100" type="digit" use-button-slot data-field="strikePrice" bind:change="onBatchFormInput" error-message="{{batchFormErrors.strikePrice}}">
+            <view slot="button" class="field-unit">%</view>
+          </van-field>
+          <view class="form-item-label">首选交易商</view>
+          <van-checkbox-group value="{{batchForm.selectedDealers}}" bind:change="onBatchDealersChange" direction="horizontal">
+            <van-checkbox wx:for="{{allDealers}}" wx:key="id" name="{{item.id}}" shape="square">{{item.name}}</van-checkbox>
+          </van-checkbox-group>
+        </view>
+
+        <!-- 联系信息 -->
+        <view class="form-section">
+          <view class="section-title">联系信息</view>
+          <van-field label="联系人" value="{{batchForm.contactName}}" placeholder="请输入联系人" data-field="contactName" bind:change="onBatchFormInput" error-message="{{batchFormErrors.contactName || ''}}" required />
+          <van-field label="联系电话" value="{{batchForm.contactPhone}}" placeholder="请输入联系电话" type="tel" data-field="contactPhone" bind:change="onBatchFormInput" error-message="{{batchFormErrors.contactPhone || ''}}" required />
+          <van-field label="邮箱" value="{{batchForm.contactEmail}}" placeholder="请输入邮箱（可选）" data-field="contactEmail" bind:change="onBatchFormInput" error-message="{{batchFormErrors.contactEmail || ''}}" />
+          <van-field label="备注" value="{{batchForm.notes}}" placeholder="请输入备注（可选）" type="textarea" rows="2" data-field="notes" bind:change="onBatchFormInput" />
+        </view>
+      </scroll-view>
+
+      <!-- 提交进度 -->
+      <view class="batch-progress" wx:if="{{isBatchSubmitting}}">
+        <view class="progress-bar">
+          <view class="progress-fill" style="width: {{batchProgress}}%"></view>
+        </view>
+        <text class="progress-text">提交中... {{batchProgress}}%（成功{{batchSuccessCount}} / 失败{{batchFailCount}}）</text>
+      </view>
+
+      <!-- 提交按钮 -->
+      <view class="form-footer">
+        <van-button type="primary" round block bind:click="submitBatchInquiry" loading="{{isBatchSubmitting}}" disabled="{{isBatchSubmitting}}">
+          {{isBatchSubmitting ? '提交中...' : '批量提交询价'}}
+        </van-button>
+      </view>
+    </view>
+  </van-popup>
+
+  <!-- 批量结果弹窗 -->
+  <van-popup show="{{showBatchResult}}" round position="center" bind:close="closeBatchResult">
+    <view class="batch-result-dialog">
+      <view class="dialog-title">批量询价完成</view>
+      <view class="result-content">
+        <view class="result-item success">
+          <text class="result-count">{{batchSuccessCount}}</text>
+          <text class="result-label">成功</text>
+        </view>
+        <view class="result-item fail" wx:if="{{batchFailCount > 0}}">
+          <text class="result-count">{{batchFailCount}}</text>
+          <text class="result-label">失败</text>
+        </view>
+      </view>
+      <view class="dialog-actions">
+        <van-button size="small" type="default" bind:click="closeBatchResult">关闭</van-button>
+        <van-button size="small" type="primary" bind:click="goInquiryHistory">查看询价记录</van-button>
+      </view>
+    </view>
+  </van-popup>
+
+  <!-- ==================== 快速询价表单弹窗 ==================== -->
+  <van-popup show="{{showQuickForm}}" 
+             round 
+             position="bottom" 
+             custom-style="height: 85%;" 
+             bind:close="hideQuickForm">
+    <view class="inquiry-form-popup">
+      <view class="form-header">
+        <text class="form-title">快速询价</text>
+        <van-icon name="cross" bind:click="hideQuickForm" />
+      </view>
+      
+      <scroll-view scroll-y class="form-content">
+        <!-- 产品信息（手动输入） -->
+        <view class="form-section">
+          <view class="section-title">标的信息</view>
+          <van-field label="产品名称" value="{{quickForm.productName}}" placeholder="请输入产品名称" data-field="productName" bind:change="onQuickFormInput" error-message="{{quickFormErrors.productName || ''}}" />
+          <van-field label="产品代码" value="{{quickForm.productCode}}" placeholder="请输入产品代码" data-field="productCode" bind:change="onQuickFormInput" />
+          
+          <!-- 搜索建议 -->
+          <view class="quick-search-results" wx:if="{{quickSearchResults.length > 0}}">
+            <view class="search-result-item" wx:for="{{quickSearchResults}}" wx:key="id" hover-class="press" bindtap="selectQuickProduct" data-id="{{item.id}}">
+              <text class="result-name">{{item.name}}</text>
+              <text class="result-code">{{item.code}}</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 期权参数 -->
+        <view class="form-section">
+          <view class="section-title">期权参数</view>
+          <view class="form-item-label">期权类型</view>
+          <van-radio-group value="{{quickForm.optionType}}" bind:change="onQuickOptionTypeChange" direction="horizontal" class="form-radio-group">
+            <van-radio name="call">看涨 (Call)</van-radio>
+            <van-radio name="put">看跌 (Put)</van-radio>
+          </van-radio-group>
+
+          <view class="form-item-label">期权结构</view>
+          <van-dropdown-menu active-color="#1989fa">
+            <van-dropdown-item value="{{quickForm.structure}}" options="{{structureOptions}}" bind:change="onQuickStructureChange" />
+          </van-dropdown-menu>
+
+          <view class="form-item-label">期权期限</view>
+          <van-dropdown-menu active-color="#1989fa">
+            <van-dropdown-item value="{{quickForm.term}}" options="{{termOptions}}" bind:change="onQuickTermChange" />
+          </van-dropdown-menu>
+        </view>
+
+        <!-- 金额与价格 -->
+        <view class="form-section">
+          <view class="section-title">交易金额与价格</view>
+          <van-field label="名义本金" value="{{quickForm.notionalAmount}}" placeholder="请输入名义本金" type="number" use-button-slot data-field="notionalAmount" bind:change="onQuickFormInput" error-message="{{quickFormErrors.notionalAmount}}">
+            <view slot="button" class="field-unit">万元</view>
+          </van-field>
+          <van-field label="行权价" value="{{quickForm.strikePrice}}" placeholder="如: 100" type="digit" use-button-slot data-field="strikePrice" bind:change="onQuickFormInput" error-message="{{quickFormErrors.strikePrice}}">
+            <view slot="button" class="field-unit">%</view>
+          </van-field>
+          <view class="form-item-label">首选交易商</view>
+          <van-checkbox-group value="{{quickForm.selectedDealers}}" bind:change="onQuickDealersChange" direction="horizontal">
+            <van-checkbox wx:for="{{allDealers}}" wx:key="id" name="{{item.id}}" shape="square">{{item.name}}</van-checkbox>
+          </van-checkbox-group>
+        </view>
+
+        <!-- 联系信息 -->
+        <view class="form-section">
+          <view class="section-title">联系信息</view>
+          <van-field label="联系人" value="{{quickForm.contactName}}" placeholder="请输入联系人" data-field="contactName" bind:change="onQuickFormInput" error-message="{{quickFormErrors.contactName || ''}}" required />
+          <van-field label="联系电话" value="{{quickForm.contactPhone}}" placeholder="请输入联系电话" type="tel" data-field="contactPhone" bind:change="onQuickFormInput" error-message="{{quickFormErrors.contactPhone || ''}}" required />
+          <van-field label="邮箱" value="{{quickForm.contactEmail}}" placeholder="请输入邮箱（可选）" data-field="contactEmail" bind:change="onQuickFormInput" error-message="{{quickFormErrors.contactEmail || ''}}" />
+          <van-field label="备注" value="{{quickForm.notes}}" placeholder="请输入备注（可选）" type="textarea" rows="2" data-field="notes" bind:change="onQuickFormInput" />
+        </view>
+      </scroll-view>
+
+      <!-- 提交按钮 -->
+      <view class="form-footer">
+        <van-button type="primary" round block bind:click="submitQuickInquiry" loading="{{isQuickSubmitting}}" disabled="{{isQuickSubmitting}}">
+          {{isQuickSubmitting ? '提交中...' : '提交询价'}}
+        </van-button>
       </view>
     </view>
   </van-popup>

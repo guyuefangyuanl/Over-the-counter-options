@@ -1,0 +1,123 @@
+<!--pages/inquiry-history/inquiry-history.wxml-->
+<wxs module="utils">
+var formatTime = function(time) {
+  if (!time) return '--';
+  var d = getDate(time);
+  if (!d || isNaN(d.getTime())) return '--';
+  var year = d.getFullYear();
+  var month = d.getMonth() + 1;
+  var day = d.getDate();
+  var hour = d.getHours();
+  var minute = d.getMinutes();
+  month = month < 10 ? '0' + month : '' + month;
+  day = day < 10 ? '0' + day : '' + day;
+  hour = hour < 10 ? '0' + hour : '' + hour;
+  minute = minute < 10 ? '0' + minute : '' + minute;
+  return year + '-' + month + '-' + day + ' ' + hour + ':' + minute;
+};
+
+var formatOptionType = function(type) {
+  if (type === 'call') return '看涨';
+  if (type === 'put') return '看跌';
+  return type || '--';
+};
+
+var formatStructure = function(s) {
+  if (s === 'vanilla') return '香草';
+  if (s === 'snowball') return '雪球';
+  if (s === 'phoenix') return '凤凰';
+  return s || '--';
+};
+
+var formatStatus = function(s) {
+  if (s === 'pending') return '待处理';
+  if (s === 'quoted') return '已报价';
+  if (s === 'completed') return '已成交';
+  if (s === 'rejected') return '已拒绝';
+  return s || '--';
+};
+
+var statusColor = function(s) {
+  if (s === 'pending') return '#E6A23C';
+  if (s === 'quoted') return '#409EFF';
+  if (s === 'completed') return '#67C23A';
+  if (s === 'rejected') return '#F56C6C';
+  return '#909399';
+};
+
+module.exports = {
+  formatTime: formatTime,
+  formatOptionType: formatOptionType,
+  formatStructure: formatStructure,
+  formatStatus: formatStatus,
+  statusColor: statusColor
+};
+</wxs>
+
+<view class="page-container">
+  <!-- 状态筛选 Tab -->
+  <view class="status-tabs">
+    <scroll-view scroll-x class="tabs-scroll" show-scrollbar="{{false}}" enable-flex="true">
+      <view class="tab-item {{activeStatus === item.value ? 'is-active' : ''}}"
+            wx:for="{{statusTabs}}" wx:key="value"
+            bindtap="switchStatus"
+            data-status="{{item.value}}">
+        {{item.label}}
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- 列表区域 -->
+  <scroll-view scroll-y class="list-wrapper" enable-flex="true">
+    <block wx:for="{{inquiryList}}" wx:key="_id">
+      <view class="inquiry-card" hover-class="card-hover" bindtap="goDetail" data-id="{{item._id}}">
+        <view class="card-top">
+          <view class="card-product">
+            <text class="product-name">{{item.productName || (item.selectedProduct.name) || '--'}}</text>
+            <text class="product-code">{{item.productCode || (item.selectedProduct.code) || ''}}</text>
+          </view>
+          <van-tag plain color="{{utils.statusColor(item.status)}}">{{utils.formatStatus(item.status)}}</van-tag>
+        </view>
+
+        <view class="card-params">
+          <view class="param-item">
+            <text class="param-label">类型</text>
+            <text class="param-value">{{utils.formatOptionType(item.optionType)}}</text>
+          </view>
+          <view class="param-item">
+            <text class="param-label">结构</text>
+            <text class="param-value">{{utils.formatStructure(item.structure)}}</text>
+          </view>
+          <view class="param-item">
+            <text class="param-label">期限</text>
+            <text class="param-value">{{item.term || '--'}}</text>
+          </view>
+          <view class="param-item">
+            <text class="param-label">本金</text>
+            <text class="param-value">{{item.notionalAmount || '--'}}万</text>
+          </view>
+        </view>
+
+        <view class="card-bottom">
+          <text class="card-time">{{utils.formatTime(item.createdAt)}}</text>
+          <van-icon name="arrow" size="14px" color="#c0c4cc" />
+        </view>
+      </view>
+    </block>
+
+    <!-- 加载更多 -->
+    <view class="load-more" wx:if="{{isLoading}}">
+      <van-loading size="20px" type="spinner">加载中...</van-loading>
+    </view>
+
+    <!-- 没有更多 -->
+    <view class="no-more" wx:if="{{!hasMore && inquiryList.length > 0 && !isLoading}}">
+      <text>没有更多了</text>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty-wrapper" wx:if="{{isEmpty && !isLoading}}">
+      <van-empty description="暂无询价记录" />
+    </view>
+  </scroll-view>
+</view>

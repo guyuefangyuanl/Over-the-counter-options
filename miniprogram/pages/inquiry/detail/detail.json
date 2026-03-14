@@ -1,5 +1,9 @@
 {
   "navigationBarTitleText": "期权报价",
   "navigationBarBackgroundColor": "#2D8CF0",
-  "navigationBarTextStyle": "white"
+  "navigationBarTextStyle": "white",
+  "usingComponents": {
+    "van-loading": "@vant/weapp/loading/index",
+    "van-icon": "@vant/weapp/icon/index"
+  }
 }

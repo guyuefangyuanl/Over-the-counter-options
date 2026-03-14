@@ -42,6 +42,13 @@ Page({
         showArrow: true
       },
       {
+        id: 'inquiry-history',
+        title: '询价记录',
+        icon: 'service',
+        path: '/pages/inquiry-history/inquiry-history',
+        showArrow: true
+      },
+      {
         id: 'suggestion',
         title: '功能建议',
         icon: 'suggestion',

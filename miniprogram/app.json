@@ -19,7 +19,9 @@
     "pages/position/position",
     "pages/search/search",
     "pages/search-stock/search-stock",
+    "pages/inquiry/inquiry",
     "pages/inquiry/detail/detail",
+    "pages/inquiry-history/inquiry-history",
     "pages/test/test"
   ],
   "window": {

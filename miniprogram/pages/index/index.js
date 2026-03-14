@@ -33,22 +33,27 @@ Page({
       duration: 500,
       circular: true
     },
+    // Banner 轮播图
+    // 注意：当前使用 Gitee 外链，建议后续迁移到微信云存储以提高稳定性
     swiperImgurls: [
       {
         id: 1,
         url: 'https://foruda.gitee.com/images/1753933592927170033/941a7b09_15547261.png',
+        title: '场外期权专业服务',
         loaded: false,
         error: false
       },
       {
         id: 2,
         url: 'https://foruda.gitee.com/images/1753933678767460248/b6cdc705_15547261.png',
+        title: '一键询价，高效便捷',
         loaded: false,
         error: false
       },
       {
         id: 3,
         url: 'https://foruda.gitee.com/images/1753933748782644798/7113f0b4_15547261.png',
+        title: '实时行情，精准分析',
         loaded: false,
         error: false
       }
@@ -68,6 +73,7 @@ Page({
         icon: '/images/star.png', 
         name: '自选', 
         path: '/pages/quotes/quotes',
+        params: { tab: '自选' },
         color: 'transparent'
       },
       { 
@@ -75,6 +81,7 @@ Page({
         icon: '/images/个股.svg', 
         name: '个股', 
         path: '/pages/quotes/quotes',
+        params: { tab: '个股' },
         color: 'transparent'
       },
       { 
@@ -82,13 +89,14 @@ Page({
         icon: '/images/指数.svg', 
         name: '指数', 
         path: '/pages/quotes/quotes',
+        params: { tab: '指数' },
         color: 'transparent'
       },
       { 
         id: 4, 
-        icon: '/images/ETF基金.svg', 
-        name: 'ETF', 
-        path: '/pages/quotes/quotes',
+        icon: '/images/inquiry.png', 
+        name: '询价', 
+        path: '/pages/inquiry/inquiry',
         color: 'transparent'
       },
       { 
@@ -190,6 +198,30 @@ Page({
           profit: -3.6,
           profitRate: -2.4,
           status: 'expired'
+        },
+        {
+          id: 8,
+          name: '比亚迪',
+          code: '002594',
+          market: 'SZ',
+          structure: '100C3m',
+          feeRate: '4.20%',
+          scale: '80万',
+          profit: 18.5,
+          profitRate: 15.6,
+          status: 'finished'
+        },
+        {
+          id: 9,
+          name: '中信证券',
+          code: '600030',
+          market: 'SH',
+          structure: '100P6m',
+          feeRate: '3.60%',
+          scale: '60万',
+          profit: -8.2,
+          profitRate: -6.4,
+          status: 'finished'
         }
       ],
       knowledge: [
@@ -360,7 +392,8 @@ Page({
       this.setData({
         marketIndices: indices.map(index => ({
           ...index,
-          changeRate: dataFormatter.formatPercent(index.changeRate),
+          // changeRate 可能已是格式化字符串('+0.37%')或数值，统一处理
+          changeRate: index.changeRate || dataFormatter.formatPercent(index.changePercent),
           formattedPrice: dataFormatter.formatNumber(index.price, 2)
         }))
       });
@@ -377,9 +410,9 @@ Page({
       this.setData({
         hotOptions: options.map(option => ({
           ...option,
-          formattedPrice: dataFormatter.formatNumber(option.price, 4),
-          changeRate: dataFormatter.formatPercent(option.changeRate),
-          volume: dataFormatter.formatVolume(option.volume)
+          formattedPrice: dataFormatter.formatNumber(option.price || option.lastPrice, 4),
+          changeRate: option.changeRate || dataFormatter.formatPercent(option.change),
+          volume: option.volume ? dataFormatter.formatVolume(option.volume) : '--'
         }))
       });
     } catch (error) {
@@ -388,14 +421,38 @@ Page({
     }
   },
 
-  // 新增：加载持仓数据（可接后端数据源）
+  // 加载持仓数据（优先云数据库 inquiries 集合，降级到本地 Mock）
   async loadHoldingsData() {
     try {
-      const { holdingsData } = this.data;
-      this.setData({ holdingsData });
+      const db = wx.cloud && wx.cloud.database ? wx.cloud.database() : null;
+      if (db) {
+        const res = await db.collection('inquiries')
+          .where({ status: db.command.in(['active', 'expiring', 'expired', 'finished']) })
+          .orderBy('createTime', 'desc')
+          .limit(20)
+          .get()
+          .catch(() => null);
+
+        if (res && res.data && res.data.length > 0) {
+          const holdings = res.data.map((item, idx) => ({
+            id: item._id || idx,
+            name: item.productName || item.underlyingName || '--',
+            code: item.productCode || item.underlyingCode || '--',
+            market: item.market || 'SH',
+            structure: item.structure || '--',
+            feeRate: item.feeRate || '--',
+            scale: item.notionalAmount ? item.notionalAmount + '万' : '--',
+            profit: item.profit || 0,
+            profitRate: item.profitRate || 0,
+            status: item.status || 'active'
+          }));
+          this.setData({ 'holdingsData.holdings': holdings });
+          return;
+        }
+      }
+      // 降级：使用本地 Mock 数据（data 中已有默认值）
     } catch (e) {
       console.error('加载持仓数据失败:', e);
-      uiEnhancer.showToast('持仓数据加载失败', 'error');
     }
   },
 
@@ -672,9 +729,15 @@ Page({
 
   // 快捷功能点击
   onQuickActionTap(e) {
-    const { path } = e.currentTarget.dataset;
+    const { path, params } = e.currentTarget.dataset;
     if (!path) return;
-    this.safeNavigate(path);
+    // 如果有 params（如 tab 参数），拼接为 query string 或存入 globalData
+    if (params) {
+      const queryStr = Object.keys(params).map(k => k + '=' + encodeURIComponent(params[k])).join('&');
+      this.safeNavigate(path + '?' + queryStr);
+    } else {
+      this.safeNavigate(path);
+    }
   },
 
   // 市场指数点击
@@ -699,7 +762,13 @@ Page({
         url = '/pages/quotes/quotes';
         break;
       case 'indices':
-        url = '/pages/quotes/quotes';
+        url = '/pages/quotes/quotes?tab=指数';
+        break;
+      case 'holdings':
+        url = '/pages/account/account';
+        break;
+      case 'knowledge':
+        url = '/pages/data-explanation/data-explanation';
         break;
       default:
         return;

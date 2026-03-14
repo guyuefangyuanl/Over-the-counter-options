@@ -1,8 +1,7 @@
-<view class="container" style="position: relative; left: 0rpx; top: -178rpx">
+<view class="container">
   <!-- 加载状态 -->
   <view class="loading-container" wx:if="{{loading}}">
-    <view class="loading-spinner"></view>
-    <text class="loading-text">加载中...</text>
+    <van-loading type="spinner" color="#409EFF" size="48rpx" vertical>加载中...</van-loading>
   </view>
 
   <!-- 主内容 -->
@@ -34,10 +33,10 @@
           wx:for="{{quickActions}}" 
           wx:key="id"
           data-path="{{item.path}}"
+          data-params="{{item.params}}"
           bindtap="onQuickActionTap">
           <view wx:if="{{item.id == 1}}" class="action-icon-svg action-icon-fav-selected"></view>
-          <image wx:elif="{{item.id == 3}}" class="action-icon-img action-icon-index" src="{{item.icon}}" mode="aspectFit" />
-          <image wx:elif="{{item.id == 4}}" class="action-icon-img action-icon-etf" src="{{item.icon}}" mode="aspectFit" />
+          <image wx:elif="{{item.id == 4}}" class="action-icon-img action-icon-inquiry" src="{{item.icon}}" mode="aspectFit" />
           <image wx:elif="{{item.id == 5}}" class="action-icon-img action-icon-calculator" src="{{item.icon}}" mode="aspectFit" />
           <image wx:else class="action-icon-img" src="{{item.icon}}" mode="aspectFit" />
           <text class="action-name">{{item.name}}</text>
@@ -65,10 +64,11 @@
         >
           <view class="banner-item">
             <view class="banner-placeholder" wx:if="{{!item.loaded && !item.error}}">
-              <view class="loading-spinner small" style="border-color: #ddd; border-top-color: #409EFF;"></view>
+              <van-loading type="spinner" color="#409EFF" size="36rpx" />
             </view>
             <view class="banner-error" wx:if="{{item.error}}">
-              <text>加载失败</text>
+              <van-icon name="photo-fail" size="48rpx" color="#c0c4cc" />
+              <text class="banner-error-text">{{item.title || '加载失败'}}</text>
             </view>
             <image 
               class="banner-image {{item.loaded ? 'loaded' : ''}}" 
@@ -91,7 +91,7 @@
       </view>
 
       <view class="searching-state" wx:if="{{isSearching}}">
-        <view class="loading-spinner small"></view>
+        <van-loading type="spinner" color="#409EFF" size="36rpx" />
         <text class="searching-text">搜索中...</text>
       </view>
 
@@ -121,7 +121,33 @@
 
     <!-- 首页内容 -->
     <view class="home-content" wx:if="{{!showSearchResults}}">
-      
+
+      <!-- 市场指数 -->
+      <view class="section market-indices-section" wx:if="{{marketIndices.length > 0}}">
+        <view class="section-header">
+          <view class="section-title-wrapper">
+            <view class="section-title-icon index-section-icon"></view>
+            <text class="section-title">市场指数</text>
+          </view>
+          <text class="more-btn" data-type="indices" bindtap="onViewMore">></text>
+        </view>
+        <view class="indices-scroll-wrapper">
+          <scroll-view scroll-x class="indices-scroll" enable-flex>
+            <view 
+              class="index-chip" 
+              wx:for="{{marketIndices}}" 
+              wx:key="code"
+              data-code="{{item.code}}"
+              bindtap="onIndexTap"
+            >
+              <text class="index-chip-name">{{item.name}}</text>
+              <text class="index-chip-price">{{item.formattedPrice}}</text>
+              <text class="index-chip-change {{item.changeRate.indexOf('-') !== -1 ? 'down' : 'up'}}">{{item.changeRate}}</text>
+            </view>
+          </scroll-view>
+        </view>
+      </view>
+
       <!-- 持仓案例卡片 -->
       <view class="section holding-section">
         <view class="section-header">
@@ -129,7 +155,7 @@
             <view class="section-title-icon case-icon"></view>
             <text class="section-title">持仓案例</text>
           </view>
-          <text class="more-btn">></text>
+          <text class="more-btn" data-type="holdings" bindtap="onViewMore">></text>
         </view>
 
         <view class="holding-card enhanced-card">
@@ -221,7 +247,7 @@
                <view class="section-title-icon knowledge-icon"></view>
                <text class="section-title">知识</text>
             </view>
-            <text class="more-btn">></text>
+            <text class="more-btn" data-type="knowledge" bindtap="onViewMore">></text>
          </view>
          <view class="knowledge-list enhanced-card">
             <block wx:for="{{holdingsData.knowledge}}" wx:key="id">

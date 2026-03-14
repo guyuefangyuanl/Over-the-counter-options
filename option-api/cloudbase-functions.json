@@ -1,0 +1,49 @@
+{
+  "functionsRoot": "./src",
+  "functions": [
+    {
+      "name": "default",
+      "directory": ".",
+      "target": "main",
+      "triggerPath": "/"
+    },
+    {
+      "name": "cloudbase-nodesdk",
+      "directory": "cloudbase-nodesdk",
+      "triggerPath": "/cloudbase-nodesdk"
+    },
+    {
+      "name": "echo",
+      "directory": "echo",
+      "source": "echo.js",
+      "triggerPath": "/echo"
+    },
+    {
+      "name": "log",
+      "directory": "log",
+      "source": "index.js",
+      "triggerPath": "/log"
+    },
+    {
+      "name": "ws",
+      "directory": "ws",
+      "triggerPath": "/ws"
+    },
+    {
+      "name": "sse",
+      "directory": "sse",
+      "triggerPath": "/sse"
+    },
+    {
+      "name": "sse-openai",
+      "directory": "sse-openai",
+      "triggerPath": "/sse-openai"
+    }
+  ],
+  "routes": [
+    {
+      "functionName": "echo",
+      "path": "/call-echo"
+    }
+  ]
+}

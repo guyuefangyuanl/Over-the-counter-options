@@ -1,3 +1,5 @@
+// miniprogram/pages/inquiry/detail/detail.js
+
 Page({
   data: {
     keyword: '',
@@ -5,156 +7,155 @@ Page({
     structure: 'vanilla',
     term: '1M',
     terms: ['1M', '2M', '3M', '6M'],
-    strikes: ['80C', '85C', '90C', '95C', '100C', '103C', '105C', '108C', '110C'],
-    _fullQuoteList: [
-      {
-        id: 1,
-        group: 'group1',
-        type: 'stock',
-        name: '贵州茅台',
-        code: '600519',
-        changePercent: 1.23,
-        term: '1M',
-        structure: 'vanilla',
-        dealers: ['CICC', 'CITIC'],
-        rates: {
-          '80': 13.00,
-          '85': 12.10,
-          '90': 11.20,
-          '95': 10.20,
-          '100': 10.50,
-          '103': 9.40,
-          '105': 8.30,
-          '108': 7.30,
-          '110': 6.50
-        }
-      },
-      {
-        id: 2,
-        group: 'group1',
-        type: 'stock',
-        name: '宁德时代',
-        code: '300750',
-        changePercent: -2.45,
-        term: '1M',
-        structure: 'vanilla',
-        dealers: ['CICC', 'GJS'],
-        rates: {
-          '80': 14.20,
-          '85': 13.10,
-          '90': 12.00,
-          '95': 11.00,
-          '100': 12.80,
-          '103': 11.10,
-          '105': 10.20,
-          '108': 9.80,
-          '110': 8.90
-        }
-      },
-      {
-        id: 3,
-        group: 'group2',
-        type: 'stock',
-        name: '比亚迪',
-        code: '002594',
-        changePercent: 3.10,
-        term: '2M',
-        structure: 'vanilla',
-        dealers: ['CITIC'],
-        rates: {
-          '80': 16.20,
-          '85': 15.10,
-          '90': 14.00,
-          '95': 13.00,
-          '100': 15.25,
-          '103': 13.90,
-          '105': 12.85,
-          '108': 11.80,
-          '110': 10.45
-        }
-      },
-      {
-        id: 4,
-        group: 'holding',
-        type: 'stock',
-        name: '药明康德',
-        code: '603259',
-        changePercent: 0.55,
-        term: '3M',
-        structure: 'snowball',
-        dealers: ['CICC', 'CITIC', 'GJS'],
-        rates: {
-          '80': 19.90,
-          '85': 18.60,
-          '90': 17.40,
-          '95': 16.00,
-          '100': 18.00,
-          '103': 16.40,
-          '105': 15.50,
-          '108': 14.30,
-          '110': 13.00
-        }
-      }
-    ]
+    strikes: ['80', '85', '90', '95', '100', '103', '105', '108', '110'],
+    rateMatrix: [],   // 预计算的费率矩阵 [rowIndex][colIndex]
+    isLoading: false,
+    isEmpty: false
   },
 
   onLoad(q) {
-    const id = q && q.id ? Number(q.id) : NaN;
-    if (!Number.isNaN(id)) {
-      const p = this.data._fullQuoteList.find(i => i.id === id);
-      if (p) {
-        this.setData({ product: p, keyword: p.name });
-      }
+    if (q && q.id) {
+      this.loadProductById(q.id);
+    } else if (q && q.code) {
+      this.searchByCode(q.code);
     }
   },
 
-  formatChange(v) {
-    if (v === null || v === undefined) return '--';
-    const n = Number(v);
-    if (Number.isNaN(n)) return '--';
-    const s = n > 0 ? '+' : '';
-    return s + n.toFixed(2) + '%';
+  /**
+   * 根据ID从云数据库加载产品报价
+   */
+  loadProductById(id) {
+    this.setData({ isLoading: true, isEmpty: false });
+    const db = wx.cloud.database();
+    db.collection('quotes').doc(id).get().then(res => {
+      if (res.data) {
+        const product = this._normalizeProduct(res.data);
+        this.setData({ product, keyword: product.name, isLoading: false });
+        this._buildRateMatrix();
+      } else {
+        this.setData({ isLoading: false, isEmpty: true });
+      }
+    }).catch(err => {
+      console.error('加载报价数据失败:', err);
+      this.setData({ isLoading: false, isEmpty: true });
+      wx.showToast({ title: '加载失败', icon: 'none' });
+    });
+  },
+
+  /**
+   * 根据代码搜索产品
+   */
+  searchByCode(code) {
+    this.setData({ isLoading: true, isEmpty: false });
+    const db = wx.cloud.database();
+    db.collection('quotes').where({
+      code: db.RegExp({ regexp: code, options: 'i' })
+    }).limit(1).get().then(res => {
+      if (res.data && res.data.length > 0) {
+        const product = this._normalizeProduct(res.data[0]);
+        this.setData({ product, keyword: product.name, isLoading: false });
+        this._buildRateMatrix();
+      } else {
+        this.setData({ isLoading: false, isEmpty: true });
+        wx.showToast({ title: '未找到标的', icon: 'none' });
+      }
+    }).catch(err => {
+      console.error('搜索标的失败:', err);
+      this.setData({ isLoading: false, isEmpty: true });
+    });
+  },
+
+  /**
+   * 标准化产品数据，兼容不同字段格式
+   */
+  _normalizeProduct(item) {
+    return {
+      ...item,
+      id: item._id || item.id,
+      name: item.name || '',
+      code: item.code || '',
+      type: item.type || 'stock',
+      changePercent: item.changePercent || 0,
+      rates: item.rates || {}
+    };
+  },
+
+  /**
+   * 预计算费率矩阵
+   * rateMatrix[行索引][列索引] = "13.00%"
+   */
+  _buildRateMatrix() {
+    const { product, strikes, terms } = this.data;
+    if (!product || !product.rates) {
+      this.setData({ rateMatrix: [] });
+      return;
+    }
+
+    const matrix = [];
+    for (var i = 0; i < strikes.length; i++) {
+      var row = [];
+      var strikeKey = strikes[i];
+      var baseRate = product.rates[strikeKey];
+
+      for (var j = 0; j < terms.length; j++) {
+        if (baseRate === undefined || baseRate === null) {
+          row.push('--');
+        } else {
+          // 期限调整系数：1M=0, 2M=+0.6, 3M=+1.2, 6M=+2.0
+          var adj = j === 0 ? 0 : j === 1 ? 0.6 : j === 2 ? 1.2 : 2.0;
+          row.push((baseRate + adj).toFixed(2) + '%');
+        }
+      }
+      matrix.push(row);
+    }
+
+    this.setData({ rateMatrix: matrix });
   },
 
   switchStructure(e) {
-    const s = e.currentTarget.dataset.structure;
+    var s = e.currentTarget.dataset.structure;
     this.setData({ structure: s });
+    this._buildRateMatrix();
   },
 
   switchTerm(e) {
-    const t = e.currentTarget.dataset.term;
+    var t = e.currentTarget.dataset.term;
     this.setData({ term: t });
   },
 
   onKeywordInput(e) {
-    const d = e && e.detail;
-    const val = typeof d === 'string' ? d : (d && d.value) || '';
+    var d = e && e.detail;
+    var val = typeof d === 'string' ? d : (d && d.value) || '';
     this.setData({ keyword: val });
   },
 
   onKeywordConfirm() {
-    const k = String(this.data.keyword).trim().toLowerCase();
-    const p = this.data._fullQuoteList.find(i =>
-      i.type === 'stock' &&
-      (i.name.toLowerCase().includes(k) || i.code.toLowerCase().includes(k))
-    );
-    if (p) {
-      this.setData({ product: p });
-    } else {
-      wx.showToast({ title: '未找到标的', icon: 'none' });
-    }
-  },
+    var k = String(this.data.keyword).trim();
+    if (!k) return;
 
-  getRate(strikeLabel, termIndex) {
-    const s = String(strikeLabel).replace('C', '');
-    const p = this.data.product;
-    if (!p) return '--';
-    const base = p.rates[s];
-    if (base === undefined) return '--';
-    const adj = termIndex === 0 ? 0 :
-                termIndex === 1 ? 0.6 :
-                termIndex === 2 ? 1.2 : 2.0;
-    return (base + adj).toFixed(2) + '%';
+    this.setData({ isLoading: true, isEmpty: false });
+    var db = wx.cloud.database();
+    var regex = db.RegExp({ regexp: k, options: 'i' });
+
+    db.collection('quotes').where(
+      db.command.or([
+        { name: regex },
+        { code: regex }
+      ])
+    ).limit(1).get().then(res => {
+      if (res.data && res.data.length > 0) {
+        var product = this._normalizeProduct(res.data[0]);
+        this.setData({ product: product, keyword: product.name, isLoading: false });
+        this._buildRateMatrix();
+      } else {
+        this.setData({ isLoading: false, isEmpty: true });
+        wx.showToast({ title: '未找到标的', icon: 'none' });
+      }
+    }).catch(err => {
+      console.error('搜索失败:', err);
+      this.setData({ isLoading: false });
+      wx.showToast({ title: '搜索失败', icon: 'none' });
+    });
   },
 
   goBack() {
@@ -162,10 +163,10 @@ Page({
   },
 
   goCalculator() {
-    wx.navigateTo({ url: '/pages/calculator/index' });
+    wx.navigateTo({ url: '/pages/calculator/calculator' });
   },
 
   goWorkspace() {
-    wx.navigateTo({ url: '/pages/workspace/index' });
+    wx.navigateTo({ url: '/pages/workspace/workspace' });
   }
 });

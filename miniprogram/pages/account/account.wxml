@@ -38,7 +38,13 @@
           class="user-avatar"
           src="{{userInfo.avatar || '/images/default-avatar.png'}}"
           mode="aspectFill"
+          binderror="onAvatarError"
+          bindtap="onAvatarTap"
         ></image>
+        <!-- 上传加载指示器 -->
+        <view class="avatar-loading" wx:if="{{isAvatarUploading}}">
+          <van-loading size="20px" type="spinner" color="#fff" />
+        </view>
       </button>
       <view class="user-info-box">
         <input

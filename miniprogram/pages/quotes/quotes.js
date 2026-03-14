@@ -223,6 +223,11 @@ Page({
   handleNavigationParams: function(options) {
     if (!options) return;
 
+    // 支持 tab 参数切换到指定分类
+    if (options.tab) {
+      this.setData({ currentTab: options.tab });
+    }
+
     // 如果有传入的股票信息，使用传入的股票
     if (options.stock) {
       try {

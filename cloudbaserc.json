@@ -1,0 +1,42 @@
+{
+  "$schema": "https://framework-1258016615.tcloudbaseapp.com/schema/latest.json",
+  "envId": "cloud1-9gcouaba33c8959c",
+  "version": "2.0",
+  "framework": {
+    "name": "option-trading-backend",
+    "plugins": {
+      "client": {
+        "use": "@cloudbase/framework-plugin-container",
+        "inputs": {
+          "serviceName": "flask-api",
+          "servicePath": "/",
+          "localPath": "./",
+          "uploadType": "image",
+          "imageInfo": {
+            "imageUrl": "ccr.ccs.tencentyun.com/cloudbaseframework/flask-starter:latest"
+          },
+          "containerPort": 80,
+          "envVariables": {
+            "NODE_ENV": "production",
+            "FLASK_ENV": "production",
+            "WX_APPID": "wx83166cb97bfc0d4c",
+            "WX_CLOUD_ENV": "develop-8gx7kh9g045e6c9a"
+          },
+          "cpu": 0.25,
+          "mem": 0.5,
+          "minNum": 0,
+          "maxNum": 10,
+          "policyDetails": [
+            {
+              "policyType": "cpu",
+              "policyThreshold": 60
+            }
+          ],
+          "customLogs": "stdout,/var/log/access.log",
+          "vpcId": "",
+          "subnetId": ""
+        }
+      }
+    }
+  }
+}
