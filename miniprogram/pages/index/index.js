@@ -94,7 +94,7 @@ Page({
       },
       { 
         id: 4, 
-        icon: '/images/inquiry.png', 
+        icon: '/images/询价.svg', 
         name: '询价', 
         path: '/pages/inquiry/inquiry',
         color: 'transparent'
@@ -255,7 +255,11 @@ Page({
   },
 
   safeNavigate(url) {
-    if (this.data.isNavigating) return;
+    console.log('safeNavigate调用, url:', url, 'isNavigating:', this.data.isNavigating);
+    if (this.data.isNavigating) {
+      console.log('导航被阻止，isNavigating为true');
+      return;
+    }
     
     // 提取路径和参数
     const path = url.split('?')[0];
@@ -270,6 +274,7 @@ Page({
     ];
     
     const isTabBar = tabBarPages.some(p => path.endsWith(p));
+    console.log('path:', path, 'isTabBar:', isTabBar, 'queryStr:', queryStr);
 
     if (isTabBar) {
       // 如果有参数，存入全局变量
@@ -279,12 +284,19 @@ Page({
           const [key, value] = pair.split('=');
           if (key) params[key] = decodeURIComponent(value || '');
         });
+        console.log('存入全局参数:', params);
         app.globalData.pendingQuoteParams = params;
       }
       
       wx.switchTab({
         url: path,
-        success: () => { this.setData({ isNavigating: false, selectedResultCode: null }); }
+        success: () => { 
+          console.log('switchTab成功');
+          this.setData({ isNavigating: false, selectedResultCode: null }); 
+        },
+        fail: (err) => {
+          console.error('switchTab失败:', err);
+        }
       });
       return;
     }
@@ -292,6 +304,8 @@ Page({
     this.setData({ isNavigating: true });
     wx.navigateTo({
       url,
+      success: () => { console.log('navigateTo成功'); },
+      fail: (err) => { console.error('navigateTo失败:', err); },
       complete: () => { this.setData({ isNavigating: false, selectedResultCode: null }); }
     });
   },
@@ -407,14 +421,15 @@ Page({
   async loadHotOptions() {
     try {
       const options = await optionsService.getHotOptions();
-      this.setData({
-        hotOptions: options.map(option => ({
-          ...option,
-          formattedPrice: dataFormatter.formatNumber(option.price || option.lastPrice, 4),
-          changeRate: option.changeRate || dataFormatter.formatPercent(option.change),
-          volume: option.volume ? dataFormatter.formatVolume(option.volume) : '--'
-        }))
-      });
+      console.log('loadHotOptions获取到的原始数据:', options);
+      const mappedOptions = options.map(option => ({
+        ...option,
+        formattedPrice: dataFormatter.formatNumber(option.price || option.lastPrice, 4),
+        changeRate: option.changeRate || dataFormatter.formatPercent(option.change),
+        volume: option.volume ? dataFormatter.formatVolume(option.volume) : '--'
+      }));
+      console.log('loadHotOptions映射后的数据:', mappedOptions);
+      this.setData({ hotOptions: mappedOptions });
     } catch (error) {
       console.error('加载热门期权失败:', error);
       throw error;
@@ -486,12 +501,14 @@ Page({
     }
   },
 
-  // 新增：知识文章点击
+  // 新增：知识文章点击 - 跳转到知识详情页面
   onKnowledgeItemTap(e) {
     try {
       const { id } = e.currentTarget.dataset;
+      console.log('[知识] 点击文章ID:', id);
       if (typeof uiEnhancer.hapticFeedback === 'function') uiEnhancer.hapticFeedback('light');
-      wx.navigateTo({ url: `/pages/data-explanation/data-explanation?from=home&id=${id}` });
+      // 跳转到知识详情页面，显示已编写好的知识内容
+      wx.navigateTo({ url: `/pages/knowledge-detail/knowledge-detail?id=${id}` });
     } catch (err) {
       console.error('打开文章失败:', err);
       uiEnhancer.showToast('页面开发中', 'none');
@@ -746,11 +763,43 @@ Page({
     this.safeNavigate(`/pages/quotes/quotes?code=${code}`);
   },
 
-  // 期权卡片点击
+  // 期权卡片点击 - 跳转到股票详情页面
   onOptionTap(e) {
-    const { code } = e.currentTarget.dataset;
-    this.setData({ selectedResultCode: code });
-    this.safeNavigate(`/pages/quotes/quotes?code=${code}`);
+    const { code, name, market, structure } = e.currentTarget.dataset;
+    console.log('onOptionTap点击热门产品:', { code, name, market, structure });
+    this.setData({ selectedResultCode: code, isNavigating: false });
+
+    // 对参数进行URL编码，确保中文等特殊字符正确传递
+    const encodedCode = encodeURIComponent(code || '');
+    const encodedName = encodeURIComponent(name || '');
+
+    // 跳转到股票详情页面（参考search.js的跳转逻辑）
+    const url = `/pages/stock-detail/stock-detail?code=${encodedCode}&name=${encodedName}`;
+    console.log('[热门产品] 跳转到股票详情页:', url);
+
+    wx.navigateTo({
+      url: url,
+      success: () => {
+        console.log('[热门产品] 跳转成功');
+      },
+      fail: (err) => {
+        console.error('[热门产品] 跳转失败:', err);
+        // 如果跳转失败，降级到报价页面
+        wx.switchTab({
+          url: '/pages/quotes/quotes',
+          success: () => {
+            // 将参数存入全局变量供报价页面使用
+            app.globalData.pendingQuoteParams = {
+              code: code,
+              name: name,
+              market: market,
+              structure: structure,
+              source: 'hotOption'
+            };
+          }
+        });
+      }
+    });
   },
 
   // 查看更多

@@ -232,10 +232,20 @@ Page({
   // 点击搜索结果
   onResultTap: function (e) {
     const item = e.currentTarget.dataset.item;
-      
-    // 跳转到新的非 tabBar 股票详情页面
+    console.log('[搜索] 点击结果:', item);
+
+    // 对参数进行URL编码，确保中文等特殊字符正确传递
+    const encodedName = encodeURIComponent(item.name || '');
+    const encodedCode = encodeURIComponent(item.code || '');
+    const price = item.price || '';
+    const changePercent = item.changePercent || '';
+
+    // 跳转到股票详情页面
+    const url = `/pages/stock-detail/stock-detail?code=${encodedCode}&name=${encodedName}&price=${price}&changePercent=${changePercent}`;
+    console.log('[跳转] 目标URL:', url);
+
     wx.navigateTo({
-      url: `/pages/stock-detail/stock-detail?code=${item.code}&name=${item.name}&price=${item.price}&changePercent=${item.changePercent}`,
+      url: url,
       success: () => {
         console.log('[跳转] 股票详情页成功');
       },

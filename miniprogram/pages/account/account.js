@@ -46,7 +46,16 @@ Page({
       daysLeft: ''
     },
     positionFormErrors: {},
-    isSubmittingPosition: false
+    isSubmittingPosition: false,
+
+    // 持仓操作相关
+    editingPosition: null,           // 当前编辑的持仓
+    showEditPositionForm: false,     // 编辑持仓弹窗
+    showClosePositionDialog: false,  // 平仓确认弹窗
+    closingPosition: null,           // 待平仓的持仓
+    closeType: 'accounting',         // 平仓类型：accounting/order
+    closePrice: '',                  // 平仓价格
+    isClosingPosition: false         // 平仓提交中
   },
 
   // 防并发标记（不放入 data，避免触发 setData 开销）
@@ -102,8 +111,177 @@ Page({
   handlePositionAction(e) {
     const id = e.currentTarget.dataset.id;
     const action = e.currentTarget.dataset.action;
-    console.log('position action', id, action);
-    wx.showToast({ title: '功能开发中', icon: 'none' });
+    const position = this.data.allPositions.find(p => p.id === id);
+
+    if (!position) {
+      wx.showToast({ title: '持仓不存在', icon: 'none' });
+      return;
+    }
+
+    switch (action) {
+      case 'modify':
+        this.openModifyPositionForm(position);
+        break;
+      case 'close':
+        this.openClosePositionDialog(position, 'accounting');
+        break;
+      case 'close-live':
+        this.openClosePositionDialog(position, 'order');
+        break;
+      case 'delete':
+        this.confirmDeletePosition(position);
+        break;
+      default:
+        wx.showToast({ title: '未知操作', icon: 'none' });
+    }
+  },
+
+  // 打开修改持仓弹窗
+  openModifyPositionForm(position) {
+    this.setData({
+      showEditPositionForm: true,
+      editingPosition: position,
+      positionForm: {
+        productCode: position.productCode || '',
+        productName: position.productName || '',
+        quantity: String(position.notional || ''),
+        price: String(position.fillPrice || ''),
+        dealer: position.dealer || '自营',
+        daysLeft: String(position.daysLeft || '30')
+      },
+      positionFormErrors: {}
+    });
+  },
+
+  // 关闭修改持仓弹窗
+  hideEditPositionForm() {
+    if (this.data.isSubmittingPosition) return;
+    this.setData({ showEditPositionForm: false, editingPosition: null });
+  },
+
+  // 提交修改持仓
+  async submitEditPositionForm() {
+    if (this.data.isSubmittingPosition) return;
+
+    const form = this.data.positionForm;
+    const errors = {};
+
+    if (!(form.productCode || '').trim()) errors.productCode = '请输入标的代码';
+    if (!(form.productName || '').trim()) errors.productName = '请输入标的名称';
+    if (!form.quantity || isNaN(Number(form.quantity)) || Number(form.quantity) <= 0) {
+      errors.quantity = '请输入有效的名义本金';
+    }
+    if (!form.price || isNaN(Number(form.price)) || Number(form.price) <= 0) {
+      errors.price = '请输入有效的成本价';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      this.setData({ positionFormErrors: errors });
+      return;
+    }
+
+    this.setData({ isSubmittingPosition: true });
+    try {
+      const payload = {
+        productCode: (form.productCode || '').trim(),
+        productName: (form.productName || '').trim(),
+        quantity: Number(form.quantity),
+        price: Number(form.price),
+        dealer: (form.dealer || '').trim() || '自营',
+        daysLeft: form.daysLeft ? Number(form.daysLeft) : 30
+      };
+      await accountService.updatePosition(this.data.editingPosition.id, payload);
+      this.setData({ showEditPositionForm: false, editingPosition: null });
+      wx.showToast({ title: '修改成功', icon: 'success' });
+      this.loadPageData();
+    } catch (err) {
+      wx.showToast({ title: (err && err.message) || '修改失败', icon: 'none' });
+    } finally {
+      this.setData({ isSubmittingPosition: false });
+    }
+  },
+
+  // 打开平仓确认弹窗
+  openClosePositionDialog(position, closeType) {
+    this.setData({
+      showClosePositionDialog: true,
+      closingPosition: position,
+      closeType: closeType,
+      closePrice: String(position.currentPrice !== '--' ? position.currentPrice : position.fillPrice)
+    });
+  },
+
+  // 关闭平仓确认弹窗
+  hideClosePositionDialog() {
+    if (this.data.isClosingPosition) return;
+    this.setData({ showClosePositionDialog: false, closingPosition: null });
+  },
+
+  // 平仓价格输入
+  onClosePriceInput(e) {
+    this.setData({ closePrice: e.detail.value });
+  },
+
+  // 切换平仓类型
+  onCloseTypeChange(e) {
+    this.setData({ closeType: e.detail.value });
+  },
+
+  // 确认平仓
+  async confirmClosePosition() {
+    if (this.data.isClosingPosition) return;
+
+    const { closingPosition, closePrice, closeType } = this.data;
+    const price = Number(closePrice);
+
+    if (!closePrice || isNaN(price) || price <= 0) {
+      wx.showToast({ title: '请输入有效的平仓价格', icon: 'none' });
+      return;
+    }
+
+    this.setData({ isClosingPosition: true });
+    try {
+      const result = await accountService.closePosition(closingPosition.id, {
+        closePrice: price,
+        closeType: closeType
+      });
+      this.setData({ showClosePositionDialog: false, closingPosition: null });
+
+      const profitLoss = result?.data?.profitLoss || 0;
+      const profitText = profitLoss >= 0 ? `盈利 ${profitLoss.toFixed(2)}` : `亏损 ${Math.abs(profitLoss).toFixed(2)}`;
+      wx.showModal({
+        title: closeType === 'accounting' ? '平仓记账成功' : '平仓下单成功',
+        content: `该笔持仓已${profitText}`,
+        showCancel: false,
+        confirmText: '知道了'
+      });
+      this.loadPageData();
+    } catch (err) {
+      wx.showToast({ title: (err && err.message) || '平仓失败', icon: 'none' });
+    } finally {
+      this.setData({ isClosingPosition: false });
+    }
+  },
+
+  // 确认删除持仓
+  confirmDeletePosition(position) {
+    wx.showModal({
+      title: '确认删除',
+      content: `确定要删除持仓「${position.productName}」吗？此操作不可恢复。`,
+      confirmText: '删除',
+      confirmColor: '#F54F52',
+      success: async (res) => {
+        if (res.confirm) {
+          try {
+            await accountService.deletePosition(position.id);
+            wx.showToast({ title: '删除成功', icon: 'success' });
+            this.loadPageData();
+          } catch (err) {
+            wx.showToast({ title: (err && err.message) || '删除失败', icon: 'none' });
+          }
+        }
+      }
+    });
   },
 
   // 更新头像 - 增强版（多重容错）
@@ -215,13 +393,22 @@ Page({
   },
 
   // 更新昵称
-  onNicknameChange(e) {
+  async onNicknameChange(e) {
     const nickname = (e.detail.value || '').trim();
     if (!nickname) return;
+
+    const oldNickname = this.data.userInfo?.nickname;
     this.setData({ 'userInfo.nickname': nickname });
-    accountService.updateUserProfile({ nickname }).catch(err => {
+
+    try {
+      await accountService.updateUserProfile({ nickname });
+      wx.showToast({ title: '昵称已更新', icon: 'success', duration: 1500 });
+    } catch (err) {
       console.warn('昵称更新失败:', err.message);
-    });
+      // 恢复旧昵称
+      this.setData({ 'userInfo.nickname': oldNickname });
+      wx.showToast({ title: '昵称更新失败', icon: 'none' });
+    }
   },
 
   /**
@@ -272,8 +459,9 @@ Page({
 
       // --- 处理资产概览 ---
       let overview = { totalScale: 0, totalProfit: 0, completedProfit: 0 };
+      let costDetails = { total: 0, optionFee: 0, commission: 0 };
       if (overviewResult.status === 'fulfilled') {
-        // 后端: flask_success_response(data={ totalMarketValue, totalProfitLoss, totalCount })
+        // 后端: flask_success_response(data={ totalMarketValue, totalProfitLoss, completedProfit, optionFee, commission, totalCount })
         // api.js resolve 的是整个 body: { success, code, data: {...} }
         const stats = (overviewResult.value && overviewResult.value.data)
           ? overviewResult.value.data
@@ -281,7 +469,12 @@ Page({
         overview = {
           totalScale: stats.totalMarketValue != null ? stats.totalMarketValue : 0,
           totalProfit: stats.totalProfitLoss != null ? stats.totalProfitLoss : 0,
-          completedProfit: 0 // 后端暂未返回已结平仓盈亏
+          completedProfit: stats.completedProfit != null ? stats.completedProfit : 0
+        };
+        costDetails = {
+          optionFee: stats.optionFee != null ? stats.optionFee : 0,
+          commission: stats.commission != null ? stats.commission : 0,
+          total: (stats.optionFee || 0) + (stats.commission || 0)
         };
       } else {
         console.warn('[account] 资产概览加载失败:', overviewResult.reason && overviewResult.reason.message);
@@ -302,7 +495,7 @@ Page({
         this.setData({ positionsError: true });
       }
 
-      this.setData({ overview, allPositions: positions });
+      this.setData({ overview, costDetails, allPositions: positions });
       this._filterPositions();
     } catch (e) {
       // 捕获意外异常，防止整个 loadPageData 崩溃
@@ -332,6 +525,7 @@ Page({
 
     return {
       id: p._id || p.id || '',
+      productCode: p.productCode || '',
       productName: p.productName || '未知产品',
       dealer: p.dealer || '自营',
       notional: marketValue,

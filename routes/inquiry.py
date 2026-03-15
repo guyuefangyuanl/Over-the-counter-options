@@ -33,6 +33,61 @@ def create_inquiry():
         logger.error(f"提交询价失败: {e}")
         return flask_error_response(str(e), 500)
 
+@inquiry_bp.route('/inquiries', methods=['GET'])
+@require_auth
+def get_my_inquiries():
+    """小程序用户：获取自己的询价列表"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        page_size = request.args.get('pageSize', 20, type=int)
+        status = request.args.get('status')
+        
+        # 获取当前用户的 openid
+        user_id = None
+        if hasattr(g, 'user'):
+            user_id = g.user.get('sub') or g.user.get('openid')
+        elif hasattr(g, 'admin'):
+            user_id = g.admin.get('sub')
+        
+        items, total = trade_service.get_inquiries(
+            limit=page_size, 
+            page=page, 
+            status=status,
+            user_id=user_id
+        )
+        
+        return flask_paginated_response(
+            data=items,
+            page=page,
+            per_page=page_size,
+            total=total,
+        )
+    except Exception as e:
+        logger.error(f"获取询价列表失败: {e}")
+        return flask_error_response(str(e), 500)
+
+@inquiry_bp.route('/inquiries/<id>', methods=['GET'])
+@require_auth
+def get_inquiry_detail(id):
+    """小程序用户：获取询价详情"""
+    try:
+        inquiry = trade_service.get_inquiry_by_id(id)
+        
+        if not inquiry:
+            return flask_error_response("询价记录不存在", 404)
+        
+        # 可选：验证是否是用户自己的记录
+        # user_id = None
+        # if hasattr(g, 'user'):
+        #     user_id = g.user.get('sub') or g.user.get('openid')
+        # if user_id and inquiry.get('userId') != user_id:
+        #     return flask_error_response("无权访问", 403)
+        
+        return flask_success_response(data=inquiry)
+    except Exception as e:
+        logger.error(f"获取询价详情失败: {e}")
+        return flask_error_response(str(e), 500)
+
 @inquiry_bp.route('/admin/inquiries', methods=['GET'])
 @require_auth
 def admin_get_inquiries():

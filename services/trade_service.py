@@ -204,6 +204,43 @@ class TradeService:
         model = self._get_position_model()
         return model.delete_position(position_id)
 
+    def get_position_by_id(self, position_id: str) -> Optional[Dict[str, Any]]:
+        """根据ID获取单个持仓"""
+        model = self._get_position_model()
+        return model.get_position_by_id(position_id)
+
+    def close_position(self, position_id: str, close_price: float, close_type: str = 'accounting') -> bool:
+        """平仓操作
+
+        Args:
+            position_id: 持仓ID
+            close_price: 平仓价格
+            close_type: 平仓类型 'accounting'(记账) 或 'order'(下单)
+        """
+        model = self._get_position_model()
+        position = model.get_position_by_id(position_id)
+        if not position:
+            raise ValueError("持仓不存在")
+
+        if position.get('status') != 'active':
+            raise ValueError("持仓已平仓或状态异常")
+
+        # 计算平仓盈亏
+        quantity = float(position.get('quantity', 0))
+        cost_price = float(position.get('price', 0))
+        profit_loss = (close_price - cost_price) * quantity if cost_price > 0 else 0
+
+        # 更新持仓状态
+        update_data = {
+            'status': 'closed',
+            'closePrice': close_price,
+            'closeType': close_type,
+            'profitLoss': profit_loss,
+            'closedAt': datetime.utcnow().isoformat() if model._is_cloud() else datetime.utcnow()
+        }
+
+        return model.update_position(position_id, update_data)
+
     def get_position_statistics(self, customer_id: str = None) -> Dict[str, Any]:
         model = self._get_position_model()
         return model.get_statistics(customer_id)

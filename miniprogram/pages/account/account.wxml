@@ -293,4 +293,159 @@
       </view>
     </view>
   </van-popup>
+
+  <!-- 修改持仓弹窗 -->
+  <van-popup
+    show="{{showEditPositionForm}}"
+    round
+    position="bottom"
+    custom-style="height: 80%;"
+    bind:close="hideEditPositionForm"
+  >
+    <view class="inquiry-form-popup">
+      <view class="form-header">
+        <text class="form-title">修改持仓</text>
+        <van-icon name="cross" bind:click="hideEditPositionForm" />
+      </view>
+
+      <scroll-view scroll-y class="form-content">
+        <!-- 标的信息 -->
+        <view class="form-section">
+          <view class="section-title">标的信息</view>
+          <van-field
+            label="标的代码"
+            placeholder="如 510050"
+            value="{{positionForm.productCode}}"
+            data-field="productCode"
+            bind:blur="onPositionFormInput"
+            error-message="{{positionFormErrors.productCode || ''}}"
+            required
+          />
+          <van-field
+            label="标的名称"
+            placeholder="如 上证50ETF"
+            value="{{positionForm.productName}}"
+            data-field="productName"
+            bind:blur="onPositionFormInput"
+            error-message="{{positionFormErrors.productName || ''}}"
+            required
+          />
+        </view>
+
+        <!-- 持仓参数 -->
+        <view class="form-section">
+          <view class="section-title">持仓参数</view>
+          <van-field
+            label="名义本金"
+            placeholder="请输入名义本金"
+            value="{{positionForm.quantity}}"
+            type="number"
+            use-button-slot
+            data-field="quantity"
+            bind:blur="onPositionFormInput"
+            error-message="{{positionFormErrors.quantity || ''}}"
+            required
+          >
+            <view slot="button" class="field-unit">元</view>
+          </van-field>
+          <van-field
+            label="成本价"
+            placeholder="如 3.250"
+            value="{{positionForm.price}}"
+            type="digit"
+            data-field="price"
+            bind:blur="onPositionFormInput"
+            error-message="{{positionFormErrors.price || ''}}"
+            required
+          />
+          <van-field
+            label="交易商"
+            placeholder="可选，如 自营"
+            value="{{positionForm.dealer}}"
+            data-field="dealer"
+            bind:blur="onPositionFormInput"
+          />
+          <van-field
+            label="剩余天数"
+            placeholder="可选，默认 30 天"
+            value="{{positionForm.daysLeft}}"
+            type="number"
+            data-field="daysLeft"
+            bind:blur="onPositionFormInput"
+          />
+        </view>
+      </scroll-view>
+
+      <!-- 提交按钮 -->
+      <view class="form-footer">
+        <van-button
+          type="primary"
+          round
+          block
+          bind:click="submitEditPositionForm"
+          loading="{{isSubmittingPosition}}"
+          disabled="{{isSubmittingPosition}}"
+        >
+          {{isSubmittingPosition ? '提交中...' : '确认修改'}}
+        </van-button>
+      </view>
+    </view>
+  </van-popup>
+
+  <!-- 平仓确认弹窗 -->
+  <van-popup
+    show="{{showClosePositionDialog}}"
+    round
+    position="bottom"
+    custom-style="height: auto; padding-bottom: env(safe-area-inset-bottom);"
+    bind:close="hideClosePositionDialog"
+  >
+    <view class="close-position-dialog">
+      <view class="dialog-header">
+        <text class="dialog-title">{{closeType === 'accounting' ? '平仓记账' : '平仓下单'}}</text>
+        <van-icon name="cross" bind:click="hideClosePositionDialog" />
+      </view>
+
+      <view class="dialog-content">
+        <view class="position-info">
+          <text class="product-name">{{closingPosition.productName}}</text>
+          <text class="position-detail">名义本金: ¥{{closingPosition.notional}} | 成本价: {{closingPosition.fillPrice}}</text>
+        </view>
+
+        <van-field
+          label="平仓价格"
+          placeholder="请输入平仓价格"
+          value="{{closePrice}}"
+          type="digit"
+          bind:change="onClosePriceInput"
+          required
+        />
+
+        <view class="close-type-info">
+          <text class="type-label">平仓类型：</text>
+          <text class="type-value">{{closeType === 'accounting' ? '平仓记账（仅记录盈亏）' : '平仓下单（发起交易）'}}</text>
+        </view>
+      </view>
+
+      <view class="dialog-footer">
+        <van-button
+          type="default"
+          round
+          bind:click="hideClosePositionDialog"
+          disabled="{{isClosingPosition}}"
+        >
+          取消
+        </van-button>
+        <van-button
+          type="primary"
+          round
+          bind:click="confirmClosePosition"
+          loading="{{isClosingPosition}}"
+          disabled="{{isClosingPosition}}"
+        >
+          确认平仓
+        </van-button>
+      </view>
+    </view>
+  </van-popup>
 </view>

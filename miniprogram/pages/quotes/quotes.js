@@ -180,12 +180,17 @@ Page({
     // 检查收藏状态
     this.checkFavoriteStatus();
     
-    // 初始化数据
+    // 初始化数据 - 注意：loadHotStocks 会在 handleNavigationParams 中调用
+    // 这里只加载其他数据
     this.loadWatchlist();
-    this.loadHotStocks();
     this.loadIndexData();
     this.loadEtfData();
     this.loadGroups({ silent: true });
+    
+    // 如果没有跳转参数，才加载默认热门股票
+    if (!options.code && !options.stock) {
+      this.loadHotStocks();
+    }
     
     // 初始化期权报价系统
     this.initPricingSystem();
@@ -221,10 +226,12 @@ Page({
   },
 
   handleNavigationParams: function(options) {
+    console.log('handleNavigationParams收到参数:', options);
     if (!options) return;
 
     // 支持 tab 参数切换到指定分类
     if (options.tab) {
+      console.log('设置tab:', options.tab);
       this.setData({ currentTab: options.tab });
     }
 
@@ -232,6 +239,7 @@ Page({
     if (options.stock) {
       try {
         const stockInfo = typeof options.stock === 'string' ? JSON.parse(decodeURIComponent(options.stock)) : options.stock;
+        console.log('解析stock信息:', stockInfo);
         this.setData({
           currentTab: '个股',
           currentStock: {
@@ -243,12 +251,16 @@ Page({
             displayText: `${stockInfo.price || 11.36}  +${stockInfo.changePercent || 5.68}%`
           }
         });
+        // 重新加载热门股票列表和期权报价
+        this.loadHotStocks();
+        this.loadOptionQuotes();
       } catch (e) {
         console.error('解析股票信息失败:', e);
       }
     } else {
       const sc = (options.stockCode || options.code);
       const sn = (options.stockName || options.name);
+      console.log('处理code/name参数:', { sc, sn });
       if (sc) {
         const code = this.normalizeParam(sc);
         const name = this.normalizeParam(sn) || '平安银行';
@@ -256,6 +268,7 @@ Page({
         const changePercent = options.changePercent || Number((Math.random() * 4 - 2).toFixed(2));
         const change = Number((price * changePercent / 100).toFixed(2));
         
+        console.log('设置currentStock:', { code, name, price, change, changePercent });
         this.setData({
           currentTab: '个股',
           currentStock: {
@@ -268,7 +281,8 @@ Page({
           }
         });
         
-        // 如果是从搜索跳转，重新加载报价
+        // 如果是从搜索跳转，重新加载热门股票列表和期权报价
+        this.loadHotStocks();
         this.loadOptionQuotes();
       }
     }
@@ -317,7 +331,7 @@ Page({
     // 模拟或调用 API 获取热门个股数据
     // 实际项目中应优先从后端实时获取
     setTimeout(() => {
-      const baseStocks = [
+      let baseStocks = [
         { name: '宁德时代', code: '300750.SZ', changePercent: 2.47, price: 180.50, atm: 11.83, otm105: 9.77, otm110: 8.01 },
         { name: '东方财富', code: '300059.SZ', changePercent: 0.50, price: 13.45, atm: 16.20, otm105: 14.21, otm110: 12.44 },
         { name: '平安银行', code: '000001.SZ', changePercent: -0.35, price: 10.20, atm: 6.53, otm105: 4.46, otm110: 2.94 },
@@ -330,7 +344,37 @@ Page({
         { name: '隆基绿能', code: '601012.SH', changePercent: -1.89, price: 18.45, atm: 22.34, otm105: 20.12, otm110: 18.45 }
       ];
       
-      // 应用排序
+      // 如果有当前选中的股票（从首页跳转过来），将其插入到列表顶部
+      const { currentStock } = this.data;
+      console.log('loadHotStocks currentStock:', currentStock);
+      let selectedStock = null;
+      
+      if (currentStock && currentStock.code) {
+        // 检查是否已存在该股票
+        const existingIndex = baseStocks.findIndex(s => s.code.split('.')[0] === currentStock.code.split('.')[0]);
+        if (existingIndex >= 0) {
+          // 已存在，移除并更新数据
+          const existing = baseStocks.splice(existingIndex, 1)[0];
+          existing.name = currentStock.name || existing.name;
+          existing.price = currentStock.price || existing.price;
+          existing.changePercent = currentStock.changePercent || existing.changePercent;
+          selectedStock = existing;
+        } else {
+          // 不存在，创建新条目
+          selectedStock = {
+            name: currentStock.name,
+            code: currentStock.code + (currentStock.market === 'SH' ? '.SH' : '.SZ'),
+            changePercent: currentStock.changePercent || 0,
+            price: currentStock.price || 0,
+            atm: 10.00,
+            otm105: 8.50,
+            otm110: 7.20
+          };
+        }
+        console.log('选中的股票:', selectedStock);
+      }
+      
+      // 对剩余股票应用排序
       const { sortField, sortOrder } = this.data;
       const sortedStocks = baseStocks.sort((a, b) => {
         let valA = a[sortField];
@@ -346,6 +390,11 @@ Page({
           return valB - valA;
         }
       });
+
+      // 如果有选中的股票，放在最前面
+      if (selectedStock) {
+        sortedStocks.unshift(selectedStock);
+      }
 
       const now = new Date();
       const formattedTime = `${now.getFullYear()}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}更新`;
@@ -1638,7 +1687,7 @@ Page({
         duration: 2000
       });
       
-      // 延迟跳转到询价中心
+      // 延迟跳转到询价中心（仅成功时跳转）
       setTimeout(() => {
         wx.switchTab({
           url: '/pages/inquiry/inquiry'
@@ -1647,11 +1696,13 @@ Page({
     }).catch(err => {
       console.error('询价提交失败:', err);
       wx.hideLoading();
+      // 失败时不跳转，保持在当前页面显示错误提示，让用户可以重新尝试
       wx.showToast({
-        title: '提交失败：' + (err.message || '请重试'),
+        title: '提交失败：' + (err.message || '请检查网络后重试'),
         icon: 'none',
         duration: 3000
       });
+      // 不跳转，用户可以修改信息后重新提交
     });
   },
   
@@ -1903,18 +1954,20 @@ Page({
         duration: 2000
       });
       
-      // 跳转到询价详情页面
+      // 成功后跳转到询价详情页面
       wx.navigateTo({
         url: '/pages/inquiry/inquiry?type=detail&id=' + result.data.inquiryId
       });
     }).catch(err => {
       console.error('询价提交失败:', err);
       wx.hideLoading();
+      // 失败时不跳转，保持在当前页面显示错误提示，让用户可以重新尝试
       wx.showToast({
-        title: '提交失败：' + (err.message || '请重试'),
+        title: '提交失败：' + (err.message || '请检查网络后重试'),
         icon: 'none',
         duration: 3000
       });
+      // 不跳转，用户可以修改信息后重新提交
     });
   },
 

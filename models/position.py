@@ -66,64 +66,139 @@ class PositionModel:
                 items.append(item)
             return items, total
 
+    def get_position_by_id(self, position_id: str) -> Optional[Dict[str, Any]]:
+        """根据ID获取单个持仓"""
+        if self._is_cloud():
+            if not self.cloud_client:
+                return None
+            try:
+                query = f'db.collection("{self.collection_name}").where({{_id: "{position_id}"}}).limit(1).get()'
+                items = self.cloud_client.query(query)
+                if items:
+                    item = items[0]
+                    if "_id" in item:
+                        item["_id"] = str(item["_id"])
+                    return item
+                return None
+            except Exception as e:
+                logger.warning(f"[get_position_by_id] 云数据库查询失败: {e}")
+                return None
+        else:
+            if not self.collection:
+                return None
+            try:
+                item = self.collection.find_one({'_id': ObjectId(position_id)})
+                if item:
+                    item["_id"] = str(item["_id"])
+                    for k in ["createdAt", "updatedAt"]:
+                        if k in item and hasattr(item[k], "isoformat"):
+                            item[k] = item[k].isoformat()
+                return item
+            except Exception as e:
+                logger.warning(f"[get_position_by_id] MongoDB查询失败: {e}")
+                return None
+
     def get_statistics(self, customer_id: str = None) -> Dict[str, Any]:
-        # This requires aggregation which is hard with Cloud DB simple client
-        # We will do simple fetch and sum for now if data is small, or use count for count.
-        # For large data, this is not efficient on Cloud DB without cloud functions.
-        # But for local mongo, we can use aggregate.
-        
+        """获取持仓统计数据，包括存续和已完结的统计"""
         stats = {
-            "totalMarketValue": 0,
-            "totalProfitLoss": 0,
+            "totalMarketValue": 0,      # 存续名义本金
+            "totalProfitLoss": 0,       # 存续净收益
+            "completedProfit": 0,       # 完结净收益
+            "optionFee": 0,             # 权利金总额
+            "commission": 0,            # 手续费总额
             "totalCount": 0
         }
-        
+
         if self._is_cloud():
-            # Limited implementation: Fetch all (up to 1000) and sum
-            # This is a limitation of the current CloudClient
             if not self.cloud_client:
                 return stats
-                
-            where_clause = '.where({status: "active"})'
+
+            # 查询存续持仓
+            active_where = '.where({status: "active"})'
             if customer_id:
-                where_clause = f'.where({{status: "active", customerId: "{customer_id}"}})'
-                
-            query = f'db.collection("{self.collection_name}"){where_clause}.limit(1000).get()'
+                active_where = f'.where({{status: "active", customerId: "{customer_id}"}})'
+
+            active_query = f'db.collection("{self.collection_name}"){active_where}.limit(1000).get()'
             try:
-                items = self.cloud_client.query(query)
+                active_items = self.cloud_client.query(active_query)
             except Exception as e:
-                import logging
-                logging.getLogger(__name__).warning(f"[get_statistics] 云数据库查询失败，返回空统计: {e}")
-                return stats
-            
-            stats["totalCount"] = len(items)
-            for item in items:
+                logger.warning(f"[get_statistics] 云数据库查询存续持仓失败: {e}")
+                active_items = []
+
+            # 查询已完结持仓
+            closed_where = '.where({status: "closed"})'
+            if customer_id:
+                closed_where = f'.where({{status: "closed", customerId: "{customer_id}"}})'
+
+            closed_query = f'db.collection("{self.collection_name}"){closed_where}.limit(1000).get()'
+            try:
+                closed_items = self.cloud_client.query(closed_query)
+            except Exception as e:
+                logger.warning(f"[get_statistics] 云数据库查询已完结持仓失败: {e}")
+                closed_items = []
+
+            # 统计存续持仓
+            stats["totalCount"] = len(active_items)
+            for item in active_items:
                 stats["totalMarketValue"] += float(item.get("marketValue", 0))
                 stats["totalProfitLoss"] += float(item.get("profitLoss", 0))
-                
+                stats["optionFee"] += float(item.get("optionFee", 0))
+                stats["commission"] += float(item.get("commission", 0))
+
+            # 统计已完结持仓盈亏
+            for item in closed_items:
+                stats["completedProfit"] += float(item.get("profitLoss", 0))
+                stats["optionFee"] += float(item.get("optionFee", 0))
+                stats["commission"] += float(item.get("commission", 0))
+
         else:
             if not self.collection:
                 return stats
-                
-            match = {"status": "active"}
+
+            # 存续持仓统计
+            active_match = {"status": "active"}
             if customer_id:
-                match["customerId"] = customer_id
-                
-            pipeline = [
-                {"$match": match},
+                active_match["customerId"] = customer_id
+
+            active_pipeline = [
+                {"$match": active_match},
                 {"$group": {
                     "_id": None,
                     "totalMarketValue": {"$sum": "$marketValue"},
                     "totalProfitLoss": {"$sum": "$profitLoss"},
+                    "optionFee": {"$sum": {"$ifNull": ["$optionFee", 0]}},
+                    "commission": {"$sum": {"$ifNull": ["$commission", 0]}},
                     "count": {"$sum": 1}
                 }}
             ]
-            result = list(self.collection.aggregate(pipeline))
-            if result:
-                stats["totalMarketValue"] = result[0]["totalMarketValue"]
-                stats["totalProfitLoss"] = result[0]["totalProfitLoss"]
-                stats["totalCount"] = result[0]["count"]
-                
+            active_result = list(self.collection.aggregate(active_pipeline))
+            if active_result:
+                stats["totalMarketValue"] = active_result[0]["totalMarketValue"]
+                stats["totalProfitLoss"] = active_result[0]["totalProfitLoss"]
+                stats["optionFee"] = active_result[0]["optionFee"]
+                stats["commission"] = active_result[0]["commission"]
+                stats["totalCount"] = active_result[0]["count"]
+
+            # 已完结持仓统计
+            closed_match = {"status": "closed"}
+            if customer_id:
+                closed_match["customerId"] = customer_id
+
+            closed_pipeline = [
+                {"$match": closed_match},
+                {"$group": {
+                    "_id": None,
+                    "completedProfit": {"$sum": "$profitLoss"},
+                    "optionFee": {"$sum": {"$ifNull": ["$optionFee", 0]}},
+                    "commission": {"$sum": {"$ifNull": ["$commission", 0]}}
+                }}
+            ]
+            closed_result = list(self.collection.aggregate(closed_pipeline))
+            if closed_result:
+                stats["completedProfit"] = closed_result[0]["completedProfit"]
+                stats["optionFee"] += closed_result[0]["optionFee"]
+                stats["commission"] += closed_result[0]["commission"]
+
         return stats
 
     def create_positions(self, positions: List[Dict[str, Any]]) -> bool:

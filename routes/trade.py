@@ -127,10 +127,22 @@ def create_position():
 
 @trade_bp.route('/positions/<position_id>', methods=['PUT'])
 @require_auth
-@require_roles('admin')
 def update_position(position_id):
-    """更新持仓"""
+    """更新持仓 - 用户只能修改自己的持仓，管理员可修改所有"""
     try:
+        current_user = getattr(g, 'admin', {})
+        role = current_user.get('role')
+        user_id = current_user.get('sub')
+
+        # 获取持仓验证权限
+        position = trade_service.get_position_by_id(position_id)
+        if not position:
+            return flask_error_response("持仓不存在", 404)
+
+        # 权限检查：admin可操作所有，user只能操作自己的
+        if role == 'user' and position.get('customerId') != user_id:
+            return flask_error_response("无权操作此持仓", 403)
+
         data = request.json
         success = trade_service.update_position(position_id, data)
         if success:
@@ -143,10 +155,22 @@ def update_position(position_id):
 
 @trade_bp.route('/positions/<position_id>', methods=['DELETE'])
 @require_auth
-@require_roles('admin')
 def delete_position(position_id):
-    """删除持仓"""
+    """删除持仓 - 用户只能删除自己的持仓，管理员可删除所有"""
     try:
+        current_user = getattr(g, 'admin', {})
+        role = current_user.get('role')
+        user_id = current_user.get('sub')
+
+        # 获取持仓验证权限
+        position = trade_service.get_position_by_id(position_id)
+        if not position:
+            return flask_error_response("持仓不存在", 404)
+
+        # 权限检查：admin可操作所有，user只能操作自己的
+        if role == 'user' and position.get('customerId') != user_id:
+            return flask_error_response("无权操作此持仓", 403)
+
         success = trade_service.delete_position(position_id)
         if success:
             return flask_success_response(message="持仓删除成功")
@@ -154,6 +178,80 @@ def delete_position(position_id):
             return flask_error_response("持仓删除失败", 500)
     except Exception as e:
         current_app.logger.error(f'删除持仓失败: {e}')
+        return flask_error_response(str(e), 500)
+
+@trade_bp.route('/positions/<position_id>', methods=['GET'])
+@require_auth
+def get_position_detail(position_id):
+    """获取单个持仓详情"""
+    try:
+        current_user = getattr(g, 'admin', {})
+        role = current_user.get('role')
+        user_id = current_user.get('sub')
+
+        position = trade_service.get_position_by_id(position_id)
+        if not position:
+            return flask_error_response("持仓不存在", 404)
+
+        # 权限检查：admin可查看所有，user只能查看自己的
+        if role == 'user' and position.get('customerId') != user_id:
+            return flask_error_response("无权查看此持仓", 403)
+
+        return flask_success_response(data=position, message='获取持仓详情成功')
+    except Exception as e:
+        current_app.logger.error(f'获取持仓详情失败: {e}')
+        return flask_error_response(str(e), 500)
+
+@trade_bp.route('/positions/<position_id>/close', methods=['POST'])
+@require_auth
+def close_position(position_id):
+    """平仓操作 - 支持平仓记账和平仓下单"""
+    try:
+        current_user = getattr(g, 'admin', {})
+        role = current_user.get('role')
+        user_id = current_user.get('sub')
+
+        # 获取持仓验证权限
+        position = trade_service.get_position_by_id(position_id)
+        if not position:
+            return flask_error_response("持仓不存在", 404)
+
+        # 权限检查：admin可操作所有，user只能操作自己的
+        if role == 'user' and position.get('customerId') != user_id:
+            return flask_error_response("无权操作此持仓", 403)
+
+        data = request.json or {}
+        close_price = data.get('closePrice')
+        close_type = data.get('closeType', 'accounting')  # accounting 或 order
+
+        if close_price is None:
+            return flask_error_response("平仓价格不能为空", 400)
+
+        try:
+            close_price = float(close_price)
+        except (TypeError, ValueError):
+            return flask_error_response("平仓价格格式错误", 400)
+
+        success = trade_service.close_position(position_id, close_price, close_type)
+        if success:
+            # 计算并返回平仓盈亏
+            quantity = float(position.get('quantity', 0))
+            cost_price = float(position.get('price', 0))
+            profit_loss = (close_price - cost_price) * quantity if cost_price > 0 else 0
+
+            return flask_success_response(
+                data={
+                    'profitLoss': profit_loss,
+                    'closeType': close_type
+                },
+                message="平仓成功"
+            )
+        else:
+            return flask_error_response("平仓失败", 500)
+    except ValueError as ve:
+        return flask_error_response(str(ve), 400)
+    except Exception as e:
+        current_app.logger.error(f'平仓操作失败: {e}')
         return flask_error_response(str(e), 500)
 
 @trade_bp.route('/positions/statistics', methods=['GET'])

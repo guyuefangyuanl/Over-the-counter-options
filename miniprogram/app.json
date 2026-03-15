@@ -16,6 +16,7 @@
     "pages/workspace/workspace",
     "pages/option-matrix/option-matrix",
     "pages/data-explanation/data-explanation",
+    "pages/knowledge-detail/knowledge-detail",
     "pages/position/position",
     "pages/search/search",
     "pages/search-stock/search-stock",

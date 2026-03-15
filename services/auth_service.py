@@ -36,6 +36,12 @@ class AuthService:
             "admin": 30,
         }
 
+        # SSL 验证配置（与 cloud_db.py 保持一致）
+        ssl_verify_env = os.getenv('WX_VERIFY_SSL', os.getenv('SSL_VERIFY', 'true')).lower()
+        self._verify_ssl = ssl_verify_env != 'false'
+        if not self._verify_ssl:
+            logger.warning("微信登录 SSL 验证已禁用（WX_VERIFY_SSL=false）")
+
     def _get_model(self):
         from models.user import UserModel
         ensure_db = getattr(current_app, "ensure_db", None)
@@ -362,7 +368,7 @@ class AuthService:
         }
         
         try:
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, timeout=10, verify=self._verify_ssl)
             result = response.json()
             
             if 'openid' not in result:

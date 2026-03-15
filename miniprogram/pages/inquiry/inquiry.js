@@ -175,7 +175,24 @@ Page({
     quickSearchResults: []
   },
 
-  onLoad() {
+  onLoad(options) {
+    // 处理从首页跳转传递的产品参数
+    console.log('询价页面加载，接收参数:', options);
+    if (options && options.code) {
+      const selectedProduct = {
+        code: decodeURIComponent(options.code || ''),
+        name: decodeURIComponent(options.name || ''),
+        market: decodeURIComponent(options.market || 'SH'),
+        structure: decodeURIComponent(options.structure || 'vanilla')
+      };
+      console.log('设置选中产品:', selectedProduct);
+      this.setData({ 
+        'inquiryForm.selectedProduct': selectedProduct,
+        'inquiryForm.structure': selectedProduct.structure || 'vanilla',
+        showInquiryForm: true // 直接显示询价表单
+      });
+    }
+    
     this.loadFavorites();
     this.fetchQuoteList(); // 从后端获取数据
     this.loadCustomGroups(); // 从本地存储加载自定义分组
@@ -690,11 +707,13 @@ Page({
       this.hideInquiryForm();
     }).catch(err => {
       console.error('提交询价失败:', err);
+      // 失败时不跳转，保持在当前页面显示错误提示，让用户可以重新尝试
       wx.showToast({ 
-        title: '提交失败：' + (err.message || '请重试'), 
+        title: '提交失败：' + (err.message || '请检查网络后重试'), 
         icon: 'none',
         duration: 3000
       });
+      // 不跳转，用户可以修改信息后重新提交
     }).finally(() => {
       this.setData({ isSubmitting: false });
     });
@@ -1038,7 +1057,9 @@ Page({
       this.hideQuickForm();
     }).catch(err => {
       console.error('快速询价失败:', err);
-      wx.showToast({ title: '提交失败：' + (err.message || '请重试'), icon: 'none', duration: 3000 });
+      // 失败时不跳转，保持在当前页面显示错误提示，让用户可以重新尝试
+      wx.showToast({ title: '提交失败：' + (err.message || '请检查网络后重试'), icon: 'none', duration: 3000 });
+      // 不跳转，用户可以修改信息后重新提交
     }).finally(() => {
       this.setData({ isQuickSubmitting: false });
     });

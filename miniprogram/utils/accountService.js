@@ -40,6 +40,27 @@ const accountService = {
   // data: { productCode, productName, quantity, price, dealer, daysLeft }
   createPosition: (data) => {
     return api.post('/trade/positions', data, REALTIME_OPTIONS);
+  },
+
+  // 获取持仓详情
+  getPositionDetail: (positionId) => {
+    return api.get(`/trade/positions/${positionId}`, {}, {}, REALTIME_OPTIONS);
+  },
+
+  // 更新持仓
+  updatePosition: (positionId, data) => {
+    return api.put(`/trade/positions/${positionId}`, data, REALTIME_OPTIONS);
+  },
+
+  // 删除持仓
+  deletePosition: (positionId) => {
+    return api.delete(`/trade/positions/${positionId}`, REALTIME_OPTIONS);
+  },
+
+  // 平仓操作
+  // data: { closePrice, closeType: 'accounting' | 'order' }
+  closePosition: (positionId, data) => {
+    return api.post(`/trade/positions/${positionId}/close`, data, REALTIME_OPTIONS);
   }
 };
 

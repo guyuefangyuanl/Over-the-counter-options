@@ -50,12 +50,17 @@ Page({
       navBarHeight: 44
     });
 
+    console.log('[股票详情] 接收参数:', options);
+
     if (options.code) {
-      const code = options.code;
-      const name = options.name ? decodeURIComponent(options.name) : '平安银行';
-      const price = options.price || '11.36';
-      const change = parseFloat(options.change || 0.61);
-      const changePercent = options.changePercent || '5.68';
+      // 对所有参数进行URL解码，确保正确处理编码后的中文等特殊字符
+      const code = decodeURIComponent(options.code || '');
+      const name = options.name ? decodeURIComponent(options.name) : '未知股票';
+      const price = options.price || '--';
+      const change = parseFloat(options.change || 0);
+      const changePercent = options.changePercent || '0.00';
+
+      console.log('[股票详情] 解码后参数:', { code, name, price, changePercent });
 
       this.setData({
         stock: {

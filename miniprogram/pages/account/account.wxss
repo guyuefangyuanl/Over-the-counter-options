@@ -565,3 +565,74 @@ page {
   border: 1rpx solid var(--primary);
   border-radius: 200rpx;
 }
+
+/* ========== 平仓确认弹窗样式 ========== */
+.close-position-dialog {
+  padding: var(--spacing-lg);
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.dialog-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dialog-content {
+  margin-bottom: var(--spacing-lg);
+}
+
+.position-info {
+  background: var(--bg-secondary);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.product-name {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.position-detail {
+  display: block;
+  font-size: 24rpx;
+  color: var(--text-secondary);
+}
+
+.close-type-info {
+  display: flex;
+  align-items: center;
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.type-label {
+  font-size: 26rpx;
+  color: var(--text-secondary);
+}
+
+.type-value {
+  font-size: 26rpx;
+  color: var(--text-primary);
+}
+
+.dialog-footer {
+  display: flex;
+  gap: var(--spacing-md);
+}
+
+.dialog-footer van-button {
+  flex: 1;
+}
