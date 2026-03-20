@@ -19,9 +19,13 @@ from services.file_parser import (
     save_upload_session_payload,
 )
 from services.sync_service import sync_quotes, upsert_quotes_from_file, delete_quotes, sync_all_quotes
+from services.cache import get_quotes_cache, invalidate_quotes_cache
 
 logger = logging.getLogger(__name__)
 admin_bp = Blueprint('admin', __name__)
+
+# 缓存实例
+_quotes_cache = get_quotes_cache()
 
 def _parse_int(value, default: int) -> int:
     if value is None:
@@ -114,7 +118,7 @@ def get_orders():
 @admin_bp.route('/quotes', methods=['GET'])
 @require_auth
 def get_quotes():
-    """管理后台：获取报价列表"""
+    """管理后台：获取报价列表（支持筛选和缓存）"""
     try:
         pagination, err = _parse_pagination()
         if err:
@@ -123,12 +127,73 @@ def get_quotes():
         page_size = pagination["page_size"]
         skip = (page - 1) * page_size
 
+        # 获取筛选参数
+        keyword = request.args.get('keyword', '').strip()
+        filter_type = request.args.get('type', '').strip()
+        filter_trader = request.args.get('trader', '').strip()
+        
+        # 检查是否禁用缓存（用于强制刷新）
+        no_cache = request.args.get('noCache', '').lower() == 'true'
+        
+        # 构建缓存键
+        cache_key = f"quotes:{page}:{page_size}:{keyword}:{filter_type}:{filter_trader}"
+        
+        # 尝试从缓存获取
+        if not no_cache:
+            cached_result = _quotes_cache.get(cache_key)
+            if cached_result:
+                logger.info(f"缓存命中: {cache_key}")
+                return flask_paginated_response(
+                    data=cached_result['stocks'],
+                    page=cached_result['page'],
+                    per_page=cached_result['per_page'],
+                    total=cached_result['total'],
+                    message="from_cache"
+                )
+
         try:
             cloud = CloudDbClient.from_env()
-            stocks = cloud.query(
-                f'db.collection("quotes").orderBy("updated_at","desc").skip({skip}).limit({page_size}).get()'
-            )
-            total = cloud.count('db.collection("quotes")')
+            
+            # 构建查询条件
+            where_conditions = []
+            
+            # 关键词搜索（股票代码或名称）
+            if keyword:
+                # 使用正则表达式进行模糊匹配
+                keyword_escaped = keyword.replace('"', '\\"')
+                where_conditions.append(f'(stock_code: /{keyword_escaped}/i || name: /{keyword_escaped}/i)')
+            
+            # 类型筛选
+            if filter_type:
+                filter_type_escaped = filter_type.replace('"', '\\"')
+                where_conditions.append(f'type: "{filter_type_escaped}"')
+            
+            # 交易商筛选
+            if filter_trader:
+                filter_trader_escaped = filter_trader.replace('"', '\\"')
+                where_conditions.append(f'trader: "{filter_trader_escaped}"')
+            
+            # 构建完整查询
+            if where_conditions:
+                where_clause = ' && '.join(where_conditions)
+                query = f'db.collection("quotes").where({{{where_clause}}}).orderBy("updated_at","desc").skip({skip}).limit({page_size}).get()'
+                count_query = f'db.collection("quotes").where({{{where_clause}}}).count()'
+            else:
+                query = f'db.collection("quotes").orderBy("updated_at","desc").skip({skip}).limit({page_size}).get()'
+                count_query = 'db.collection("quotes")'
+            
+            stocks = cloud.query(query)
+            total = cloud.count(count_query)
+            
+            # 缓存结果
+            result_data = {
+                'stocks': stocks if isinstance(stocks, list) else [],
+                'page': page,
+                'per_page': page_size,
+                'total': total if isinstance(total, int) else 0
+            }
+            _quotes_cache.set(cache_key, result_data, ttl=30.0)  # 缓存 30 秒
+            
         except (CloudDbConfigError, CloudDbRequestError) as e:
             # 回退到本地 Mock 存储
             logger.warning(f"云数据库访问失败，回退到本地存储: {e}")
@@ -167,6 +232,8 @@ def delete_quotes_api():
         if has_codes:
             result = delete_quotes(codes=codes)
             if result.get("success"):
+                # 使缓存失效
+                invalidate_quotes_cache()
                 return flask_success_response(
                     data={"deleted": result.get("deleted", 0)},
                     message=f"已成功删除 {result.get('deleted', 0)} 条记录",
@@ -233,6 +300,8 @@ def delete_quotes_api():
                         "deleted": int(result.get("deleted") or 0),
                         "durationMs": int(result.get("durationMs") or duration_ms),
                     }
+                    # 使缓存失效
+                    invalidate_quotes_cache()
                 else:
                     payload["status"] = "failed"
                     payload["deleted"] = int(result.get("deleted") or payload.get("deleted") or 0)
@@ -309,6 +378,130 @@ def delete_quotes_task_status(task_id: str):
     except Exception as e:
         logger.error(f"查询删除任务失败: {e}")
         return flask_error_response(f"查询任务失败: {str(e)}", 500)
+
+
+@admin_bp.route('/quotes/<quote_id>', methods=['PUT'])
+@require_auth
+@require_roles("admin", "editor")
+def update_quote(quote_id: str):
+    """管理后台：更新单条行情记录"""
+    try:
+        import json as json_module
+        payload = request.get_json(silent=True) or {}
+        if not payload:
+            return flask_error_response("请求体不能为空", 400)
+        
+        # 验证 quote_id
+        safe_id = str(quote_id).strip()
+        if not safe_id:
+            return flask_error_response("quote_id 无效", 400)
+        
+        try:
+            cloud = CloudDbClient.from_env()
+        except CloudDbConfigError as e:
+            return flask_error_response(str(e), 500)
+        
+        # 准备更新数据
+        update_data = {}
+        allowed_fields = ['name', 'price', 'rate', 'type', 'term', 'trader', 
+                          'changePercent', 'open', 'high', 'low', 'pre_close', 
+                          'volume', 'amount']
+        
+        for field in allowed_fields:
+            if field in payload:
+                value = payload[field]
+                # 数值字段转换
+                if field in ['price', 'rate', 'changePercent', 'open', 'high', 'low', 'pre_close', 'volume', 'amount']:
+                    try:
+                        value = float(value) if value is not None else None
+                    except (ValueError, TypeError):
+                        continue
+                if value is not None:
+                    update_data[field] = value
+        
+        if not update_data:
+            return flask_error_response("没有有效的更新字段", 400)
+        
+        # 添加更新时间
+        update_data['updated_at'] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        
+        # 执行更新
+        try:
+            # 先查询记录是否存在，确定使用 _id 还是 code 查询
+            existing = cloud.query(f'db.collection("quotes").where({{_id: "{safe_id}"}}).limit(1).get()')
+            where_field = "_id"
+            
+            if not existing or len(existing) == 0:
+                # 尝试使用 code 字段查询
+                existing = cloud.query(f'db.collection("quotes").where({{code: "{safe_id}"}}).limit(1).get()')
+                if not existing or len(existing) == 0:
+                    return flask_error_response("记录不存在", 404)
+                where_field = "code"
+            
+            # 构建 where_js 字符串
+            where_js = json_module.dumps({where_field: safe_id})
+            
+            # 执行更新
+            result = cloud.update_where(
+                collection="quotes",
+                where_js=where_js,
+                data=update_data
+            )
+            
+            if result > 0:
+                # 使缓存失效
+                invalidate_quotes_cache()
+                return flask_success_response(
+                    data={"updated": True, "quote_id": safe_id, "modified_count": result},
+                    message="更新成功"
+                )
+            else:
+                return flask_success_response(
+                    data={"updated": True, "quote_id": safe_id, "modified_count": 0},
+                    message="更新成功（无变化）"
+                )
+                
+        except CloudDbRequestError as e:
+            logger.error(f"更新行情失败: {e}")
+            return flask_error_response(f"更新失败: {str(e)}", 500)
+            
+    except Exception as e:
+        logger.error(f"更新行情失败: {e}")
+        return flask_error_response(f"更新失败: {str(e)}", 500)
+
+
+@admin_bp.route('/quotes/<quote_id>', methods=['GET'])
+@require_auth
+def get_quote_detail(quote_id: str):
+    """管理后台：获取单条行情详情"""
+    try:
+        safe_id = str(quote_id).strip()
+        if not safe_id:
+            return flask_error_response("quote_id 无效", 400)
+        
+        try:
+            cloud = CloudDbClient.from_env()
+        except CloudDbConfigError as e:
+            return flask_error_response(str(e), 500)
+        
+        # 查询记录
+        try:
+            result = cloud.query(f'db.collection("quotes").where({{_id: "{safe_id}"}}).limit(1).get()')
+            if not result or len(result) == 0:
+                # 尝试使用 code 字段查询
+                result = cloud.query(f'db.collection("quotes").where({{code: "{safe_id}"}}).limit(1).get()')
+                if not result or len(result) == 0:
+                    return flask_error_response("记录不存在", 404)
+            
+            return flask_success_response(data=result[0])
+        except CloudDbRequestError as e:
+            logger.error(f"查询行情详情失败: {e}")
+            return flask_error_response(f"查询失败: {str(e)}", 500)
+            
+    except Exception as e:
+        logger.error(f"查询行情详情失败: {e}")
+        return flask_error_response(f"查询失败: {str(e)}", 500)
+
 
 @admin_bp.route('/sync-quotes', methods=['POST'])
 @require_auth

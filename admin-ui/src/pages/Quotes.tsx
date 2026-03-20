@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   App,
   Table,
@@ -14,13 +14,55 @@ import {
   Descriptions,
   Row,
   Col,
+  Form,
+  Input,
+  InputNumber,
+  Select,
 } from 'antd';
-import { UploadOutlined, ReloadOutlined, DeleteOutlined } from '@ant-design/icons';
+import { UploadOutlined, ReloadOutlined, DeleteOutlined, EditOutlined, SearchOutlined, SyncOutlined } from '@ant-design/icons';
 import api, { getApiErrorMessage, type ApiResponse } from '../utils/api';
 import type { ColumnsType } from 'antd/es/table';
 import PageState from '../components/PageState';
 
 const { Title } = Typography;
+
+// 简单的防抖 Hook
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+  
+  return debouncedValue;
+}
+
+// 简单的内存缓存
+const queryCache = new Map<string, { data: unknown; timestamp: number }>();
+const CACHE_TTL = 30000; // 30 秒
+
+function getCachedData<T>(key: string): T | null {
+  const cached = queryCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data as T;
+  }
+  queryCache.delete(key);
+  return null;
+}
+
+function setCachedData<T>(key: string, data: T): void {
+  queryCache.set(key, { data, timestamp: Date.now() });
+}
+
+function clearCache(): void {
+  queryCache.clear();
+}
 
 interface Quote {
   _id?: string;
@@ -149,13 +191,33 @@ const Quotes: React.FC = () => {
   const [uploadResult, setUploadResult] = useState<ConfirmUploadPayload['result'] | null>(null);
   const uploadPollTimerRef = useRef<number | null>(null);
   const deletePollTimerRef = useRef<number | null>(null);
+  
+  // 筛选相关状态
+  const [filterForm] = Form.useForm();
+  const [filters, setFilters] = useState<{ keyword?: string; type?: string; trader?: string }>({});
+  
+  // 编辑相关状态
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editForm] = Form.useForm();
+  const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  
+  // 自动刷新状态
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const autoRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetchQuotes = useCallback(async (page = 1, pageSize = 10) => {
+  const fetchQuotes = useCallback(async (page = 1, pageSize = 10, filterParams?: { keyword?: string; type?: string; trader?: string }) => {
     setIsFetching(true);
     setError(null);
     try {
+      const params: Record<string, unknown> = { page, pageSize };
+      const currentFilters = filterParams ?? filters;
+      if (currentFilters.keyword) params.keyword = currentFilters.keyword;
+      if (currentFilters.type) params.type = currentFilters.type;
+      if (currentFilters.trader) params.trader = currentFilters.trader;
+      
       const res = await api.get<ApiResponse<PaginatedPayload<Quote>>>('/admin/quotes', {
-        params: { page, pageSize },
+        params,
       });
       console.log('[Quotes] API Response:', res);
       if (res.success && res.data?.pagination && Array.isArray(res.data.items)) {
@@ -180,7 +242,7 @@ const Quotes: React.FC = () => {
     } finally {
       setIsFetching(false);
     }
-  }, [message]);
+  }, [message, filters]);
 
   useEffect(() => {
     void fetchQuotes();
@@ -198,25 +260,58 @@ const Quotes: React.FC = () => {
         window.clearInterval(deletePollTimerRef.current);
         deletePollTimerRef.current = null;
       }
+      if (autoRefreshTimerRef.current !== null) {
+        clearInterval(autoRefreshTimerRef.current);
+        autoRefreshTimerRef.current = null;
+      }
     };
   }, []);
+
+  // 自动刷新逻辑
+  useEffect(() => {
+    if (autoRefresh) {
+      autoRefreshTimerRef.current = setInterval(() => {
+        void fetchQuotes(pagination.current, pagination.pageSize, filters);
+      }, 30000); // 30秒刷新一次
+      
+      return () => {
+        if (autoRefreshTimerRef.current !== null) {
+          clearInterval(autoRefreshTimerRef.current);
+          autoRefreshTimerRef.current = null;
+        }
+      };
+    } else {
+      if (autoRefreshTimerRef.current !== null) {
+        clearInterval(autoRefreshTimerRef.current);
+        autoRefreshTimerRef.current = null;
+      }
+    }
+  }, [autoRefresh, pagination.current, pagination.pageSize, filters, fetchQuotes]);
 
   const columns: ColumnsType<Quote> = [
     {
       title: '代码',
       dataIndex: 'stock_code',
       key: 'stock_code',
+      sorter: (a, b) => a.stock_code.localeCompare(b.stock_code),
     },
     {
       title: '名称',
       dataIndex: 'name',
       key: 'name',
+      sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
     },
     {
       title: '类型',
       dataIndex: 'type',
       key: 'type',
       render: (val) => val || '-',
+      filters: [
+        { text: '香草', value: '香草' },
+        { text: 'Call', value: 'Call' },
+        { text: 'Put', value: 'Put' },
+      ],
+      onFilter: (value, record) => record.type === value,
     },
     {
       title: '期限',
@@ -234,9 +329,31 @@ const Quotes: React.FC = () => {
       title: '费率/价格',
       dataIndex: 'rate',
       key: 'rate',
+      sorter: (a, b) => {
+        const valA = a.rate ?? a.price ?? 0;
+        const valB = b.rate ?? b.price ?? 0;
+        return valA - valB;
+      },
       render: (val, record: Quote) => {
-        if (typeof val === 'number') return `${(val * 100).toFixed(2)}%`;
-        if (typeof record.price === 'number') return record.price.toFixed(2);
+        // 如果有涨跌幅数据，显示涨跌幅并添加颜色
+        if (typeof record.changePercent === 'number') {
+          const changePercent = record.changePercent;
+          const color = changePercent > 0 ? '#cf1322' : changePercent < 0 ? '#3f8600' : '#595959';
+          const arrow = changePercent > 0 ? '↑' : changePercent < 0 ? '↓' : '';
+          return (
+            <span style={{ color, fontWeight: 500 }}>
+              {changePercent > 0 ? '+' : ''}{(changePercent * 100).toFixed(2)}% {arrow}
+            </span>
+          );
+        }
+        // 显示费率
+        if (typeof val === 'number') {
+          return <span style={{ color: '#595959' }}>{(val * 100).toFixed(2)}%</span>;
+        }
+        // 显示价格
+        if (typeof record.price === 'number') {
+          return <span style={{ color: '#595959' }}>{record.price.toFixed(2)}</span>;
+        }
         return '-';
       },
     },
@@ -244,23 +361,90 @@ const Quotes: React.FC = () => {
       title: '更新时间',
       dataIndex: 'updated_at',
       key: 'updated_at',
+      sorter: (a, b) => {
+        const timeA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+        const timeB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+        return timeA - timeB;
+      },
       render: (val) => val ? new Date(val).toLocaleString() : '-',
     },
     {
       title: '操作',
       key: 'action',
       render: (_, record) => (
-        <Button
-          type="link"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={() => handleDelete([record.stock_code])}
-        >
-          删除
-        </Button>
+        <Space size="small">
+          <Button
+            type="link"
+            icon={<EditOutlined />}
+            onClick={() => handleEditOpen(record)}
+          >
+            编辑
+          </Button>
+          <Button
+            type="link"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleDelete([record.stock_code])}
+          >
+            删除
+          </Button>
+        </Space>
       ),
     },
   ];
+  
+  // 筛选处理
+  const handleFilterSubmit = useCallback(() => {
+    const values = filterForm.getFieldsValue();
+    setFilters(values);
+    void fetchQuotes(1, pagination.pageSize, values);
+  }, [fetchQuotes, filterForm, pagination.pageSize]);
+  
+  const handleFilterReset = useCallback(() => {
+    filterForm.resetFields();
+    setFilters({});
+    void fetchQuotes(1, pagination.pageSize, {});
+  }, [fetchQuotes, filterForm, pagination.pageSize]);
+  
+  // 编辑处理
+  const handleEditOpen = useCallback((record: Quote) => {
+    setEditingQuote(record);
+    editForm.setFieldsValue({
+      name: record.name,
+      price: record.price,
+      rate: record.rate,
+      type: record.type,
+      term: record.term,
+      trader: record.trader,
+    });
+    setEditModalOpen(true);
+  }, [editForm]);
+  
+  const handleEditSubmit = useCallback(async () => {
+    if (!editingQuote) return;
+    
+    try {
+      const values = await editForm.validateFields();
+      setIsUpdating(true);
+      
+      const quoteId = editingQuote._id || editingQuote.code;
+      const res = await api.put<ApiResponse<{ updated: boolean }>>(`/admin/quotes/${quoteId}`, values);
+      
+      if (res.success) {
+        message.success('更新成功');
+        setEditModalOpen(false);
+        setEditingQuote(null);
+        editForm.resetFields();
+        void fetchQuotes(pagination.current, pagination.pageSize, filters);
+      } else {
+        message.error(res.message || '更新失败');
+      }
+    } catch (err) {
+      message.error(getApiErrorMessage(err, '更新失败'));
+    } finally {
+      setIsUpdating(false);
+    }
+  }, [editingQuote, editForm, fetchQuotes, message, pagination, filters]);
 
   const [isBulkImporting, setIsBulkImporting] = useState(false);
 
@@ -684,8 +868,15 @@ const Quotes: React.FC = () => {
           >
             清空所有
           </Button>
-          <Button icon={<ReloadOutlined />} onClick={() => fetchQuotes(pagination.current, pagination.pageSize)}>
+          <Button icon={<ReloadOutlined />} onClick={() => fetchQuotes(pagination.current, pagination.pageSize, filters)}>
             刷新
+          </Button>
+          <Button 
+            type={autoRefresh ? 'primary' : 'default'}
+            icon={<SyncOutlined spin={autoRefresh} />}
+            onClick={() => setAutoRefresh(!autoRefresh)}
+          >
+            {autoRefresh ? '自动刷新中' : '开启自动刷新'}
           </Button>
           <Button onClick={openSyncLogs} disabled={isFetchingSyncLogs}>
             同步历史
@@ -727,6 +918,53 @@ const Quotes: React.FC = () => {
           </Upload>
         </Space>
       </div>
+      
+      {/* 筛选表单 */}
+      <Form
+        form={filterForm}
+        layout="inline"
+        style={{ marginBottom: 16 }}
+        onFinish={handleFilterSubmit}
+      >
+        <Form.Item name="keyword" style={{ marginBottom: 8 }}>
+          <Input 
+            placeholder="股票代码/名称" 
+            allowClear 
+            style={{ width: 150 }}
+            prefix={<SearchOutlined />}
+          />
+        </Form.Item>
+        <Form.Item name="type" style={{ marginBottom: 8 }}>
+          <Select 
+            placeholder="类型" 
+            allowClear 
+            style={{ width: 120 }}
+            options={[
+              { label: '香草', value: '香草' },
+              { label: 'Call', value: 'Call' },
+              { label: 'Put', value: 'Put' },
+            ]}
+          />
+        </Form.Item>
+        <Form.Item name="trader" style={{ marginBottom: 8 }}>
+          <Input 
+            placeholder="交易商" 
+            allowClear 
+            style={{ width: 120 }}
+          />
+        </Form.Item>
+        <Form.Item style={{ marginBottom: 8 }}>
+          <Space>
+            <Button type="primary" htmlType="submit" loading={isFetching}>
+              筛选
+            </Button>
+            <Button onClick={handleFilterReset}>
+              重置
+            </Button>
+          </Space>
+        </Form.Item>
+      </Form>
+      
       <PageState
         loading={tableLoading}
         error={error}
@@ -898,6 +1136,90 @@ const Quotes: React.FC = () => {
             </div>
           )}
         </div>
+      </Modal>
+
+      {/* 编辑Modal */}
+      <Modal
+        title="编辑行情"
+        open={editModalOpen}
+        onOk={handleEditSubmit}
+        confirmLoading={isUpdating}
+        onCancel={() => {
+          setEditModalOpen(false);
+          setEditingQuote(null);
+          editForm.resetFields();
+        }}
+        okText="保存"
+        cancelText="取消"
+        width={600}
+      >
+        <Form
+          form={editForm}
+          layout="vertical"
+        >
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
+                <Input placeholder="请输入名称" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="price" label="价格">
+                <InputNumber placeholder="请输入价格" style={{ width: '100%' }} precision={2} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="rate" label="费率">
+                <InputNumber placeholder="请输入费率（小数）" style={{ width: '100%' }} precision={4} step={0.0001} min={0} max={1} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="type" label="类型">
+                <Select 
+                  placeholder="请选择类型" 
+                  allowClear
+                  options={[
+                    { label: '香草', value: '香草' },
+                    { label: 'Call', value: 'Call' },
+                    { label: 'Put', value: 'Put' },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="term" label="期限">
+                <Select 
+                  placeholder="请选择期限" 
+                  allowClear
+                  options={[
+                    { label: '1周', value: '1W' },
+                    { label: '2周', value: '2W' },
+                    { label: '1个月', value: '1M' },
+                    { label: '2个月', value: '2M' },
+                    { label: '3个月', value: '3M' },
+                    { label: '6个月', value: '6M' },
+                    { label: '12个月', value: '12M' },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="trader" label="交易商">
+                <Input placeholder="请输入交易商" />
+              </Form.Item>
+            </Col>
+          </Row>
+          {editingQuote && (
+            <Descriptions column={2} size="small" style={{ marginTop: 16 }}>
+              <Descriptions.Item label="代码">{editingQuote.stock_code}</Descriptions.Item>
+              <Descriptions.Item label="ID">{editingQuote._id || editingQuote.code}</Descriptions.Item>
+            </Descriptions>
+          )}
+        </Form>
       </Modal>
     </Card>
   );

@@ -1,15 +1,43 @@
 // miniprogram/pages/inquiry-history/inquiry-history.js
 const { getMyInquiries, getInquiryDetail } = require('../../utils/inquiryService.js');
 
+// 统一的询价状态定义（与后端保持一致）
+const INQUIRY_STATUS = {
+  PENDING: 'pending',       // 待处理
+  PROCESSING: 'processing', // 处理中
+  QUOTED: 'quoted',         // 已报价
+  COMPLETED: 'completed',   // 已成交
+  REJECTED: 'rejected'      // 已拒绝
+};
+
+// 状态标签映射
+const STATUS_LABELS = {
+  [INQUIRY_STATUS.PENDING]: '待处理',
+  [INQUIRY_STATUS.PROCESSING]: '处理中',
+  [INQUIRY_STATUS.QUOTED]: '已报价',
+  [INQUIRY_STATUS.COMPLETED]: '已成交',
+  [INQUIRY_STATUS.REJECTED]: '已拒绝'
+};
+
+// 状态颜色映射
+const STATUS_COLORS = {
+  [INQUIRY_STATUS.PENDING]: '#E6A23C',     // 橙色
+  [INQUIRY_STATUS.PROCESSING]: '#409EFF',  // 蓝色
+  [INQUIRY_STATUS.QUOTED]: '#409EFF',      // 蓝色
+  [INQUIRY_STATUS.COMPLETED]: '#67C23A',   // 绿色
+  [INQUIRY_STATUS.REJECTED]: '#F56C6C'     // 红色
+};
+
 Page({
   data: {
     activeStatus: '',
     statusTabs: [
       { label: '全部', value: '' },
-      { label: '待处理', value: 'pending' },
-      { label: '已报价', value: 'quoted' },
-      { label: '已成交', value: 'completed' },
-      { label: '已拒绝', value: 'rejected' }
+      { label: '待处理', value: INQUIRY_STATUS.PENDING },
+      { label: '处理中', value: INQUIRY_STATUS.PROCESSING },
+      { label: '已报价', value: INQUIRY_STATUS.QUOTED },
+      { label: '已成交', value: INQUIRY_STATUS.COMPLETED },
+      { label: '已拒绝', value: INQUIRY_STATUS.REJECTED }
     ],
     inquiryList: [],
     total: 0,
@@ -147,8 +175,14 @@ Page({
    * 格式化状态
    */
   _formatStatus(status) {
-    var map = { pending: '待处理', quoted: '已报价', completed: '已成交', rejected: '已拒绝' };
-    return map[status] || status || '--';
+    return STATUS_LABELS[status] || status || '--';
+  },
+
+  /**
+   * 获取状态颜色
+   */
+  _getStatusColor(status) {
+    return STATUS_COLORS[status] || '#909399';
   },
 
   /**

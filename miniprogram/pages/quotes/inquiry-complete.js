@@ -643,7 +643,7 @@ Page({
    */
   goToProfile: function () {
     wx.switchTab({
-      url: '/pages/profile/index',
+      url: '/pages/profile/profile',
       fail: () => {
         this.showError('页面跳转失败');
       }
@@ -654,8 +654,9 @@ Page({
    * 跳转到设置页面
    */
   goToSettings: function () {
-    wx.navigateTo({
-      url: '/pages/settings/index',
+    // 设置页面暂未开发，跳转到个人中心
+    wx.switchTab({
+      url: '/pages/profile/profile',
       fail: () => {
         this.showError('页面跳转失败');
       }
@@ -1436,7 +1437,7 @@ Page({
    */
   goToCalculator: function () {
     wx.navigateTo({
-      url: '/pages/calculator/index',
+      url: '/pages/calculator/calculator',
       success: () => {
         this.recordUserAction('go_to_calculator');
       },
@@ -1456,7 +1457,7 @@ Page({
     }
     
     wx.navigateTo({
-      url: '/pages/quotes/records',
+      url: '/pages/inquiry-history/inquiry-history',
       success: () => {
         this.recordUserAction('go_to_records');
       },
@@ -1471,7 +1472,7 @@ Page({
    */
   goToProfile: function () {
     wx.switchTab({
-      url: '/pages/profile/index',
+      url: '/pages/profile/profile',
       success: () => {
         this.recordUserAction('go_to_profile');
       },

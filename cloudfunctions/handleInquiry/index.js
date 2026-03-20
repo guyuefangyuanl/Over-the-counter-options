@@ -8,6 +8,75 @@ cloud.init({
 const db = cloud.database()
 const _ = db.command
 
+// 统一的询价状态定义
+const INQUIRY_STATUS = {
+  PENDING: 'pending',       // 待处理
+  PROCESSING: 'processing', // 处理中
+  QUOTED: 'quoted',         // 已报价
+  COMPLETED: 'completed',   // 已成交
+  REJECTED: 'rejected'      // 已拒绝
+}
+
+// 状态标签映射
+const STATUS_LABELS = {
+  [INQUIRY_STATUS.PENDING]: '待处理',
+  [INQUIRY_STATUS.PROCESSING]: '处理中',
+  [INQUIRY_STATUS.QUOTED]: '已报价',
+  [INQUIRY_STATUS.COMPLETED]: '已成交',
+  [INQUIRY_STATUS.REJECTED]: '已拒绝'
+}
+
+// 合法的状态转换
+const VALID_TRANSITIONS = {
+  [INQUIRY_STATUS.PENDING]: [
+    INQUIRY_STATUS.PROCESSING,
+    INQUIRY_STATUS.QUOTED,
+    INQUIRY_STATUS.REJECTED
+  ],
+  [INQUIRY_STATUS.PROCESSING]: [
+    INQUIRY_STATUS.QUOTED,
+    INQUIRY_STATUS.COMPLETED,
+    INQUIRY_STATUS.REJECTED
+  ],
+  [INQUIRY_STATUS.QUOTED]: [
+    INQUIRY_STATUS.COMPLETED,
+    INQUIRY_STATUS.REJECTED
+  ],
+  [INQUIRY_STATUS.COMPLETED]: [],  // 终态
+  [INQUIRY_STATUS.REJECTED]: []    // 终态
+}
+
+/**
+ * 验证状态转换是否合法
+ * @param {String} fromStatus 当前状态
+ * @param {String} toStatus 目标状态
+ * @returns {Object} { valid: boolean, error: string|null }
+ */
+function validateTransition(fromStatus, toStatus) {
+  // 检查目标状态是否有效
+  const allStatuses = Object.values(INQUIRY_STATUS)
+  if (!allStatuses.includes(toStatus)) {
+    return { valid: false, error: `无效的目标状态: ${toStatus}` }
+  }
+
+  // 检查状态转换是否合法
+  const allowedTransitions = VALID_TRANSITIONS[fromStatus]
+  if (allowedTransitions === undefined) {
+    // 未知状态，允许转换（兼容历史数据）
+    return { valid: true, error: null }
+  }
+
+  if (!allowedTransitions.includes(toStatus)) {
+    const allowedLabels = allowedTransitions.map(s => STATUS_LABELS[s])
+    return {
+      valid: false,
+      error: `状态'${STATUS_LABELS[fromStatus]}'不能转换为'${STATUS_LABELS[toStatus]}'，允许的转换: ${allowedLabels.length > 0 ? allowedLabels.join('、') : '无'}`
+    }
+  }
+
+  return { valid: true, error: null }
+}
+
 // 云函数入口函数
 exports.main = async (event, context) => {
   const { action, data } = event
@@ -41,7 +110,31 @@ async function updateInquiryStatus(data, operatorOpenid) {
     return { success: false, message: '缺少必要参数' }
   }
 
+  // 验证目标状态是否有效
+  const allStatuses = Object.values(INQUIRY_STATUS)
+  if (!allStatuses.includes(status)) {
+    return { success: false, message: `无效的状态值: ${status}` }
+  }
+
   try {
+    // 获取当前记录以验证状态流转
+    const currentRes = await db.collection('inquiries').doc(id).get()
+    const currentRecord = currentRes.data
+
+    if (!currentRecord) {
+      return { success: false, message: '询价记录不存在' }
+    }
+
+    const currentStatus = currentRecord.status || INQUIRY_STATUS.PENDING
+
+    // 验证状态转换
+    const validation = validateTransition(currentStatus, status)
+    if (!validation.valid) {
+      console.warn(`状态流转验证失败: ${id}, ${currentStatus} -> ${status}, error: ${validation.error}`)
+      return { success: false, message: validation.error }
+    }
+
+    // 执行更新
     const res = await db.collection('inquiries').doc(id).update({
       data: {
         status,
@@ -52,11 +145,13 @@ async function updateInquiryStatus(data, operatorOpenid) {
     })
 
     if (res.stats.updated > 0) {
+      console.log(`状态更新成功: ${id}, ${currentStatus} -> ${status}`)
       return { success: true, message: '状态更新成功' }
     } else {
       return { success: false, message: '更新失败，记录可能不存在' }
     }
   } catch (err) {
+    console.error('updateInquiryStatus 失败:', err)
     return { success: false, message: err.message }
   }
 }
@@ -74,11 +169,24 @@ async function getInquiryStats() {
       })
       .end()
 
+    // 确保所有状态都有统计值
+    const result = {}
+    Object.values(INQUIRY_STATUS).forEach(status => {
+      result[status] = 0
+    })
+
+    stats.list.forEach(item => {
+      if (item._id) {
+        result[item._id] = item.count
+      }
+    })
+
     return {
       success: true,
-      data: stats.list
+      data: result
     }
   } catch (err) {
+    console.error('getInquiryStats 失败:', err)
     return { success: false, message: err.message }
   }
 }
@@ -102,6 +210,11 @@ async function getMyInquiryList(data, openid) {
 
     // 支持按状态筛选
     if (data?.status) {
+      // 验证状态值
+      const allStatuses = Object.values(INQUIRY_STATUS)
+      if (!allStatuses.includes(data.status)) {
+        return { success: false, message: `无效的状态值: ${data.status}` }
+      }
       query = db.collection('inquiries').where({
         openid,
         status: data.status

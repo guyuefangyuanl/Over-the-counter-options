@@ -178,8 +178,9 @@
             <view class="position-card__footer">
               <view class="btn-group">
                 <view class="btn-small btn-outline" data-id="{{item.id}}" data-action="modify" bindtap="handlePositionAction">修改</view>
-                <view class="btn-small btn-outline" data-id="{{item.id}}" data-action="close" bindtap="handlePositionAction">平仓记账</view>
-                <view class="btn-small btn-primary" data-id="{{item.id}}" data-action="close-live" bindtap="handlePositionAction">平仓下单</view>
+                <view class="btn-small btn-outline" data-id="{{item.id}}" data-action="close" bindtap="handlePositionAction" wx:if="{{item.status !== 'CLOSED'}}">平仓记账</view>
+                <view class="btn-small btn-primary" data-id="{{item.id}}" data-action="close-live" bindtap="handlePositionAction" wx:if="{{item.status !== 'CLOSED'}}">平仓下单</view>
+                <view class="btn-small btn-danger" data-id="{{item.id}}" data-action="delete" bindtap="handlePositionAction">删除</view>
               </view>
             </view>
           </view>

@@ -426,8 +426,11 @@ async function performRequestWithRetry(url, method, data, header, timeout, retri
             authError.noRetry = true;
             reject(authError);
           } else if (res.statusCode === 403) {
-            const forbiddenError = new Error('没有权限访问该资源');
+            // 检查是否是业务层返回的403（HTTP 200但code=403）
+            console.warn('[API] 403 Forbidden:', res.data);
+            const forbiddenError = new Error(res.data?.message || '没有权限访问该资源');
             forbiddenError.noRetry = true;
+            forbiddenError.details = res.data;
             reject(forbiddenError);
           } else if (res.statusCode === 404) {
             reject(new Error('请求的资源不存在'));

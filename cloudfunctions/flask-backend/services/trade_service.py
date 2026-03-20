@@ -2,6 +2,7 @@ import logging
 from typing import List, Dict, Any, Tuple, Optional
 from flask import current_app
 from datetime import datetime
+from services.inquiry_status import INQUIRY_STATUS_VALUES
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +69,10 @@ class TradeService:
         return model.update_inquiry(inquiry_id, data)
 
     def get_inquiry_statistics(self) -> Dict[str, int]:
+        """获取询价统计信息（按状态分组计数）"""
         model = self._get_inquiry_model()
-        target_statuses = ["pending", "processing", "completed", "rejected"]
+        # 使用统一的状态定义
+        target_statuses = list(INQUIRY_STATUS_VALUES)
         stats: Dict[str, int] = {s: 0 for s in target_statuses}
 
         if hasattr(model, 'collection') and model.collection is not None:
@@ -87,7 +90,7 @@ class TradeService:
             except Exception as e:
                 logger.warning(f"统计查询 aggregate 失败，降级单独计数: {e}")
 
-        # 云数据库路径：分别 count（云DB 暂不支持 aggregate）
+        # 云数据库路径：分别 count
         for status in target_statuses:
             try:
                 _, count = model.get_inquiries(limit=1, status=status)
@@ -130,41 +133,53 @@ class TradeService:
         model = self._get_position_model()
         skip = (page - 1) * limit
         positions, total = model.get_positions(limit, skip, customer_id)
-        
-        # Update with real-time quotes
-        if positions:
+
+        # Update with real-time quotes (with timeout protection)
+        # 仅在有持仓且数量合理时尝试获取实时行情，避免大量请求导致超时
+        if positions and len(positions) <= 20:  # 限制最多20个持仓获取行情
             try:
                 from services.stock_service import StockService
-                for p in positions:
+                import concurrent.futures
+
+                def update_position_quote(p):
+                    """更新单个持仓的行情数据"""
                     code = p.get('productCode')
                     if not code:
-                        continue
-                        
-                    # Try to get quote. Fail gracefully.
+                        return
+
                     try:
+                        # 设置3秒超时
                         quote = StockService.get_stock_realtime_data(code)
-                    except:
-                        quote = None
-                        
-                    if quote and quote.get('price'):
-                        current_price = float(quote['price'])
-                        p['currentPrice'] = current_price 
-                        
-                        # Calculate PnL
-                        cost_price = float(p.get('price', 0))
-                        qty = float(p.get('quantity', 0))
-                        
-                        if cost_price and qty:
-                            new_mv = current_price * qty
-                            p['marketValue'] = new_mv
-                            p['profitLoss'] = new_mv - (cost_price * qty)
-                            # Calculate return rate
-                            if cost_price > 0:
-                                p['returnRate'] = (current_price - cost_price) / cost_price
-                            
+                        if quote and quote.get('price'):
+                            current_price = float(quote['price'])
+                            p['currentPrice'] = current_price
+
+                            # Calculate PnL
+                            cost_price = float(p.get('price', 0))
+                            qty = float(p.get('quantity', 0))
+
+                            if cost_price and qty:
+                                new_mv = current_price * qty
+                                p['marketValue'] = new_mv
+                                p['profitLoss'] = new_mv - (cost_price * qty)
+                                if cost_price > 0:
+                                    p['returnRate'] = (current_price - cost_price) / cost_price
+                    except Exception as e:
+                        logger.debug(f"获取 {code} 行情失败: {e}")
+                        # 行情获取失败不影响持仓展示
+
+                # 使用线程池并发获取行情，总超时10秒
+                with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                    futures = [executor.submit(update_position_quote, p) for p in positions]
+                    try:
+                        concurrent.futures.wait(futures, timeout=10)
+                    except Exception as e:
+                        logger.warning(f"行情查询超时: {e}")
+
             except Exception as e:
-                logger.error(f"Failed to update real-time quotes for positions: {e}")
-                
+                logger.warning(f"Failed to update real-time quotes: {e}")
+                # 行情获取失败不影响持仓列表返回
+
         return positions, total
 
     def create_position(self, data: Dict[str, Any]) -> str:
@@ -203,6 +218,79 @@ class TradeService:
     def delete_position(self, position_id: str) -> bool:
         model = self._get_position_model()
         return model.delete_position(position_id)
+
+    def close_position(self, position_id: str, close_price: float, close_type: str = 'accounting', customer_id: str = None) -> Dict[str, Any]:
+        """
+        平仓操作
+        :param position_id: 持仓ID
+        :param close_price: 平仓价格
+        :param close_type: 平仓类型 'accounting'(平仓记账) 或 'order'(平仓下单)
+        :param customer_id: 客户ID（用于权限验证）
+        :return: 包含平仓结果的字典
+        """
+        model = self._get_position_model()
+        
+        # 1. 获取持仓信息
+        position = model.get_position_by_id(position_id)
+        if not position:
+            raise ValueError("持仓不存在")
+        
+        # 2. 验证持仓归属（如果提供了customer_id）
+        if customer_id and position.get('customerId') != customer_id:
+            raise ValueError("无权操作此持仓")
+        
+        # 3. 检查持仓状态
+        if position.get('status') != 'active':
+            raise ValueError("该持仓已完结，无法再次平仓")
+        
+        # 4. 计算盈亏
+        quantity = float(position.get('quantity', 0))
+        cost_price = float(position.get('price', 0))
+        cost_basis = quantity * cost_price
+        close_value = quantity * close_price
+        profit_loss = close_value - cost_basis
+        
+        # 5. 更新持仓状态
+        update_data = {
+            'status': 'closed',
+            'closePrice': close_price,
+            'closeValue': close_value,
+            'profitLoss': profit_loss,
+            'closeType': close_type,
+            'closedAt': datetime.utcnow().isoformat() if model._is_cloud() else datetime.utcnow()
+        }
+        
+        success = model.update_position(position_id, update_data)
+        if not success:
+            raise RuntimeError("平仓更新失败")
+        
+        # 6. 如果是平仓下单，创建订单记录
+        if close_type == 'order':
+            try:
+                order_model = self._get_order_model()
+                order_data = {
+                    'positionId': position_id,
+                    'productCode': position.get('productCode'),
+                    'productName': position.get('productName'),
+                    'customerId': position.get('customerId'),
+                    'customerName': position.get('customerName'),
+                    'type': 'close',
+                    'quantity': quantity,
+                    'price': close_price,
+                    'status': 'filled',
+                    'filledAt': datetime.utcnow().isoformat()
+                }
+                order_model.create_order(order_data)
+            except Exception as e:
+                logger.warning(f"平仓订单创建失败，但持仓已更新: {e}")
+        
+        return {
+            'positionId': position_id,
+            'profitLoss': round(profit_loss, 2),
+            'closePrice': close_price,
+            'closeValue': round(close_value, 2),
+            'closeType': close_type
+        }
 
     def get_position_statistics(self, customer_id: str = None) -> Dict[str, Any]:
         model = self._get_position_model()

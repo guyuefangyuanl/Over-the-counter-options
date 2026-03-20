@@ -4,43 +4,65 @@
   <view class="user-card">
     <view class="user-info">
       <!-- 头像 -->
-      <view class="avatar-section" bindtap="onAvatarTap">
-        <image 
-          class="avatar {{userInfo.avatar ? '' : 'default-avatar'}}" 
-          src="{{userInfo.avatar || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMzIiIGN5PSIzMiIgcj0iMzIiIGZpbGw9IiNFNkYzRkYiLz4KPGNpcmNsZSBjeD0iMzIiIGN5PSIyNCIgcj0iOCIgZmlsbD0iIzQwOUVGRiIvPgo8cGF0aCBkPSJNMTYgNTJjMC04LjgzNyA3LjE2My0xNiAxNi0xNnMxNiA3LjE2MyAxNiAxNnY0SDE2di00eiIgZmlsbD0iIzQwOUVGRiIvPgo8L3N2Zz4='}}"
-          mode="aspectFill"
-          binderror="onAvatarError"
-        />
+      <view class="avatar-section">
+        <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+          <image
+            class="avatar {{userInfo.avatar ? '' : 'default-avatar'}}"
+            src="{{userInfo.avatar || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMzIiIGN5PSIzMiIgcj0iMzIiIGZpbGw9IiNFNkYzRkYiLz4KPGNpcmNsZSBjeD0iMzIiIGN5PSIyNCIgcj0iOCIgZmlsbD0iIzQwOUVGRiIvPgo8cGF0aCBkPSJNMTYgNTJjMC04LjgzNyA3LjE2My0xNiAxNi0xNnMxNiA3LjE2MyAxNiAxNnY0SDE2di00eiIgZmlsbD0iIzQwOUVGRiIvPgo8L3N2Zz4='}}"
+            mode="aspectFill"
+            binderror="onAvatarError"
+          />
+          <!-- 头像上传加载指示器 -->
+          <view class="avatar-loading" wx:if="{{isAvatarUploading}}">
+            <van-loading size="20px" type="spinner" color="#fff" />
+          </view>
+          <!-- 编辑提示 -->
+          <view class="avatar-edit-tip" wx:if="{{userInfo.isLoggedIn && !isAvatarUploading}}">
+            <text>编辑</text>
+          </view>
+        </button>
       </view>
-      
+
       <!-- 用户资料 -->
       <view class="user-details">
-        <view class="nickname">{{userInfo.nickname}}</view>
+        <!-- 昵称编辑 -->
+        <view class="nickname-row" wx:if="{{userInfo.isLoggedIn}}">
+          <input
+            type="nickname"
+            class="nickname-input"
+            placeholder="点击设置昵称"
+            value="{{userInfo.nickname || ''}}"
+            bindblur="onNicknameChange"
+          />
+        </view>
+        <view class="nickname" wx:else>{{userInfo.nickname}}</view>
         <view class="vip-info" wx:if="{{userInfo.isLoggedIn}}">
-          <text class="vip-level">{{userInfo.vipLevel}}{{userInfo.memberType}}</text>
-          <text class="vip-id">（VID:{{userInfo.vipId}}）</text>
+          <text class="vip-level">{{userInfo.vipLevel || 'V1'}}{{userInfo.memberType || '会员'}}</text>
+          <text class="vip-id" wx:if="{{userInfo.vipId}}">（VID:{{userInfo.vipId}}）</text>
         </view>
         <view class="login-hint" wx:else>
           <text class="hint-text">点击登录，体验更多功能</text>
         </view>
       </view>
     </view>
-    
+
     <!-- 登录/退出按钮 -->
     <view class="auth-section">
-      <button 
-        class="auth-btn login-btn" 
+      <button
+        class="auth-btn login-btn"
         wx:if="{{!userInfo.isLoggedIn}}"
         bindtap="onLogin"
+        disabled="{{isLoggingIn}}"
       >
-        授权一键登录
+        {{isLoggingIn ? '登录中...' : '授权一键登录'}}
       </button>
-      <button 
-        class="auth-btn logout-btn" 
+      <button
+        class="auth-btn logout-btn"
         wx:else
         bindtap="onLogout"
+        disabled="{{isLoggingOut}}"
       >
-        退出登录
+        {{isLoggingOut ? '退出中...' : '退出登录'}}
       </button>
     </view>
   </view>

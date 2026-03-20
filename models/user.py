@@ -290,19 +290,84 @@ class UserModel:
 
     def update_balance(self, openid: str, amount_change: float) -> float:
         """
-        Atomically update balance. 
-        Note: Cloud DB HTTP API atomic inc is tricky, so we might need fetch-update for now.
-        Returns new balance.
-        """
-        user = self.find_user_by_openid(openid)
-        if not user:
-            raise ValueError("User not found")
-            
-        current_balance = user.get('balance', 0.0)
-        new_balance = current_balance + amount_change
+        Atomically update balance using cloud database inc operator.
         
-        if new_balance < 0:
-            raise ValueError("Insufficient funds")
+        For cloud database, uses _.inc() for atomic increment.
+        For local MongoDB, uses $inc operator.
+        
+        Returns new balance.
+        
+        Note: Due to cloud DB HTTP API limitations, we cannot atomically 
+        check if balance would go negative. We use a two-phase approach:
+        1. First check current balance (fast fail for obvious cases)
+        2. Use atomic increment
+        3. If result is negative, rollback and raise error
+        """
+        if amount_change == 0:
+            user = self.find_user_by_openid(openid)
+            return user.get('balance', 0.0) if user else 0.0
             
-        self.update_user_profile(openid, {"balance": new_balance})
-        return new_balance
+        # 快速检查：如果是扣款，先检查余额是否充足（非原子，但可以快速失败）
+        if amount_change < 0:
+            user = self.find_user_by_openid(openid)
+            if not user:
+                raise ValueError("用户不存在")
+            current_balance = user.get('balance', 0.0)
+            # 预留一定的缓冲空间，防止竞态
+            if current_balance + amount_change < -0.01:  # 允许极小的浮点误差
+                raise ValueError("余额不足")
+        
+        # 使用原子递增操作
+        if self._is_cloud() and self.cloud_client:
+            try:
+                # 微信云数据库使用 _.inc() 进行原子递增
+                import json as json_module
+                where_js = json_module.dumps({"openid": openid})
+                
+                # 使用原子递增
+                result = self.cloud_client.query(
+                    f'db.collection("users").where({where_js}).update({{data: {{balance: _.inc({amount_change})}}}})'
+                )
+                
+                # 获取更新后的余额
+                user = self.find_user_by_openid(openid)
+                new_balance = user.get('balance', 0.0) if user else 0.0
+                
+                # 如果扣款后余额为负，回滚并报错
+                if new_balance < -0.01:
+                    # 回滚
+                    self.cloud_client.query(
+                        f'db.collection("users").where({where_js}).update({{data: {{balance: _.inc({-amount_change})}}}})'
+                    )
+                    raise ValueError("余额不足")
+                    
+                return new_balance
+                
+            except CloudDbRequestError as e:
+                logger.error(f"更新余额失败: {e}")
+                raise
+        else:
+            # 本地 MongoDB 使用 $inc 原子操作
+            if self.user_collection is None:
+                raise ValueError("数据库未初始化")
+                
+            result = self.user_collection.find_one_and_update(
+                {'openid': openid},
+                {'$inc': {'balance': amount_change}},
+                return_document=True  # 返回更新后的文档
+            )
+            
+            if not result:
+                raise ValueError("用户不存在")
+                
+            new_balance = result.get('balance', 0.0)
+            
+            # 如果扣款后余额为负，回滚
+            if new_balance < -0.01:
+                self.user_collection.update_one(
+                    {'openid': openid},
+                    {'$inc': {'balance': -amount_change}}
+                )
+                raise ValueError("余额不足")
+                
+            return new_balance

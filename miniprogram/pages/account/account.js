@@ -108,6 +108,30 @@ Page({
     this.openAddPositionForm();
   },
 
+  /**
+   * 检查游客权限
+   * @returns {boolean} true 表示是游客，已弹出提示；false 表示不是游客，可以继续操作
+   */
+  _checkGuestPermission() {
+    if (this.data.userInfo?.isGuest) {
+      wx.showModal({
+        title: '功能受限',
+        content: '游客模式仅支持查看功能，请登录后使用持仓管理功能。',
+        confirmText: '去登录',
+        cancelText: '取消',
+        success: (res) => {
+          if (res.confirm) {
+            wx.navigateTo({
+              url: '/pages/login/login?type=wechat'
+            });
+          }
+        }
+      });
+      return true;
+    }
+    return false;
+  },
+
   handlePositionAction(e) {
     const id = e.currentTarget.dataset.id;
     const action = e.currentTarget.dataset.action;
@@ -138,6 +162,9 @@ Page({
 
   // 打开修改持仓弹窗
   openModifyPositionForm(position) {
+    // 游客权限检查
+    if (this._checkGuestPermission()) return;
+
     this.setData({
       showEditPositionForm: true,
       editingPosition: position,
@@ -203,6 +230,9 @@ Page({
 
   // 打开平仓确认弹窗
   openClosePositionDialog(position, closeType) {
+    // 游客权限检查
+    if (this._checkGuestPermission()) return;
+
     this.setData({
       showClosePositionDialog: true,
       closingPosition: position,
@@ -265,6 +295,9 @@ Page({
 
   // 确认删除持仓
   confirmDeletePosition(position) {
+    // 游客权限检查
+    if (this._checkGuestPermission()) return;
+
     wx.showModal({
       title: '确认删除',
       content: `确定要删除持仓「${position.productName}」吗？此操作不可恢复。`,
@@ -413,7 +446,7 @@ Page({
 
   /**
    * 刷新用户资料（防并发重复）
-   * 后端返回格式：{ success, code, data: { nickname, avatar, openid, phone, ... } }
+   * 后端返回格式：{ success, code, data: { nickname, avatar, openid, phone, role, ... } }
    */
   async _refreshUserProfile() {
     if (this._isFetchingProfile) return;
@@ -423,14 +456,34 @@ Page({
       // 兼容后端返回 { data: {...} } 或直接返回对象
       const user = (res && res.data) ? res.data : res;
       if (user && typeof user === 'object') {
+        // 检测游客模式：role === 'guest' 表示游客，限制部分功能
+        const userRole = user.role || 'user';
+        const isGuest = userRole === 'guest';
+        
+        // 调试日志：输出用户角色信息
+        console.log('[account] 用户资料:', {
+          nickname: user.nickname || user.username,
+          role: userRole,
+          isGuest: isGuest,
+          openid: user.openid
+        });
+        
         this.setData({
           userInfo: {
             nickname: user.nickname || user.username || '微信用户',
             avatar: user.avatar || '',
             openid: user.openid || user.username || '',
-            phone: user.phone || ''
+            phone: user.phone || '',
+            role: userRole,
+            isGuest: isGuest
           }
         });
+
+        // 游客模式提示（仅在首次加载时显示）
+        if (isGuest && !this._hasShownGuestTip) {
+          this._hasShownGuestTip = true;
+          console.log('[account] 游客模式：持仓创建功能受限');
+        }
       }
     } catch (e) {
       // api.js 已处理 401 跳转，这里只打日志，不弹错误 toast
@@ -565,8 +618,27 @@ Page({
 
   /**
    * 打开持仓录入弹窗
+   * 游客模式下禁止创建持仓，引导用户登录
    */
   openAddPositionForm() {
+    // 游客权限检查
+    if (this.data.userInfo?.isGuest) {
+      wx.showModal({
+        title: '功能受限',
+        content: '游客模式仅支持查看功能，请登录后使用持仓录入功能。',
+        confirmText: '去登录',
+        cancelText: '取消',
+        success: (res) => {
+          if (res.confirm) {
+            wx.navigateTo({
+              url: '/pages/login/login?type=wechat'
+            });
+          }
+        }
+      });
+      return;
+    }
+
     this.setData({
       showAddPositionForm: true,
       positionForm: { productCode: '', productName: '', quantity: '', price: '', dealer: '', daysLeft: '' },
@@ -635,12 +707,36 @@ Page({
         daysLeft: form.daysLeft ? Number(form.daysLeft) : 30,
         status: 'active'
       };
+      
+      // 调试日志：输出当前用户角色和请求信息
+      console.log('[account] 提交持仓录入:', {
+        payload: payload,
+        userInfo: this.data.userInfo,
+        token: wx.getStorageSync('token') ? '已设置' : '未设置'
+      });
+      
       await accountService.createPosition(payload);
       this.setData({ showAddPositionForm: false });
       wx.showToast({ title: '录入成功', icon: 'success' });
       this.loadPageData();
     } catch (err) {
-      wx.showToast({ title: (err && err.message) || '录入失败', icon: 'none' });
+      // 详细的错误日志
+      console.error('[account] 持仓录入失败:', {
+        message: err && err.message,
+        details: err && err.details,
+        userInfo: this.data.userInfo
+      });
+      
+      // 如果是权限错误，显示更详细的提示
+      if (err && err.message && err.message.includes('权限')) {
+        wx.showModal({
+          title: '权限不足',
+          content: `当前角色: ${this.data.userInfo?.role || '未知'}\n\n${err.message}\n\n如果您是游客，请使用微信授权登录后再试。`,
+          showCancel: false
+        });
+      } else {
+        wx.showToast({ title: (err && err.message) || '录入失败', icon: 'none' });
+      }
     } finally {
       this.setData({ isSubmittingPosition: false });
     }

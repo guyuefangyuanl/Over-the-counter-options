@@ -2,6 +2,7 @@ import logging
 from typing import List, Dict, Any, Tuple, Optional
 from flask import current_app
 from datetime import datetime
+from models.inquiry_status import InquiryStatus, InquiryStatusMachine, INQUIRY_STATUS_VALUES
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +69,10 @@ class TradeService:
         return model.update_inquiry(inquiry_id, data)
 
     def get_inquiry_statistics(self) -> Dict[str, int]:
+        """获取询价统计信息（按状态分组计数）"""
         model = self._get_inquiry_model()
-        target_statuses = ["pending", "processing", "completed", "rejected"]
+        # 使用统一的状态定义
+        target_statuses = list(INQUIRY_STATUS_VALUES)
         stats: Dict[str, int] = {s: 0 for s in target_statuses}
 
         if hasattr(model, 'collection') and model.collection is not None:

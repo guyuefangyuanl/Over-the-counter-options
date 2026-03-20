@@ -2,13 +2,19 @@ const api = require('./api.js');
 
 /**
  * 账户相关 API 服务
- * - retries: 0  — 不重试，避免云DB故障（invalid appsecret rid）时每次请求等待 ~7秒
+ * - timeout: 30000 — 30秒超时，适配云托管冷启动
+ * - retries: 1 — 失败后重试1次
  * - enableCache: false — 金融实时数据，不应缓存
  * - silent: true — 内部不显示全局 loading toast，由页面自行管理
  */
 
-// 账户页公共选项（实时金融接口不重试、不缓存）
-const REALTIME_OPTIONS = { retries: 0, silent: true, enableCache: false };
+// 账户页公共选项（增加超时和重试，适配云托管冷启动）
+const REALTIME_OPTIONS = {
+  timeout: 30000,      // 30秒超时，适配云托管冷启动
+  retries: 1,          // 失败后重试1次
+  silent: true,
+  enableCache: false
+};
 
 const accountService = {
   // 获取个人资料
