@@ -4,8 +4,8 @@
   "description": "股票交易后端服务",
   "main": "app.js",
   "scripts": {
-    "start": "python app.py",
-    "dev:flask": "python app.py",
+    "start": "\"C:\\Users\\Lenovo\\Desktop\\期末作业\\python.exe\" app.py",
+    "dev:flask": "\"C:\\Users\\Lenovo\\Desktop\\期末作业\\python.exe\" app.py",
     "dev:ui": "npm run dev --prefix admin-ui",
     "dev:node-ui": "npm run dev:ui",
     "dev": "concurrently \"npm run dev:flask\" \"npm run dev:ui\"",

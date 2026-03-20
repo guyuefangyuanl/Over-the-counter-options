@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 股票API路由模块
 提供股票数据相关的API接口
@@ -238,6 +238,8 @@ def compare_quotes():
             min_idx = -1
             for i, q in enumerate(quotes):
                 rate = q.get('rate')
+                if rate is None:
+                    rate = q.get('rates')
                 if rate is not None and rate < min_rate:
                     min_rate = rate
                     min_idx = i

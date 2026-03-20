@@ -337,12 +337,66 @@ def create_order():
         # Attach user info if not present
         if 'openid' not in data:
             data['openid'] = current_user.get('sub')
-            
+
+        user_id = data.get('openid') or current_user.get('sub')
+        deducted_amount = None
+
+        # 尝试从订单数据推导“需要占用的资金”
+        required_amount = None
+        for key in ("amount", "notionalAmount", "notional", "orderAmount"):
+            if data.get(key) is not None:
+                try:
+                    required_amount = float(data.get(key))
+                except (TypeError, ValueError):
+                    required_amount = None
+                break
+
+        if required_amount is None:
+            # 兼容：quantity * rate / price
+            qty = data.get("quantity")
+            if qty is not None:
+                try:
+                    qty = float(qty)
+                except (TypeError, ValueError):
+                    qty = None
+
+            if qty is not None:
+                if data.get("rate") is not None:
+                    try:
+                        required_amount = qty * float(data.get("rate"))
+                    except (TypeError, ValueError):
+                        required_amount = None
+                elif data.get("price") is not None:
+                    try:
+                        required_amount = qty * float(data.get("price"))
+                    except (TypeError, ValueError):
+                        required_amount = None
+
+        # 若无法推导资金占用金额，则保留旧行为（不阻断订单创建）
+        if required_amount is not None and required_amount > 0 and user_id:
+            summary = trade_service.get_account_summary(user_id)
+            balance = float(summary.get("balance", 0) or 0)
+
+            passed, msg = risk_service.check_pre_trade_risk(user_id, required_amount, balance)
+            if not passed:
+                return flask_error_response(msg, 400)
+
+            # 扣减余额（订单资金占用）
+            trade_service.withdraw(user_id, required_amount, remark="order_hold")
+            deducted_amount = required_amount
+
+            # 确保订单记录里也有 amount（给前端/后续结算使用）
+            if data.get("amount") is None:
+                data["amount"] = required_amount
+
         order_id = trade_service.create_order(data)
         if order_id:
             return flask_success_response(data={"id": order_id}, message="订单创建成功")
-        else:
-            return flask_error_response("订单创建失败", 500)
+
+        # 订单创建失败：如果已扣款，则退回
+        if deducted_amount is not None and user_id:
+            trade_service.deposit(user_id, deducted_amount, remark="order_refund")
+        return flask_error_response("订单创建失败", 500)
     except Exception as e:
         current_app.logger.error(f'创建订单失败: {e}')
         return flask_error_response(str(e), 500)

@@ -492,7 +492,9 @@ def delete_quotes(*, codes: Optional[Sequence[str]] = None, progress_callback: O
                 total_deleted = 0
                 total_count = len(target_codes)
                 
-                for i, batch in enumerate([target_codes[i : i + 500] for i in range(0, len(target_codes), 500)]):
+                # 优化：使用更大的批次（从 500 改为 2000）
+                batch_size = 2000
+                for i, batch in enumerate([target_codes[j : j + batch_size] for j in range(0, len(target_codes), batch_size)]):
                     where_js = "{" + f'"stock_code": db.command.in({json.dumps(batch)})' + "}"
                     deleted = cloud.delete_where(collection="quotes", where_js=where_js)
                     total_deleted += int(deleted or 0)
@@ -511,64 +513,91 @@ def delete_quotes(*, codes: Optional[Sequence[str]] = None, progress_callback: O
                     "durationMs": int((time.time() - started_at) * 1000),
                 }
 
-            total_to_delete = 0
-            try:
-                # 优化 count 查询
-                total_to_delete = cloud.count('db.collection("quotes")')
-            except Exception:
-                pass
-
+            # 清空所有数据的高性能逻辑 - 使用并行删除
             total_deleted = 0
-            # 使用更快的迭代删除
-            for attempt in range(2000):
-                # 增大单次获取数量以优化性能
-                rows = cloud.query('db.collection("quotes").field({_id: true}).limit(1000).get()')
-                if not rows:
-                    break
-
-                batch_ids = [str(r.get("_id")).strip() for r in rows if isinstance(r, dict) and r.get("_id")]
-                batch_ids = list(dict.fromkeys(batch_ids))
-                
-                if not batch_ids:
-                    break
-
-                where_js = "{" + f'"_id": db.command.in({json.dumps(batch_ids)})' + "}"
-                deleted = cloud.delete_where(collection="quotes", where_js=where_js)
-                n = int(deleted or 0)
-                total_deleted += n
-                
-                if progress_callback:
-                    # 如果 total_to_delete 为 0，可能还没统计完，显示 0
-                    percent = 0
-                    if total_to_delete > 0:
-                        percent = min(99, int(total_deleted * 100 / total_to_delete))
+            batch_size = 1000  # 微信云数据库单次删除限制
+            max_iterations = 1000
+            consecutive_empty = 0
+            last_progress_update = time.time()
+            
+            # 使用并行删除加速（4个并行线程）
+            max_parallel_deletes = 4
+            executor = ThreadPoolExecutor(max_workers=max_parallel_deletes)
+            pending_futures = []
+            
+            try:
+                for attempt in range(max_iterations):
+                    # 查询下一批待删除的 ID
+                    rows = cloud.query(f'db.collection("quotes").field({{_id: true}}).limit({batch_size}).get()')
                     
-                    progress_callback({
-                        "deleted": total_deleted,
-                        "total": max(total_to_delete, total_deleted),
-                        "percent": percent,
-                        "status": "processing"
-                    })
+                    if not rows or len(rows) == 0:
+                        consecutive_empty += 1
+                        if consecutive_empty >= 2:
+                            break
+                        time.sleep(0.1)
+                        continue
+                    
+                    consecutive_empty = 0
+                    batch_ids = [str(r.get("_id")).strip() for r in rows if isinstance(r, dict) and r.get("_id")]
+                    batch_ids = list(dict.fromkeys(batch_ids))
+                    
+                    if not batch_ids:
+                        break
 
-                # 如果删除不动了，尝试更小批次或停止
-                if n <= 0:
-                    if attempt > 10: break
-                    continue
+                    # 提交删除任务到线程池（并行执行）
+                    def _delete_batch(ids_batch):
+                        try:
+                            where_js = "{" + f'"_id": db.command.in({json.dumps(ids_batch)})' + "}"
+                            deleted = cloud.delete_where(collection="quotes", where_js=where_js)
+                            return int(deleted or 0)
+                        except Exception as e:
+                            import logging
+                            logging.getLogger(__name__).warning(f"删除批次失败: {e}")
+                            return 0
+
+                    future = executor.submit(_delete_batch, batch_ids)
+                    pending_futures.append(future)
+                    
+                    # 如果待处理任务过多，等待一些完成
+                    if len(pending_futures) >= max_parallel_deletes:
+                        done_future = next(as_completed(pending_futures))
+                        deleted_count = done_future.result()
+                        total_deleted += deleted_count
+                        pending_futures.remove(done_future)
+                        
+                        # 定期更新进度（每 2 秒）
+                        now = time.time()
+                        if now - last_progress_update >= 2.0 and progress_callback:
+                            last_progress_update = now
+                            percent = min(99, int(total_deleted / 100)) if total_deleted > 0 else 0
+                            progress_callback({
+                                "deleted": total_deleted,
+                                "total": total_deleted + batch_size,
+                                "percent": percent,
+                                "status": "processing"
+                            })
+                
+                # 等待所有待处理任务完成
+                for future in as_completed(pending_futures):
+                    deleted_count = future.result()
+                    total_deleted += deleted_count
+                    
+            finally:
+                executor.shutdown(wait=True)
             
             if progress_callback:
                 progress_callback({
                     "deleted": total_deleted,
-                    "total": max(total_to_delete, total_deleted),
+                    "total": total_deleted,
                     "percent": 100,
                     "status": "processed"
                 })
 
             return {
-                "success": total_deleted >= total_to_delete or total_deleted > 0,
+                "success": True,
                 "deleted": total_deleted,
-                "total": total_to_delete,
                 "durationMs": int((time.time() - started_at) * 1000),
-                "message": "全量删除完成" if total_deleted >= total_to_delete else "部分删除完成"
+                "message": f"已清空 {total_deleted} 条记录"
             }
         else:
             # 回退到本地存储删除

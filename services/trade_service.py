@@ -139,6 +139,10 @@ class TradeService:
             try:
                 from services.stock_service import StockService
                 for p in positions:
+                    # 已平仓持仓不应使用实时行情覆盖已实现盈亏
+                    if p.get("status") != "active":
+                        continue
+
                     code = p.get('productCode')
                     if not code:
                         continue
@@ -337,7 +341,7 @@ class TradeService:
         })
         return new_balance
 
-    def withdraw(self, user_id: str, amount: float) -> float:
+    def withdraw(self, user_id: str, amount: float, remark: str = "提现") -> float:
         user_model = self._get_user_model()
         tx_model = self._get_transaction_model()
         
@@ -349,7 +353,7 @@ class TradeService:
             "type": "withdraw",
             "amount": -amount,
             "balance_after": new_balance,
-            "remark": "提现"
+            "remark": remark
         })
         return new_balance
 

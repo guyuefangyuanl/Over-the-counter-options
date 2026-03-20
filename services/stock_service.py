@@ -8,7 +8,6 @@
 import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime
-from requests.exceptions import RequestException
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -22,19 +21,103 @@ class StockService:
     
     @staticmethod
     def get_stock_realtime_data(symbol: str) -> Optional[Dict[str, Any]]:
-        """获取股票实时数据（云托管环境返回模拟数据）"""
-        logger.info(f"返回模拟股票数据: {symbol}")
+        """
+        获取股票实时数据（优先云端/本地 mock，最后才返回兜底 Mock）。
+
+        说明：
+        - 前端/小程序使用字段名 `changePercent`
+        - 本地 `mock_db.json` 使用 `stocks[*].changePercent`（也包含 `change_percent` 兼容字段）
+        """
+        if not symbol:
+            return None
+
+        symbol = str(symbol).strip()
+        if not symbol:
+            return None
+
+        # 1) 优先读取云数据库 quotes（如果云可用）
+        try:
+            from flask import current_app
+
+            cloud_db = getattr(current_app, "cloud_db", None)
+            if cloud_db:
+                # 股票在 quotes 集合里通常使用 code / stock_code 作为标识
+                query = (
+                    f'db.collection("quotes").where({{code: "{symbol}"}}).limit(1).get()'
+                )
+                items = cloud_db.query(query)
+                if items:
+                    item = items[0] or {}
+                    pre_close = item.get("pre_close", None)
+                    if pre_close is None:
+                        pre_close = item.get("preClose", None)
+
+                    change_percent = item.get("changePercent", None)
+                    if change_percent is None:
+                        change_percent = item.get("change_percent", None)
+
+                    return {
+                        "code": symbol,
+                        "name": item.get("name", f"股票{symbol}"),
+                        "price": item.get("price"),
+                        "changePercent": change_percent,
+                        "change_percent": change_percent,  # 兼容旧字段名
+                        "volume": item.get("volume"),
+                        "amount": item.get("amount"),
+                        "open": item.get("open"),
+                        "high": item.get("high"),
+                        "low": item.get("low"),
+                        "pre_close": pre_close,
+                        "updateSource": item.get("updateSource", "cloud_quote"),
+                        "updated_at": item.get("updated_at") or item.get("updateTime"),
+                    }
+        except Exception as e:
+            # 云端查询失败不应阻断行情展示，继续走本地 mock
+            logger.warning(f"[get_stock_realtime_data] 云端读取失败: symbol={symbol}, err={e}")
+
+        # 2) 读取本地 mock_db.json（由 sync_quotes 的回退写入）
+        try:
+            from models.stock import StockModel
+
+            model = StockModel(None)  # None => 使用本地 mock_db.json
+            stock_data = model.get_stock_data(symbol)
+            if stock_data:
+                # 统一返回字段名（确保 changePercent 存在）
+                change_percent = stock_data.get("changePercent", stock_data.get("change_percent", 0.0))
+                return {
+                    "code": symbol,
+                    "name": stock_data.get("name", f"股票{symbol}"),
+                    "price": stock_data.get("price"),
+                    "changePercent": change_percent,
+                    "change_percent": change_percent,  # 兼容旧字段名
+                    "volume": stock_data.get("volume"),
+                    "amount": stock_data.get("amount"),
+                    "open": stock_data.get("open"),
+                    "high": stock_data.get("high"),
+                    "low": stock_data.get("low"),
+                    "pre_close": stock_data.get("pre_close"),
+                    "updateSource": stock_data.get("updateSource"),
+                    "updated_at": stock_data.get("updated_at"),
+                }
+        except Exception as e:
+            logger.warning(f"[get_stock_realtime_data] 本地mock读取失败: symbol={symbol}, err={e}")
+
+        # 3) 兜底 Mock（避免前端报错，但带明显的“占位”特征）
+        logger.info(f"[get_stock_realtime_data] 未找到行情数据，使用兜底 Mock: {symbol}")
         return {
             "code": symbol,
             "name": f"股票{symbol}",
-            "price": 10.0,
+            "price": 0.0,
+            "changePercent": 0.0,
             "change_percent": 0.0,
-            "volume": 10000,
-            "amount": 100000.0,
-            "open": 10.0,
-            "high": 10.5,
-            "low": 9.8,
-            "pre_close": 10.0
+            "volume": 0,
+            "amount": 0.0,
+            "open": 0.0,
+            "high": 0.0,
+            "low": 0.0,
+            "pre_close": 0.0,
+            "updateSource": "mock_fallback",
+            "updated_at": None,
         }
     
     @staticmethod
@@ -105,12 +188,26 @@ class StockService:
         if not quotes:
             return None
             
-        # 过滤掉没有 rate 的数据并排序
-        valid_quotes = [q for q in quotes if q.get("rate") is not None]
+        # 支持兼容字段：部分数据源写入的是 rates（复数），部分写入 rate（单数）
+        def _get_rate(q: Dict[str, Any]) -> Optional[float]:
+            rate = q.get("rate", None)
+            if rate is None:
+                rate = q.get("rates", None)
+            return rate
+
+        valid_quotes = []
+        for q in quotes:
+            rate_val = _get_rate(q)
+            if rate_val is not None:
+                q2 = dict(q)
+                # 统一回填到 rate，保证下游逻辑只关心 rate
+                q2["rate"] = rate_val
+                valid_quotes.append(q2)
+
         if not valid_quotes:
             return None
-            
-        return min(valid_quotes, key=lambda x: x.get("rate", float('inf')))
+
+        return min(valid_quotes, key=lambda x: x.get("rate", float("inf")))
 
     @staticmethod
     def search_stock(keyword: str) -> Optional[List[Dict[str, Any]]]:
