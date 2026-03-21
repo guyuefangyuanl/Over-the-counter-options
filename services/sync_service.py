@@ -78,7 +78,24 @@ def sync_quotes(
     max_workers: Optional[int] = None,
     shard_index: Optional[int] = None,
     shard_count: Optional[int] = None,
+    progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
 ) -> Dict[str, Any]:
+    """
+    同步股票行情数据到云数据库
+
+    Args:
+        codes: 股票代码列表，如果为 None 则使用默认配置
+        requested_by: 请求者标识
+        source: 数据来源标识
+        timeout: 请求超时时间（秒）
+        max_workers: 最大并发数
+        shard_index: 分片索引（用于分布式处理）
+        shard_count: 分片总数
+        progress_callback: 进度回调函数
+
+    Returns:
+        Dict[str, Any]: 同步结果，包含 success、processed、fetched、errors 等字段
+    """
     started_at = time.time()
     cloud = None
     try:
@@ -88,6 +105,7 @@ def sync_quotes(
         logging.getLogger(__name__).warning("微信云数据库配置未就绪，将尝试同步到本地 Mock 存储")
 
     target_codes = list(codes) if codes else _default_codes_from_env()
+    total_codes = len(target_codes)
 
     if shard_index is None and shard_count is None:
         raw_si = os.getenv("SINA_SHARD_INDEX") or ""
@@ -101,6 +119,17 @@ def sync_quotes(
                 shard_count = None
     if shard_index is not None and shard_count is not None:
         target_codes = _shard_codes(target_codes, shard_index=int(shard_index), shard_count=int(shard_count))
+        total_codes = len(target_codes)
+
+    # 初始进度
+    if progress_callback:
+        progress_callback({
+            "percent": 5,
+            "step": "cleaning",
+            "message": f"准备抓取 {total_codes} 只股票行情...",
+            "current": 0,
+            "total": total_codes,
+        })
 
     def _load_int_env(name: str, default: int) -> int:
         raw = os.getenv(name) or ""
@@ -111,12 +140,21 @@ def sync_quotes(
         except Exception:
             return int(default)
 
+    # 根据数据量动态调整参数
+    # 对于大规模数据（>1000），增加并发和批次大小
+    if total_codes > 1000:
+        default_chunk_size = 200  # 大数据量使用更大批次
+        default_max_workers = 32   # 大数据量使用更高并发
+    else:
+        default_chunk_size = 100
+        default_max_workers = 16
+
     crawl_retries = max(0, _load_int_env("SINA_FETCH_RETRIES", 3))
-    crawl_chunk_size = _load_int_env("SINA_FETCH_CHUNK_SIZE", 50)
+    crawl_chunk_size = _load_int_env("SINA_FETCH_CHUNK_SIZE", default_chunk_size)
     if crawl_chunk_size < 1:
         crawl_chunk_size = 1
-    if crawl_chunk_size > 200:
-        crawl_chunk_size = 200
+    if crawl_chunk_size > 500:
+        crawl_chunk_size = 500  # 放宽上限
 
     crawl_max_workers_raw = os.getenv("SINA_FETCH_MAX_WORKERS") or ""
     crawl_max_workers: Optional[int] = None
@@ -126,10 +164,24 @@ def sync_quotes(
         except Exception:
             crawl_max_workers = None
 
+    # 大数据量时，max_workers 默认使用更高的值
     if max_workers is not None:
         crawl_max_workers = int(max_workers)
+    elif crawl_max_workers is None:
+        crawl_max_workers = default_max_workers
 
     crawl_t0 = time.time()
+
+    # 抓取进度回调
+    if progress_callback:
+        progress_callback({
+            "percent": 10,
+            "step": "cleaning",
+            "message": f"正在抓取 {len(target_codes)} 只股票行情...",
+            "current": 0,
+            "total": len(target_codes),
+        })
+
     items, crawl_errors = crawl_quotes(
         target_codes,
         timeout=timeout,
@@ -138,6 +190,16 @@ def sync_quotes(
         max_workers=crawl_max_workers,
     )
     crawl_ms = int((time.time() - crawl_t0) * 1000)
+
+    # 抓取完成进度
+    if progress_callback:
+        progress_callback({
+            "percent": 30,
+            "step": "ingesting",
+            "message": f"抓取完成 {len(items)} 条，正在入库...",
+            "current": 0,
+            "total": len(items),
+        })
 
     now_iso = _utc_now_iso()
     docs: List[Dict[str, Any]] = []
@@ -161,6 +223,16 @@ def sync_quotes(
                 max_workers=max_workers,
             )
             upsert_ms = int((time.time() - upsert_t0) * 1000)
+
+            # 入库进度更新
+            if progress_callback:
+                progress_callback({
+                    "percent": 90,
+                    "step": "ingesting",
+                    "message": f"入库完成：{processed} 条",
+                    "current": processed,
+                    "total": len(items),
+                })
         except CloudDbRequestError as e:
             upsert_errors.append({"code": "CLOUD_DB_WRITE_FAILED", "message": str(e)})
             upsert_ms = 0
@@ -185,11 +257,21 @@ def sync_quotes(
                     updated_at=d.get("updated_at")
                 )
                 quotes_objs.append(q)
-            
+
             mock_db_path = os.getenv("FILE_DB_PATH", "mock_db.json")
             upsert_quotes_to_mock_db(quotes_objs, file_path=mock_db_path)
             processed = len(quotes_objs)
             logger.info(f"成功同步 {processed} 条行情到本地 Mock 存储: {mock_db_path}")
+
+            # 入库进度更新
+            if progress_callback:
+                progress_callback({
+                    "percent": 90,
+                    "step": "ingesting",
+                    "message": f"入库完成：{processed} 条",
+                    "current": processed,
+                    "total": len(items),
+                })
         except Exception as e:
             upsert_errors.append({"code": "MOCK_DB_WRITE_FAILED", "message": str(e)})
 
@@ -244,10 +326,21 @@ def sync_all_quotes(
     source: str = "crawler_sina_all",
     timeout: float = 15.0,
     max_workers: Optional[int] = None,
+    progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
 ) -> Dict[str, Any]:
     """
     抓取并同步所有股票的行情数据
     """
+    # 初始进度
+    if progress_callback:
+        progress_callback({
+            "percent": 2,
+            "step": "cleaning",
+            "message": "正在获取股票代码列表...",
+            "current": 0,
+            "total": 0,
+        })
+
     codes = get_all_stock_codes()
     if not codes:
         return {
@@ -256,12 +349,23 @@ def sync_all_quotes(
             "processed": 0,
         }
 
+    # 获取到代码列表后的进度
+    if progress_callback:
+        progress_callback({
+            "percent": 5,
+            "step": "cleaning",
+            "message": f"获取到 {len(codes)} 只股票，开始抓取...",
+            "current": 0,
+            "total": len(codes),
+        })
+
     return sync_quotes(
         codes=codes,
         requested_by=requested_by,
         source=source,
         timeout=timeout,
         max_workers=max_workers,
+        progress_callback=progress_callback,
     )
 
 
@@ -515,85 +619,15 @@ def delete_quotes(*, codes: Optional[Sequence[str]] = None, progress_callback: O
                     "durationMs": int((time.time() - started_at) * 1000),
                 }
 
-            # 清空所有数据的高性能逻辑 - 使用并行删除
-            total_deleted = 0
-            batch_size = 1000  # 微信云数据库单次删除限制
-            max_iterations = 1000
-            consecutive_empty = 0
-            last_progress_update = time.time()
-            
-            # 使用并行删除加速（4个并行线程）
-            max_parallel_deletes = 4
-            executor = ThreadPoolExecutor(max_workers=max_parallel_deletes)
-            pending_futures = []
-            
-            try:
-                for attempt in range(max_iterations):
-                    # 查询下一批待删除的 ID
-                    rows = cloud.query(f'db.collection("quotes").field({{_id: true}}).limit({batch_size}).get()')
-                    
-                    if not rows or len(rows) == 0:
-                        consecutive_empty += 1
-                        if consecutive_empty >= 2:
-                            break
-                        time.sleep(0.1)
-                        continue
-                    
-                    consecutive_empty = 0
-                    batch_ids = [str(r.get("_id")).strip() for r in rows if isinstance(r, dict) and r.get("_id")]
-                    batch_ids = list(dict.fromkeys(batch_ids))
-                    
-                    if not batch_ids:
-                        break
-
-                    # 提交删除任务到线程池（并行执行）
-                    def _delete_batch(ids_batch):
-                        try:
-                            where_js = "{" + f'"_id": db.command.in({json.dumps(ids_batch)})' + "}"
-                            deleted = cloud.delete_where(collection="quotes", where_js=where_js)
-                            return int(deleted or 0)
-                        except Exception as e:
-                            import logging
-                            logging.getLogger(__name__).warning(f"删除批次失败: {e}")
-                            return 0
-
-                    future = executor.submit(_delete_batch, batch_ids)
-                    pending_futures.append(future)
-                    
-                    # 如果待处理任务过多，等待一些完成
-                    if len(pending_futures) >= max_parallel_deletes:
-                        done_future = next(as_completed(pending_futures))
-                        deleted_count = done_future.result()
-                        total_deleted += deleted_count
-                        pending_futures.remove(done_future)
-                        
-                        # 定期更新进度（每 2 秒）
-                        now = time.time()
-                        if now - last_progress_update >= 2.0 and progress_callback:
-                            last_progress_update = now
-                            percent = min(99, int(total_deleted / 100)) if total_deleted > 0 else 0
-                            progress_callback({
-                                "deleted": total_deleted,
-                                "total": total_deleted + batch_size,
-                                "percent": percent,
-                                "status": "processing"
-                            })
-                
-                # 等待所有待处理任务完成
-                for future in as_completed(pending_futures):
-                    deleted_count = future.result()
-                    total_deleted += deleted_count
-                    
-            finally:
-                executor.shutdown(wait=True)
-            
+            # 清空所有数据 - 使用高速并行截断
+            # 直接用 exists(true) 全量匹配，32路并行删除，无需先查 ID
             if progress_callback:
-                progress_callback({
-                    "deleted": total_deleted,
-                    "total": total_deleted,
-                    "percent": 100,
-                    "status": "processed"
-                })
+                progress_callback({"deleted": 0, "total": 0, "percent": 0, "status": "processing"})
+
+            total_deleted = cloud.truncate_collection(collection="quotes", max_workers=32)
+
+            if progress_callback:
+                progress_callback({"deleted": total_deleted, "total": total_deleted, "percent": 100, "status": "processed"})
 
             return {
                 "success": True,

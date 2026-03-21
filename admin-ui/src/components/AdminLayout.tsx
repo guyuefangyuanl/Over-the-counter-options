@@ -64,8 +64,6 @@ const AdminLayout: React.FC = () => {
       label: '行情管理',
       children: [
         { key: '/quotes', label: '实时行情' },
-        { key: '/quotes/history', label: '历史行情' },
-        { key: '/quotes/boards', label: '板块管理' },
       ],
     },
     {

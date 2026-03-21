@@ -46,19 +46,19 @@ default_env_path = os.path.join(env_dir, ".env")
 # 检查系统环境变量中的 NODE_ENV
 system_node_env = os.environ.get('NODE_ENV', 'development')
 
-# 优先加载生产环境配置（如果存在）
+# 加载顺序：.env -> .env.production -> .env.local（优先级依次升高）
+if os.path.exists(default_env_path):
+    load_dotenv(default_env_path, override=False)
+    logger.info(f"已从 {default_env_path} 加载基础环境变量")
 if os.path.exists(prod_env_path):
     load_dotenv(prod_env_path, override=True)
     logger.info(f"已加载生产环境配置: {prod_env_path}")
-elif os.path.exists(local_env_path):
+if os.path.exists(local_env_path):
     load_dotenv(local_env_path, override=True)
-    logger.info(f"已从 {local_env_path} 加载环境变量")
-elif os.path.exists(default_env_path):
-    load_dotenv(default_env_path, override=True)
-    logger.info(f"已从 {default_env_path} 加载环境变量")
-else:
+    logger.info(f"已从 {local_env_path} 加载本地覆盖配置（最高优先级）")
+if not any(os.path.exists(p) for p in [default_env_path, prod_env_path, local_env_path]):
     load_dotenv(override=True)
-    logger.warning(f"未找到配置文件，尝试使用默认路径加载")
+    logger.warning("未找到任何配置文件，尝试使用默认路径加载")
 
 logger.info(f"当前环境变量中包含 WX_CLOUD_ENV: {'WX_CLOUD_ENV' in os.environ}")
 if 'WX_CLOUD_ENV' in os.environ:
@@ -182,18 +182,24 @@ def create_app() -> Flask:
 
     # CORS配置
     allowed_origins = os.getenv('ALLOWED_ORIGINS', '').split(',')
-    if not allowed_origins or allowed_origins == ['']:
-        # 默认允许本地开发环境
-        allowed_origins = [
-            'http://localhost:5173',
-            'http://localhost:3000',
-            'http://127.0.0.1:5173',
-            'http://127.0.0.1:3000'
-        ]
-        logger.info(f"使用默认CORS配置: {allowed_origins}")
-    else:
-        allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
-        logger.info(f"使用自定义CORS配置: {allowed_origins}")
+    allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
+
+    # 开发环境始终允许本地前端访问
+    local_origins = [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:3000',
+    ]
+    if NODE_ENV == 'development' or not allowed_origins:
+        for o in local_origins:
+            if o not in allowed_origins:
+                allowed_origins.append(o)
+
+    if not allowed_origins:
+        allowed_origins = local_origins
+
+    logger.info(f"CORS 允许来源: {allowed_origins}")
 
     CORS(
         flask_app,

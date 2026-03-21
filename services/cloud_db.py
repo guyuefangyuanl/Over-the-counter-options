@@ -327,6 +327,42 @@ class CloudDbClient:
         except Exception:
             return 0
 
+    def truncate_collection(self, *, collection: str, max_workers: int = 32) -> int:
+        """
+        高速清空集合：并行发起多次全量删除请求直到集合为空。
+        微信云数据库每次 remove() 最多删除约 500 条，
+        通过并行+轮询直到连续两轮返回 deleted=0 为止。
+        """
+        total_deleted = 0
+        lock = threading.Lock()
+        # _id 字段在所有文档中必然存在，用 gte("") 匹配所有文档
+        where_js = '{_id: db.command.gte("")}'
+
+        def _one_delete():
+            try:
+                n = self.delete_where(collection=collection, where_js=where_js)
+                if n > 0:
+                    with lock:
+                        nonlocal total_deleted
+                        total_deleted += n
+                return n
+            except Exception as e:
+                logger.warning(f"truncate_collection 删除批次失败: {e}")
+                return 0
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            consecutive_zero_rounds = 0
+            while consecutive_zero_rounds < 3:
+                futures = [executor.submit(_one_delete) for _ in range(max_workers)]
+                round_deleted = sum(f.result() for f in as_completed(futures))
+                logger.info(f"truncate_collection 本轮删除: {round_deleted} 条，累计: {total_deleted} 条")
+                if round_deleted == 0:
+                    consecutive_zero_rounds += 1
+                else:
+                    consecutive_zero_rounds = 0
+        logger.info(f"truncate_collection 完成，共删除 {total_deleted} 条")
+        return total_deleted
+
     def upsert(
         self,
         *,

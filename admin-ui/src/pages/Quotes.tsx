@@ -191,6 +191,10 @@ const Quotes: React.FC = () => {
   const [uploadResult, setUploadResult] = useState<ConfirmUploadPayload['result'] | null>(null);
   const uploadPollTimerRef = useRef<number | null>(null);
   const deletePollTimerRef = useRef<number | null>(null);
+  // 全量更新相关状态
+  const syncAllPollTimerRef = useRef<number | null>(null);
+  const [syncAllProgress, setSyncAllProgress] = useState<ProgressData | null>(null);
+  const [syncAllResult, setSyncAllResult] = useState<SyncResultPayload | null>(null);
   
   // 筛选相关状态
   const [filterForm] = Form.useForm();
@@ -259,6 +263,10 @@ const Quotes: React.FC = () => {
       if (deletePollTimerRef.current !== null) {
         window.clearInterval(deletePollTimerRef.current);
         deletePollTimerRef.current = null;
+      }
+      if (syncAllPollTimerRef.current !== null) {
+        window.clearInterval(syncAllPollTimerRef.current);
+        syncAllPollTimerRef.current = null;
       }
       if (autoRefreshTimerRef.current !== null) {
         clearInterval(autoRefreshTimerRef.current);
@@ -461,6 +469,7 @@ const Quotes: React.FC = () => {
         
         if (uploadPollTimerRef.current !== null) {
           window.clearInterval(uploadPollTimerRef.current);
+          uploadPollTimerRef.current = null;
         }
 
         uploadPollTimerRef.current = window.setInterval(async () => {
@@ -675,44 +684,106 @@ const Quotes: React.FC = () => {
   const handleCrawlAll = useCallback(async () => {
     if (isCrawlingAll) return;
 
+    // 清理之前的定时器
+    if (syncAllPollTimerRef.current !== null) {
+      window.clearInterval(syncAllPollTimerRef.current);
+      syncAllPollTimerRef.current = null;
+    }
+
     setIsCrawlingAll(true);
+    setSyncAllProgress(null);
+    setSyncAllResult(null);
+
+    // 设置初始进度
+    setSyncAllProgress({
+      percent: 0,
+      step: 'cleaning',
+      message: '正在启动全量同步...',
+      current: 0,
+      total: 0,
+    });
+
     try {
       const res = await api.post<ApiResponse<{ status: string; taskId: string }>>('/admin/sync-all-quotes');
       if (res.success && res.data?.taskId) {
         const taskId = res.data.taskId;
-        message.loading({ content: '全量同步进行中，可能需要几分钟...', key: 'sync-all', duration: 0 });
-        
-        // 开始轮询状态
-        const timer = window.setInterval(async () => {
+
+        // 开始轮询状态 - 使用 ref 存储定时器
+        syncAllPollTimerRef.current = window.setInterval(async () => {
           try {
-            const pollRes = await api.get<ApiResponse<{ status: string; result?: SyncResultPayload }>>(`/admin/sync-all-quotes/status/${taskId}`);
+            const pollRes = await api.get<ApiResponse<{
+              status: string;
+              progress?: ProgressData;
+              result?: SyncResultPayload;
+            }>>(`/admin/sync-all-quotes/status/${taskId}`);
+
             if (!pollRes.success) {
               message.error({ content: pollRes.message || '全量同步失败', key: 'sync-all' });
-              window.clearInterval(timer);
+              if (syncAllPollTimerRef.current !== null) {
+                window.clearInterval(syncAllPollTimerRef.current);
+                syncAllPollTimerRef.current = null;
+              }
+              setSyncAllProgress(null);
               setIsCrawlingAll(false);
               return;
             }
 
-            if (pollRes.data?.status === 'processed') {
-              const processed = pollRes.data.result?.processed ?? 0;
+            // 更新进度
+            if (pollRes.data?.progress) {
+              setSyncAllProgress(pollRes.data.progress);
+            }
+
+            const status = pollRes.data?.status;
+            if (status === 'processed') {
+              const result = pollRes.data?.result;
+              const processed = result?.processed ?? 0;
+
+              // 更新最终进度
+              setSyncAllProgress({
+                percent: 100,
+                step: 'completed',
+                message: `全量同步完成：写入 ${processed} 条`,
+                current: processed,
+                total: processed,
+              });
+
+              if (syncAllPollTimerRef.current !== null) {
+                window.clearInterval(syncAllPollTimerRef.current);
+                syncAllPollTimerRef.current = null;
+              }
+
+              setSyncAllResult(result || null);
               message.success({ content: `全量同步完成：写入 ${processed} 条`, key: 'sync-all' });
-              window.clearInterval(timer);
               setIsCrawlingAll(false);
               void fetchQuotes(pagination.current, pagination.pageSize);
-            } else if (pollRes.data?.status === 'failed') {
+
+              // 1秒后关闭进度弹窗
+              setTimeout(() => {
+                setSyncAllProgress(null);
+              }, 1000);
+            } else if (status === 'failed') {
               message.error({ content: pollRes.message || '全量同步失败', key: 'sync-all' });
-              window.clearInterval(timer);
+              if (syncAllPollTimerRef.current !== null) {
+                window.clearInterval(syncAllPollTimerRef.current);
+                syncAllPollTimerRef.current = null;
+              }
+              setSyncAllProgress(null);
               setIsCrawlingAll(false);
             }
           } catch (err) {
             message.error({ content: getApiErrorMessage(err, '查询同步状态失败'), key: 'sync-all' });
-            window.clearInterval(timer);
+            if (syncAllPollTimerRef.current !== null) {
+              window.clearInterval(syncAllPollTimerRef.current);
+              syncAllPollTimerRef.current = null;
+            }
+            setSyncAllProgress(null);
             setIsCrawlingAll(false);
           }
-        }, 5000);
+        }, 2000); // 统一使用 2 秒轮询间隔
       }
     } catch (err) {
       message.error(getApiErrorMessage(err, '启动全量同步失败'));
+      setSyncAllProgress(null);
       setIsCrawlingAll(false);
     }
   }, [fetchQuotes, isCrawlingAll, message, pagination]);
@@ -1118,9 +1189,9 @@ const Quotes: React.FC = () => {
         destroyOnHidden
       >
         <div style={{ textAlign: 'center', padding: '20px 0' }}>
-          <Progress 
-            type="circle" 
-            percent={deleteProgress?.percent} 
+          <Progress
+            type="circle"
+            percent={deleteProgress?.percent}
             status={deleteProgress?.step === 'failed' ? 'exception' : 'active'}
           />
           <div style={{ marginTop: 20 }}>
@@ -1133,6 +1204,47 @@ const Quotes: React.FC = () => {
               <Typography.Text type="secondary">
                 已删除: {deleteProgress.current} / 总计: {deleteProgress.total}
               </Typography.Text>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* 全量更新进度 Modal */}
+      <Modal
+        title="全量更新进度"
+        open={!!syncAllProgress}
+        footer={null}
+        closable={false}
+        maskClosable={false}
+        destroyOnHidden
+      >
+        <div style={{ textAlign: 'center', padding: '20px 0' }}>
+          <Progress
+            type="circle"
+            percent={syncAllProgress?.percent}
+            status={syncAllProgress?.step === 'failed' ? 'exception' : 'active'}
+          />
+          <div style={{ marginTop: 20 }}>
+            <Typography.Text strong style={{ fontSize: 16 }}>
+              {syncAllProgress?.message}
+            </Typography.Text>
+          </div>
+          {syncAllProgress?.total !== undefined && syncAllProgress.total > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <Typography.Text type="secondary">
+                已处理: {syncAllProgress.current} / 总计: {syncAllProgress.total}
+              </Typography.Text>
+            </div>
+          )}
+          {syncAllResult && (
+            <div style={{ marginTop: 16 }}>
+              <Descriptions bordered size="small" column={2}>
+                <Descriptions.Item label="写入数量">{syncAllResult.processed}</Descriptions.Item>
+                <Descriptions.Item label="获取数量">{syncAllResult.fetched ?? '-'}</Descriptions.Item>
+                {syncAllResult.durationMs && (
+                  <Descriptions.Item label="耗时">{syncAllResult.durationMs}ms</Descriptions.Item>
+                )}
+              </Descriptions>
             </div>
           )}
         </div>

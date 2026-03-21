@@ -525,32 +525,32 @@ function get(url, params = {}, header = {}, options = {}) {
  * POST 请求
  * @param {string} url 请求路径
  * @param {object} data 请求数据
- * @param {object} header 请求头
+ * @param {object} options 请求选项 (timeout, retries, silent等)
  * @returns {Promise}
  */
-function post(url, data = {}, header = {}) {
-  return request(url, 'POST', data, header);
+function post(url, data = {}, options = {}) {
+  return request(url, 'POST', data, {}, options);
 }
 
 /**
  * PUT 请求
  * @param {string} url 请求路径
  * @param {object} data 请求数据
- * @param {object} header 请求头
+ * @param {object} options 请求选项 (timeout, retries, silent等)
  * @returns {Promise}
  */
-function put(url, data = {}, header = {}) {
-  return request(url, 'PUT', data, header);
+function put(url, data = {}, options = {}) {
+  return request(url, 'PUT', data, {}, options);
 }
 
 /**
  * DELETE 请求
  * @param {string} url 请求路径
- * @param {object} header 请求头
+ * @param {object} options 请求选项 (timeout, retries, silent等)
  * @returns {Promise}
  */
-function del(url, header = {}) {
-  return request(url, 'DELETE', {}, header);
+function del(url, options = {}) {
+  return request(url, 'DELETE', {}, {}, options);
 }
 
 /**

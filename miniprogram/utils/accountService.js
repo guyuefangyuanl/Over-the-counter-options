@@ -28,8 +28,12 @@ const accountService = {
   },
 
   // 获取持仓列表（不缓存、不重试）
-  getPositions: (page = 1, pageSize = 10) => {
-    return api.get('/trade/positions', { page, pageSize }, {}, REALTIME_OPTIONS);
+  // fromIndex: true 时使用 retries:0 + suppressRetryLog:true，避免首页未登录时产生重试噪音
+  getPositions: (page = 1, pageSize = 10, fromIndex = false) => {
+    const opts = fromIndex
+      ? { ...REALTIME_OPTIONS, retries: 0, suppressRetryLog: true, suppressErrorLog: true }
+      : REALTIME_OPTIONS;
+    return api.get('/trade/positions', { page, pageSize }, {}, opts);
   },
 
   // 获取资产概览（持仓统计，不缓存、不重试）

@@ -3,7 +3,6 @@ import AdminLayout from './components/AdminLayout';
 import AuthGuard from './components/AuthGuard';
 import Dashboard from './pages/Dashboard';
 import Quotes from './pages/Quotes';
-import QuotesHistory from './pages/QuotesHistory';
 import Inquiries from './pages/Inquiries';
 import Orders from './pages/Orders';
 import Login from './pages/Login';
@@ -13,7 +12,6 @@ import FeeList from './pages/FeeList';
 import FeeStatistics from './pages/FeeStatistics';
 import CustomerList from './pages/CustomerList';
 import CustomerGroups from './pages/CustomerGroups';
-import BoardList from './pages/BoardList';
 import TradeOrders from './pages/TradeOrders';
 import TradeInquiries from './pages/TradeInquiries';
 import TradePositions from './pages/TradePositions';
@@ -38,8 +36,6 @@ function App() {
           <Route path="customer/groups" element={<CustomerGroups />} />
           {/* 行情管理 */}
           <Route path="quotes" element={<Quotes />} />
-          <Route path="quotes/history" element={<QuotesHistory />} />
-          <Route path="quotes/boards" element={<BoardList />} />
           {/* 交易管理 */}
           <Route path="trade/orders" element={<TradeOrders />} />
           <Route path="trade/inquiries" element={<TradeInquiries />} />

@@ -540,15 +540,41 @@ def sync_all_quotes_api():
             "type": "sync_all_quotes",
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "status": "processing",
+            "progress": {
+                "percent": 0,
+                "step": "cleaning",
+                "message": "正在启动全量同步...",
+                "current": 0,
+                "total": 0,
+            },
             "result": None,
         }
         save_upload_session_payload(upload_id=task_id, payload=session_payload)
 
         import threading
 
+        # 进度更新回调 - 限制更新频率
+        _last_progress_update = [0.0]  # 使用列表以便在闭包中修改
+
+        def _on_progress(progress_data: dict):
+            """进度回调函数"""
+            now = time.time()
+            # 限制更新频率：每 2 秒最多更新一次，或者进度完成时更新
+            if now - _last_progress_update[0] < 2.0 and progress_data.get("percent", 0) < 100:
+                return
+            _last_progress_update[0] = now
+
+            try:
+                payload = load_upload_session_payload(upload_id=sync_task_id)
+                if payload.get("status") == "processing":
+                    payload["progress"] = progress_data
+                    save_upload_session_payload(upload_id=sync_task_id, payload=payload)
+            except Exception as e:
+                logger.warning(f"更新全量同步进度失败: {e}")
+
         def _run_sync_all(sync_task_id: str):
             try:
-                result = sync_all_quotes(requested_by="admin")
+                result = sync_all_quotes(requested_by="admin", progress_callback=_on_progress)
                 try:
                     payload = load_upload_session_payload(upload_id=sync_task_id)
                 except Exception:
@@ -557,6 +583,15 @@ def sync_all_quotes_api():
                 payload["status"] = "processed" if result.get("success") else "failed"
                 payload["processed_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
                 payload["result"] = result
+                # 更新最终进度
+                if result.get("success"):
+                    payload["progress"] = {
+                        "percent": 100,
+                        "step": "completed",
+                        "message": f"全量同步完成：写入 {result.get('processed', 0)} 条",
+                        "current": result.get("processed", 0),
+                        "total": result.get("fetched", 0),
+                    }
                 save_upload_session_payload(upload_id=sync_task_id, payload=payload)
             except Exception as e:
                 logger.error(f"异步同步全量行情失败: {e}")
@@ -564,6 +599,13 @@ def sync_all_quotes_api():
                     payload = load_upload_session_payload(upload_id=sync_task_id)
                     payload["status"] = "failed"
                     payload["result"] = {"success": False, "message": str(e)}
+                    payload["progress"] = {
+                        "percent": 0,
+                        "step": "failed",
+                        "message": f"同步失败: {str(e)}",
+                        "current": 0,
+                        "total": 0,
+                    }
                     save_upload_session_payload(upload_id=sync_task_id, payload=payload)
                 except Exception:
                     pass

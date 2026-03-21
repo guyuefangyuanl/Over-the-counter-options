@@ -1,6 +1,16 @@
 const app = getApp();
 const optionsService = require('../../services/options.js');
+const holdingsService = require('../../services/holdings.js');
 const { uiEnhancer, dataFormatter, performanceMonitor } = require('../../utils/enhancedUtils');
+
+// 首页持仓案例 tab 与账户页 tab 的映射关系
+// 首页：active / expiring / finished
+// 账户：continuing / expiring / closed
+const INDEX_TAB_MAP = {
+  active: 'continuing',
+  expiring: 'expiring',
+  finished: 'closed'
+};
 
 Page({
   data: {
@@ -108,146 +118,24 @@ Page({
       }
     ],
 
-    // 新增：持仓案例动画开关
+    // 持仓案例动画开关
     holdingsAnimate: false,
 
-    // 新增：持仓案例数据
+    // 持仓案例数据（真实数据加载后覆盖）
     holdingsData: {
-      activeTab: 'active', // active/expiring/expired
-      holdings: [
-        {
-          id: 1,
-          name: '平安银行',
-          code: '000001',
-          market: 'SZ',
-          structure: '100C1m',
-          feeRate: '5.28%',
-          scale: '100万',
-          profit: -4.91,
-          profitRate: -98.28,
-          status: 'active'
-        },
-        {
-          id: 2,
-          name: '上证50ETF',
-          code: '510050',
-          market: 'SH',
-          structure: '50P3m',
-          feeRate: '2.15%',
-          scale: '200万',
-          profit: 12.6,
-          profitRate: 8.2,
-          status: 'active'
-        },
-        {
-          id: 3,
-          name: '贵州茅台',
-          code: '600519',
-          market: 'SH',
-          structure: '100C6m',
-          feeRate: '4.85%',
-          scale: '50万',
-          profit: 34.2,
-          profitRate: 12.7,
-          status: 'active'
-        },
-        {
-          id: 4,
-          name: '招商银行',
-          code: '600036',
-          market: 'SH',
-          structure: '100C1m',
-          feeRate: '3.10%',
-          scale: '80万',
-          profit: -2.3,
-          profitRate: -1.8,
-          status: 'expiring'
-        },
-        {
-          id: 5,
-          name: '中国平安',
-          code: '601318',
-          market: 'SH',
-          structure: '100P1m',
-          feeRate: '2.90%',
-          scale: '100万',
-          profit: 1.2,
-          profitRate: 0.9,
-          status: 'expiring'
-        },
-        {
-          id: 6,
-          name: '宁德时代',
-          code: '300750',
-          market: 'SZ',
-          structure: '50C3m',
-          feeRate: '3.40%',
-          scale: '60万',
-          profit: 6.8,
-          profitRate: 5.3,
-          status: 'expired'
-        },
-        {
-          id: 7,
-          name: '隆基绿能',
-          code: '601012',
-          market: 'SH',
-          structure: '50P6m',
-          feeRate: '2.75%',
-          scale: '120万',
-          profit: -3.6,
-          profitRate: -2.4,
-          status: 'expired'
-        },
-        {
-          id: 8,
-          name: '比亚迪',
-          code: '002594',
-          market: 'SZ',
-          structure: '100C3m',
-          feeRate: '4.20%',
-          scale: '80万',
-          profit: 18.5,
-          profitRate: 15.6,
-          status: 'finished'
-        },
-        {
-          id: 9,
-          name: '中信证券',
-          code: '600030',
-          market: 'SH',
-          structure: '100P6m',
-          feeRate: '3.60%',
-          scale: '60万',
-          profit: -8.2,
-          profitRate: -6.4,
-          status: 'finished'
-        }
-      ],
-      knowledge: [
-        {
-          id: 1,
-          title: '沪深场外个股期权',
-          date: '24-12-08 14:58',
-          type: 'option',
-          link: '/pages/data-explanation/data-explanation?id=1'
-        },
-        {
-          id: 2,
-          title: '香草期权基础入门',
-          date: '24-12-12 09:30',
-          type: 'vanilla',
-          link: '/pages/data-explanation/data-explanation?id=2'
-        },
-        {
-          id: 3,
-          title: '持仓管理与风险控制',
-          date: '24-12-20 16:20',
-          type: 'knowledge',
-          link: '/pages/data-explanation/data-explanation?id=3'
-        }
-      ]
+      // 首页 tab：active=存续中 / expiring=临近到期 / finished=已完结
+      activeTab: 'active',
+      // 所有持仓（来自 accountService，格式与 account.js 一致）
+      allPositions: [],
+      // 当前 tab 过滤后的持仓（供 wxml 渲染）
+      filteredPositions: [],
+      // 知识推荐
+      knowledge: holdingsService.getKnowledgeList()
     },
+    // 持仓数据加载错误标记
+    holdingsError: false,
+    // 是否为 Mock 示例数据（未登录 / API 失败时为 true）
+    holdingsIsMock: false,
 
     // 加载状态
     loading: true,
@@ -319,10 +207,10 @@ Page({
 
   onShow() {
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
-      this.getTabBar().setData({
-        selected: 0
-      })
+      this.getTabBar().setData({ selected: 0 });
     }
+    // 每次页面显示时刷新持仓案例（含从账户页返回的情形）
+    this.loadHoldingsData();
     if (this.data.hasUserInfo) {
       this.refreshData();
     }
@@ -436,42 +324,45 @@ Page({
     }
   },
 
-  // 加载持仓数据（优先云数据库 inquiries 集合，降级到本地 Mock）
+  // 加载持仓案例数据（从 accountService 获取真实数据，未登录/失败时降级到 Mock）
   async loadHoldingsData() {
     try {
-      const db = wx.cloud && wx.cloud.database ? wx.cloud.database() : null;
-      if (db) {
-        const res = await db.collection('inquiries')
-          .where({ status: db.command.in(['active', 'expiring', 'expired', 'finished']) })
-          .orderBy('createTime', 'desc')
-          .limit(20)
-          .get()
-          .catch(() => null);
-
-        if (res && res.data && res.data.length > 0) {
-          const holdings = res.data.map((item, idx) => ({
-            id: item._id || idx,
-            name: item.productName || item.underlyingName || '--',
-            code: item.productCode || item.underlyingCode || '--',
-            market: item.market || 'SH',
-            structure: item.structure || '--',
-            feeRate: item.feeRate || '--',
-            scale: item.notionalAmount ? item.notionalAmount + '万' : '--',
-            profit: item.profit || 0,
-            profitRate: item.profitRate || 0,
-            status: item.status || 'active'
-          }));
-          this.setData({ 'holdingsData.holdings': holdings });
-          return;
-        }
-      }
-      // 降级：使用本地 Mock 数据（data 中已有默认值）
+      this.setData({ holdingsError: false });
+      const { positions, knowledge, isReal } = await holdingsService.getIndexHoldingsData();
+      this.setData({
+        'holdingsData.allPositions': positions,
+        'holdingsData.knowledge': knowledge,
+        // isReal=false 时展示「示例数据」角标，引导用户登录查看真实持仓
+        holdingsIsMock: !isReal
+      });
+      this._filterIndexPositions();
     } catch (e) {
-      console.error('加载持仓数据失败:', e);
+      // getIndexHoldingsData 内部已完全吞掉异常，此处只是保险
+      console.error('[index] 加载持仓数据异常:', e);
+      this.setData({ holdingsError: false, holdingsIsMock: true });
+      // 确保 Mock 数据已被初始化
+      this._filterIndexPositions();
     }
   },
 
-  // 新增：Tab 切换
+  // 根据首页 activeTab 过滤持仓列表
+  _filterIndexPositions() {
+    const { activeTab, allPositions = [] } = this.data.holdingsData;
+    let filtered = [];
+    if (activeTab === 'active') {
+      // 存续中：CONTINUING 且 daysLeft > 7
+      filtered = allPositions.filter(p => p.indexStatus === 'active');
+    } else if (activeTab === 'expiring') {
+      // 临近到期：CONTINUING 且 daysLeft <= 7
+      filtered = allPositions.filter(p => p.indexStatus === 'expiring');
+    } else if (activeTab === 'finished') {
+      // 已完结：CLOSED
+      filtered = allPositions.filter(p => p.indexStatus === 'finished');
+    }
+    this.setData({ 'holdingsData.filteredPositions': filtered });
+  },
+
+  // 持仓案例 Tab 切换（与 account 页分类逻辑对齐）
   onHoldingTabChange(e) {
     try {
       const tab = e.currentTarget.dataset.tab;
@@ -481,6 +372,8 @@ Page({
         'holdingsData.activeTab': tab,
         holdingsAnimate: true
       });
+      // 重新过滤当前 tab 的数据
+      this._filterIndexPositions();
       setTimeout(() => {
         this.setData({ holdingsAnimate: false });
       }, 300);
@@ -489,15 +382,28 @@ Page({
     }
   },
 
-  // 新增：持仓项点击
+  // 持仓案例点击 —— 跳转到账户页并定位到对应 tab
   onHoldingItemTap(e) {
     try {
-      const { id } = e.currentTarget.dataset;
+      const { id, indexstatus } = e.currentTarget.dataset;
       if (typeof uiEnhancer.hapticFeedback === 'function') uiEnhancer.hapticFeedback('light');
-      wx.navigateTo({ url: `/pages/position/position?id=${id}` });
+
+      // 首页 indexStatus → 账户页 tab 映射
+      const accountTab = INDEX_TAB_MAP[indexstatus] || 'continuing';
+
+      // 将目标持仓 id 和 tab 存入全局，账户页 onShow 时读取高亮
+      app.globalData.pendingPositionFocus = { positionId: id, tab: accountTab };
+
+      // 账户是 tabBar 页面，使用 switchTab 跳转
+      wx.switchTab({
+        url: '/pages/account/account',
+        fail: () => {
+          uiEnhancer.showToast('跳转失败', 'error');
+        }
+      });
     } catch (err) {
       console.error('打开持仓失败:', err);
-      uiEnhancer.showToast('页面开发中', 'none');
+      uiEnhancer.showToast('跳转失败', 'error');
     }
   },
 

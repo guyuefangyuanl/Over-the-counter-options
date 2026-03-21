@@ -137,7 +137,11 @@
       <!-- 持仓列表 -->
       <block wx:elif="{{filteredPositions.length > 0}}">
         <view class="positions-list">
-          <view class="position-card" wx:for="{{filteredPositions}}" wx:key="id">
+          <view
+            class="position-card {{item.id === highlightPositionId ? 'position-card--highlight' : ''}}"
+            wx:for="{{filteredPositions}}"
+            wx:key="id"
+          >
             <view class="position-card__header">
               <view class="position-card__name-box">
                 <text class="position-card__name">{{item.productName}}</text>

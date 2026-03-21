@@ -708,3 +708,16 @@ page {
   background: rgba(0, 0, 0, 0.5);
   border-radius: 50%;
 }
+
+/* ========== 来自首页跳转的持仓高亮样式 ========== */
+.position-card--highlight {
+  border: 2rpx solid var(--primary);
+  box-shadow: 0 0 0 4rpx rgba(51, 112, 255, 0.15);
+  animation: positionHighlight 2s ease forwards;
+}
+
+@keyframes positionHighlight {
+  0%   { box-shadow: 0 0 0 6rpx rgba(51, 112, 255, 0.35); border-color: var(--primary); }
+  60%  { box-shadow: 0 0 0 4rpx rgba(51, 112, 255, 0.20); border-color: var(--primary); }
+  100% { box-shadow: none; border-color: transparent; }
+}

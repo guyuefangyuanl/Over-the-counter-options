@@ -55,7 +55,9 @@ Page({
     closingPosition: null,           // 待平仓的持仓
     closeType: 'accounting',         // 平仓类型：accounting/order
     closePrice: '',                  // 平仓价格
-    isClosingPosition: false         // 平仓提交中
+    isClosingPosition: false,        // 平仓提交中
+    // 来自首页跳转的高亮持仓 id（2s 后自动清除）
+    highlightPositionId: null
   },
 
   // 防并发标记（不放入 data，避免触发 setData 开销）
@@ -72,6 +74,19 @@ Page({
     }
     // 每次显示时刷新用户资料（防重复并发）
     this._refreshUserProfile();
+
+    // 处理来自首页持仓案例的跳转定向（切换到对应 tab 并高亮目标持仓）
+    const focus = getApp().globalData.pendingPositionFocus;
+    if (focus) {
+      getApp().globalData.pendingPositionFocus = null;
+      const targetTab = focus.tab || 'continuing';
+      this.setData({ activeTab: targetTab, highlightPositionId: focus.positionId });
+      this._filterPositions();
+      // 2s 后清除高亮，避免持续样式残留
+      setTimeout(() => {
+        this.setData({ highlightPositionId: null });
+      }, 2000);
+    }
   },
 
   onPullDownRefresh() {

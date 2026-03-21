@@ -392,34 +392,62 @@ Page({
             loadingText: '进入游客模式...'
           });
 
-          // 创建游客账户
-          const guestInfo = {
-            isLoggedIn: true,
-            isGuest: true,
-            nickname: '游客用户',
-            avatar: '',
-            userId: `guest_${Date.now()}`,
-            loginTime: new Date().toISOString(),
-            loginType: 'guest'
-          };
+          // 调用后端游客登录接口，获取真实的受限 token
+          api.post('/auth/guest/login', {}, { silent: true, retries: 0 })
+            .then((result) => {
+              // result 是后端返回的完整响应体 { success, code, data: {...} }
+              const payload = (result && result.data) ? result.data : (result || {});
+              const token = payload.token || payload.access_token;
 
-          // 保存游客信息
-          wx.setStorageSync('userInfo', guestInfo);
+              if (token) {
+                wx.setStorageSync('token', String(token));
+              }
+              if (payload.refresh_token) {
+                wx.setStorageSync('refresh_token', String(payload.refresh_token));
+              }
 
-          setTimeout(() => {
-            this.setData({ isLoading: false });
-            wx.showToast({
-              title: '进入游客模式',
-              icon: 'success'
+              const guestInfo = {
+                isLoggedIn: true,
+                isGuest: true,
+                nickname: payload.nickname || '游客用户',
+                avatar: '',
+                userId: payload.userId || `guest_${Date.now()}`,
+                openid: payload.userId || '',
+                loginTime: new Date().toISOString(),
+                loginType: 'guest'
+              };
+              wx.setStorageSync('userInfo', guestInfo);
+
+              this.setData({ isLoading: false });
+              wx.showToast({ title: '进入游客模式', icon: 'success' });
+              setTimeout(() => {
+                wx.switchTab({ url: '/pages/index/index' });
+              }, 1500);
+            })
+            .catch((err) => {
+              console.warn('[GuestLogin] 后端游客接口失败，使用本地模式:', err && err.message);
+              // 降级：本地游客模式（无 token，仅可浏览已缓存内容）
+              const guestInfo = {
+                isLoggedIn: true,
+                isGuest: true,
+                nickname: '游客用户',
+                avatar: '',
+                userId: `guest_${Date.now()}`,
+                openid: '',
+                loginTime: new Date().toISOString(),
+                loginType: 'guest'
+              };
+              wx.setStorageSync('userInfo', guestInfo);
+              // 清除任何旧 token，避免用过期/错误 token 发请求
+              wx.removeStorageSync('token');
+              wx.removeStorageSync('refresh_token');
+
+              this.setData({ isLoading: false });
+              wx.showToast({ title: '进入游客模式', icon: 'success' });
+              setTimeout(() => {
+                wx.switchTab({ url: '/pages/index/index' });
+              }, 1500);
             });
-
-            // 跳转到首页
-            setTimeout(() => {
-              wx.switchTab({
-                url: '/pages/index/index'
-              });
-            }, 1500);
-          }, 1000);
         }
       }
     });

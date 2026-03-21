@@ -802,7 +802,7 @@
   gap: 16rpx;
 }
 
-/* 新增：持仓案例样式 */
+/* ====== 持仓案例板块 ====== */
 .holding-section {
   margin: 12rpx 0 16rpx;
 }
@@ -814,32 +814,46 @@
   box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.06);
 }
 
+/* Tab 导航（三栏，与账户页对齐） */
 .holding-tabs {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8rpx;
-  margin-bottom: 12rpx;
+  border-bottom: 2rpx solid #f0f2f5;
+  margin-bottom: 16rpx;
 }
 
 .holding-tab-item {
   flex: 1;
   text-align: center;
-  padding: 12rpx 0;
-  font-size: 24rpx;
+  padding: 16rpx 0;
+  font-size: 26rpx;
   color: #909399;
-  border-bottom: 3rpx solid transparent;
+  border-bottom: 4rpx solid transparent;
+  margin-bottom: -2rpx;
+  transition: color 0.2s ease, border-color 0.2s ease;
 }
 
 .holding-tab-item.active {
-  color: #409EFF;
-  border-bottom-color: #409EFF;
+  color: #1677FF;
+  border-bottom-color: #1677FF;
+  font-weight: 600;
 }
 
+/* 持仓列表 */
 .holding-list {
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
+  gap: 0;
+  transition: opacity 0.3s ease;
+}
+
+.holding-list.fade-in {
+  animation: holdingFadeIn 0.25s ease both;
+}
+
+@keyframes holdingFadeIn {
+  from { opacity: 0; transform: translateY(8rpx); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .holding-item {
@@ -847,74 +861,158 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12rpx;
-  padding: 12rpx 8rpx;
-  transition: transform 0.2s ease;
+  padding: 20rpx 8rpx;
+  border-bottom: 1rpx solid #f5f7fa;
+  transition: background 0.15s ease;
+}
+
+.holding-item:last-child {
+  border-bottom: none;
 }
 
 .holding-item:active {
-  transform: scale(0.98);
+  background: #f0f6ff;
+  border-radius: 12rpx;
 }
 
 .holding-left {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
+  gap: 6rpx;
+  min-width: 0;
 }
 
 .holding-right {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6rpx;
+  gap: 8rpx;
+  flex-shrink: 0;
 }
 
 .holding-name {
   font-size: 30rpx;
   font-weight: 600;
-  color: #333333;
+  color: #1f2d3d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.holding-market {
-  font-size: 24rpx;
-  color: #999999;
-}
-
-.holding-structure {
-  font-size: 24rpx;
-  color: #8593a3;
-}
-
-.holding-fee,
-.holding-scale {
-  font-size: 24rpx;
-  color: #666666;
-}
-
-.holding-profit {
+.holding-row {
   display: flex;
   gap: 12rpx;
   align-items: center;
 }
 
+.holding-code {
+  font-size: 22rpx;
+  color: #409EFF;
+}
+
+.holding-dealer {
+  font-size: 22rpx;
+  color: #909399;
+}
+
+.holding-notional {
+  font-size: 24rpx;
+  color: #606266;
+  font-weight: 500;
+}
+
+.holding-days {
+  font-size: 22rpx;
+  color: #909399;
+  background: #f5f7fa;
+  padding: 2rpx 10rpx;
+  border-radius: 8rpx;
+}
+
+.holding-days.expiring-tip {
+  color: #E6A23C;
+  background: #fdf6ec;
+}
+
+.holding-profit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4rpx;
+}
+
 .profit {
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.profit.up  { color: #F56C6C; }
+.profit.down { color: #67C23A; }
+
+.profit-rate {
+  font-size: 22rpx;
+  font-weight: 500;
+}
+
+.profit-rate.up  { color: #F56C6C; }
+.profit-rate.down { color: #67C23A; }
+
+.holding-nav-hint {
+  font-size: 20rpx;
+  color: #c0c4cc;
+}
+
+/* 示例数据角标 */
+.holdings-mock-badge {
+  font-size: 20rpx;
+  color: #E6A23C;
+  background: #fdf6ec;
+  border: 1rpx solid #f5dab1;
+  border-radius: 6rpx;
+  padding: 2rpx 10rpx;
+  margin-left: 8rpx;
+  vertical-align: middle;
+  line-height: 1.6;
+}
+
+/* 错误提示 */
+.holding-error-tip {
+  padding: 32rpx 0;
+  text-align: center;
+}
+
+.holding-error-text {
   font-size: 26rpx;
-  font-weight: 600;
+  color: #909399;
 }
 
-.profit.up {
-  color: #67C23A;
+/* 空状态 */
+.holding-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48rpx 0 32rpx;
+  gap: 12rpx;
 }
 
-.profit.down {
-  color: #F56C6C;
+.holding-empty-icon {
+  font-size: 64rpx;
+  color: #dcdfe6;
 }
 
-.profit-rate.up {
-  color: #67C23A;
+.holding-empty-text {
+  font-size: 28rpx;
+  color: #909399;
 }
 
-.profit-rate.down {
-  color: #F56C6C;
+.holding-empty-action {
+  margin-top: 8rpx;
+  padding: 12rpx 32rpx;
+  background: #ecf5ff;
+  border-radius: 32rpx;
+  color: #1677FF;
+  font-size: 26rpx;
 }
 
 .knowledge-section {
