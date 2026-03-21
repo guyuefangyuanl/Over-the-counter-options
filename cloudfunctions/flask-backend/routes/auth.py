@@ -71,16 +71,16 @@ def require_roles(*allowed_roles: str):
             if not isinstance(payload, dict):
                 logger.warning(f"[require_roles] 未登录或登录已过期，payload 类型: {type(payload)}")
                 return flask_error_response("未登录或登录已过期", 401)
-            
+
             user_role = str(payload.get("role") or "viewer")
             normalized_role = auth_service._normalize_role(user_role)
-            
+
             # 调试日志：输出用户角色信息
             logger.info(f"[require_roles] 用户: {payload.get('sub')}, 原始角色: {user_role}, 规范化角色: {normalized_role}, 允许的角色: {allowed}")
-            
+
             if normalized_role not in allowed:
                 logger.warning(f"[require_roles] 权限不足: 用户 {payload.get('sub')} 角色 {normalized_role} 不在允许的角色列表 {allowed} 中")
-                return flask_error_response(f"权限不足：当前角色({normalized_role})无权访问。需要角色: {', '.join(allowed)}", 403)
+                return flask_error_response(f"权限不足：当前角色({normalized_role})无权访问此功能。如需操作权限，请使用微信登录或联系管理员。", 403)
             return fn(*args, **kwargs)
 
         return cast(F, wrapper)

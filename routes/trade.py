@@ -108,6 +108,11 @@ def create_position():
         current_user = getattr(g, 'admin', {})
         role = current_user.get('role')
 
+        # 角色权限检查：只有 user/admin/editor 可以创建持仓
+        if role not in ['user', 'admin', 'editor']:
+            current_app.logger.warning(f'[create_position] 权限拒绝: 用户 {current_user.get("sub")} 角色 {role} 无权创建持仓')
+            return flask_error_response(f"当前角色({role or '未知'})无法创建持仓。请使用微信登录后重试，或联系管理员。", 403)
+
         # 普通用户只能给自己录入持仓，强制覆盖 customerId 防止越权
         if role == 'user':
             data['customerId'] = current_user.get('sub')
