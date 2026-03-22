@@ -1,0 +1,162 @@
+/* pages/knowledge/knowledge.wxss */
+.knowledge-container {
+  min-height: 100vh;
+  background-color: #f5f7fa;
+  padding-bottom: 20rpx;
+}
+
+/* 搜索栏 */
+.search-bar {
+  padding: 20rpx 30rpx;
+  background-color: #fff;
+}
+
+.search-input-wrap {
+  display: flex;
+  align-items: center;
+  background-color: #f5f7fa;
+  border-radius: 40rpx;
+  padding: 16rpx 30rpx;
+}
+
+.search-icon {
+  width: 36rpx;
+  height: 36rpx;
+  margin-right: 16rpx;
+  opacity: 0.5;
+}
+
+.search-input {
+  flex: 1;
+  font-size: 28rpx;
+}
+
+/* 分类标签 */
+.category-scroll {
+  background-color: #fff;
+  white-space: nowrap;
+  border-bottom: 1rpx solid #eee;
+}
+
+.category-list {
+  display: inline-flex;
+  padding: 20rpx 30rpx;
+}
+
+.category-item {
+  display: inline-block;
+  padding: 12rpx 32rpx;
+  margin-right: 20rpx;
+  font-size: 28rpx;
+  color: #666;
+  background-color: #f5f7fa;
+  border-radius: 30rpx;
+}
+
+.category-item.active {
+  color: #fff;
+  background-color: #409EFF;
+}
+
+/* 文章列表 */
+.article-list {
+  padding: 20rpx 30rpx;
+}
+
+.article-card {
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 30rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+
+.article-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16rpx;
+}
+
+.article-title {
+  flex: 1;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+  line-height: 1.4;
+}
+
+.article-category {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  color: #409EFF;
+  background-color: #ecf5ff;
+  padding: 6rpx 16rpx;
+  border-radius: 20rpx;
+  margin-left: 16rpx;
+}
+
+.article-summary {
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 20rpx;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.article-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.article-stats {
+  display: flex;
+  gap: 24rpx;
+}
+
+.stat-item {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.article-time {
+  font-size: 24rpx;
+  color: #999;
+}
+
+/* 加载中 */
+.loading-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 100rpx 0;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: #999;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 150rpx 0;
+}
+
+.empty-icon {
+  width: 200rpx;
+  height: 200rpx;
+  opacity: 0.5;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: #999;
+  margin-top: 20rpx;
+}

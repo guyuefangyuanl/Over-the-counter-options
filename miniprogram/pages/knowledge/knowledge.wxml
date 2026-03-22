@@ -1,0 +1,73 @@
+<!--pages/knowledge/knowledge.wxml-->
+<view class="knowledge-container">
+  <!-- 搜索栏 -->
+  <view class="search-bar">
+    <view class="search-input-wrap">
+      <image class="search-icon" src="/images/search.png" mode="aspectFit"></image>
+      <input 
+        class="search-input" 
+        placeholder="搜索文章" 
+        value="{{searchKeyword}}"
+        bindinput="onSearchInput"
+        bindconfirm="onSearch"
+      />
+    </view>
+  </view>
+
+  <!-- 分类标签 -->
+  <scroll-view class="category-scroll" scroll-x="true">
+    <view class="category-list">
+      <view 
+        class="category-item {{currentCategory === 0 ? 'active' : ''}}" 
+        data-id="{{0}}"
+        bindtap="onCategoryChange"
+      >
+        全部
+      </view>
+      <view 
+        class="category-item {{currentCategory === item.id ? 'active' : ''}}" 
+        wx:for="{{categories}}" 
+        wx:key="id"
+        data-id="{{item.id}}"
+        bindtap="onCategoryChange"
+      >
+        {{item.name}}
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 文章列表 -->
+  <view class="article-list" wx:if="{{!loading}}">
+    <view 
+      class="article-card" 
+      wx:for="{{articles}}" 
+      wx:key="id"
+      data-id="{{item.id}}"
+      bindtap="onArticleTap"
+    >
+      <view class="article-header">
+        <text class="article-title">{{item.title}}</text>
+        <text class="article-category">{{item.category}}</text>
+      </view>
+      <view class="article-summary">{{item.summary}}</view>
+      <view class="article-footer">
+        <view class="article-stats">
+          <text class="stat-item">{{item.views}} 阅读</text>
+          <text class="stat-item">{{item.likes}} 点赞</text>
+        </view>
+        <text class="article-time">{{item.createTime}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 加载中 -->
+  <view class="loading-wrap" wx:if="{{loading}}">
+    <view class="loading-text">加载中...</view>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{!loading && articles.length === 0}}">
+    <image class="empty-icon" src="/images/empty.png" mode="aspectFit"></image>
+    <text class="empty-text">暂无文章</text>
+  </view>
+</view>
