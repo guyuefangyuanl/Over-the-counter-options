@@ -128,3 +128,27 @@ logs/
 # Runtime temp data
 temp_uploads/
 ~$*
+
+# Backup directories
+*_backup*/
+*_bad_*/
+
+# Archive files
+*.zip
+*.rar
+
+# Windows special files
+nul
+
+# Debug scripts (keep tests/ directory)
+debug_*.py
+test_*.py
+!tests/
+verify_*.py
+check_*.py
+diagnose_*.py
+
+# Large data files
+*.xlsx
+*.xls
+*.db
