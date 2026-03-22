@@ -308,7 +308,8 @@ def sync_quotes(
         "success": len(errors) == 0,
         "processed": processed,
         "fetched": len(items),
-        "codes": target_codes,
+        "codes": target_codes[:50] if len(target_codes) > 50 else target_codes,  # 只返回前50个
+        "codesCount": len(target_codes),
         "errors": errors,
         "durationMs": duration_ms,
         "crawlMs": crawl_ms,
@@ -331,6 +332,12 @@ def sync_all_quotes(
     """
     抓取并同步所有股票的行情数据
     """
+    import logging
+    _logger = logging.getLogger(__name__)
+
+    _logger.info("[全量更新] ========== sync_all_quotes 开始 ==========")
+    print("[全量更新] ========== sync_all_quotes 开始 ==========")
+
     # 初始进度
     if progress_callback:
         progress_callback({
@@ -341,12 +348,20 @@ def sync_all_quotes(
             "total": 0,
         })
 
+    _logger.info("[全量更新] 正在调用 get_all_stock_codes()...")
+    print("[全量更新] 正在调用 get_all_stock_codes()...")
+
     codes = get_all_stock_codes()
+
+    _logger.info(f"[全量更新] get_all_stock_codes() 返回 {len(codes)} 只股票")
+    print(f"[全量更新] get_all_stock_codes() 返回 {len(codes)} 只股票")
+
     if not codes:
         return {
             "success": False,
             "message": "未能获取到股票代码列表",
             "processed": 0,
+            "codesCount": 0,
         }
 
     # 获取到代码列表后的进度
@@ -359,7 +374,7 @@ def sync_all_quotes(
             "total": len(codes),
         })
 
-    return sync_quotes(
+    result = sync_quotes(
         codes=codes,
         requested_by=requested_by,
         source=source,
@@ -367,6 +382,12 @@ def sync_all_quotes(
         max_workers=max_workers,
         progress_callback=progress_callback,
     )
+
+    # 添加调试信息
+    result["_debug_input_codes_count"] = len(codes)
+    _logger.info(f"[全量更新] sync_quotes 返回: codesCount={result.get('codesCount')}, processed={result.get('processed')}")
+
+    return result
 
 
 def clean_and_validate_item(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:

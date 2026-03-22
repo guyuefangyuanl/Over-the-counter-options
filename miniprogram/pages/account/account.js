@@ -124,14 +124,18 @@ Page({
   },
 
   /**
-   * 检查游客权限
-   * @returns {boolean} true 表示是游客，已弹出提示；false 表示不是游客，可以继续操作
+   * 检查游客/只读用户权限
+   * @returns {boolean} true 表示是游客/只读用户，已弹出提示；false 表示可以继续操作
    */
   _checkGuestPermission() {
-    if (this.data.userInfo?.isGuest) {
+    const role = this.data.userInfo?.role;
+    const isGuestOrViewer = role === 'guest' || role === 'viewer';
+
+    if (isGuestOrViewer) {
+      const roleName = role === 'guest' ? '游客' : '只读用户';
       wx.showModal({
         title: '功能受限',
-        content: '游客模式仅支持查看功能，请登录后使用持仓管理功能。',
+        content: `${roleName}模式仅支持查看功能，请登录后使用持仓管理功能。`,
         confirmText: '去登录',
         cancelText: '取消',
         success: (res) => {
@@ -633,26 +637,11 @@ Page({
 
   /**
    * 打开持仓录入弹窗
-   * 游客模式下禁止创建持仓，引导用户登录
+   * 游客/只读用户禁止创建持仓，引导用户登录
    */
   openAddPositionForm() {
-    // 游客权限检查
-    if (this.data.userInfo?.isGuest) {
-      wx.showModal({
-        title: '功能受限',
-        content: '游客模式仅支持查看功能，请登录后使用持仓录入功能。',
-        confirmText: '去登录',
-        cancelText: '取消',
-        success: (res) => {
-          if (res.confirm) {
-            wx.navigateTo({
-              url: '/pages/login/login?type=wechat'
-            });
-          }
-        }
-      });
-      return;
-    }
+    // 游客/只读用户权限检查
+    if (this._checkGuestPermission()) return;
 
     this.setData({
       showAddPositionForm: true,
@@ -741,16 +730,28 @@ Page({
         details: err && err.details,
         userInfo: this.data.userInfo
       });
-      
-      // 如果是权限错误，显示更详细的提示
-      if (err && err.message && err.message.includes('权限')) {
+
+      // 如果是权限错误，显示更详细的提示并引导用户登录
+      const errorMsg = (err && err.message) || '';
+      const userRole = this.data.userInfo?.role;
+      const isGuestOrViewer = userRole === 'guest' || userRole === 'viewer';
+
+      if (errorMsg.includes('权限') || errorMsg.includes('登录') || isGuestOrViewer) {
         wx.showModal({
-          title: '权限不足',
-          content: `当前角色: ${this.data.userInfo?.role || '未知'}\n\n${err.message}\n\n如果您是游客，请使用微信授权登录后再试。`,
-          showCancel: false
+          title: '需要登录',
+          content: isGuestOrViewer
+            ? '游客/只读用户无法录入持仓。请使用微信授权登录后使用完整功能。'
+            : `${errorMsg}\n\n当前角色: ${userRole || '未知'}`,
+          confirmText: '去登录',
+          cancelText: '取消',
+          success: (res) => {
+            if (res.confirm) {
+              wx.navigateTo({ url: '/pages/login/login' });
+            }
+          }
         });
       } else {
-        wx.showToast({ title: (err && err.message) || '录入失败', icon: 'none' });
+        wx.showToast({ title: errorMsg || '录入失败', icon: 'none' });
       }
     } finally {
       this.setData({ isSubmittingPosition: false });

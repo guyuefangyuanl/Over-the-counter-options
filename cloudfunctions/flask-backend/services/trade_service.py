@@ -184,17 +184,35 @@ class TradeService:
 
     def create_position(self, data: Dict[str, Any]) -> str:
         model = self._get_position_model()
-        # Basic validation
-        if not data.get('customerId') or not data.get('productCode'):
-            raise ValueError("缺少必要字段：customerId 或 productCode")
-            
+
+        # Basic validation with detailed error message
+        if not data.get('customerId'):
+            logger.error(f'[create_position] 缺少 customerId，收到的数据: {list(data.keys())}')
+            raise ValueError("缺少必要字段：customerId（用户身份信息）。请确保已正确登录。")
+        if not data.get('productCode'):
+            logger.error(f'[create_position] 缺少 productCode')
+            raise ValueError("缺少必要字段：productCode（标的代码）")
+
         # Ensure numeric types
-        data['quantity'] = float(data.get('quantity', 0))
-        data['price'] = float(data.get('price', 0))
+        try:
+            data['quantity'] = float(data.get('quantity', 0))
+            data['price'] = float(data.get('price', 0))
+        except (ValueError, TypeError) as e:
+            logger.error(f'[create_position] 数值转换失败: {e}')
+            raise ValueError(f"数值格式错误: {str(e)}")
+
         data['marketValue'] = data['quantity'] * data['price']
-        data['profitLoss'] = 0 # Initial PL is 0
-        
-        return model.create_position(data)
+        data['profitLoss'] = 0  # Initial PL is 0
+
+        logger.info(f'[create_position] 创建持仓: customerId={data.get("customerId")}, productCode={data.get("productCode")}, quantity={data.get("quantity")}')
+
+        try:
+            position_id = model.create_position(data)
+            logger.info(f'[create_position] 持仓创建成功: id={position_id}')
+            return position_id
+        except Exception as e:
+            logger.error(f'[create_position] 数据库写入失败: {e}')
+            raise
 
     def update_position(self, position_id: str, data: Dict[str, Any]) -> bool:
         model = self._get_position_model()

@@ -37,17 +37,20 @@ class StorageManager {
    * 初始化存储管理器
    */
   initStorageManager() {
-    // 定期清理过期缓存
-    if (this.config.autoCleanup) {
-      this.cleanupTimer = setInterval(() => {
-        this.cleanExpiredCache();
-      }, this.config.cleanupInterval);
-    }
+    // 延迟启动定时器，避免阻塞应用启动
+    setTimeout(() => {
+      // 定期清理过期缓存
+      if (this.config.autoCleanup) {
+        this.cleanupTimer = setInterval(() => {
+          this.cleanExpiredCache();
+        }, this.config.cleanupInterval);
+      }
 
-    // 定期同步数据
-    this.syncTimer = setInterval(() => {
-      this.processSyncQueue();
-    }, this.config.syncInterval);
+      // 定期同步数据
+      this.syncTimer = setInterval(() => {
+        this.processSyncQueue();
+      }, this.config.syncInterval);
+    }, 2000); // 延迟2秒启动定时器
 
     // 监听应用生命周期
     this.setupLifecycleListeners();

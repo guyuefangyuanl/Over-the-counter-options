@@ -574,7 +574,16 @@ def sync_all_quotes_api():
 
         def _run_sync_all(sync_task_id: str):
             try:
+                # 先打印调试信息
+                print(f"[全量更新] ========== 开始执行全量更新任务 ==========")
+                logger.info(f"[全量更新] 开始执行全量更新任务, task_id={sync_task_id}")
+
                 result = sync_all_quotes(requested_by="admin", progress_callback=_on_progress)
+
+                # 打印结果
+                print(f"[全量更新] 任务完成, 结果: {result}")
+                logger.info(f"[全量更新] 任务完成, fetched={result.get('fetched')}, processed={result.get('processed')}")
+
                 try:
                     payload = load_upload_session_payload(upload_id=sync_task_id)
                 except Exception:

@@ -65,8 +65,8 @@ Page({
   },
 
   // 微信授权登录按钮点击事件
-  // 关键修复：wx.getUserProfile() 必须在用户点击事件的同步上下文中调用
-  // 不能放在 wx.login() 的异步回调中，否则会报错 "can only be invoked by user TAP gesture"
+  // 注意：wx.getUserProfile() 在基础库 2.27.1+ 已废弃，不再返回真实用户信息
+  // 新的登录流程：仅使用 wx.login() 获取 code，后端处理 openid
   onWechatAuthLogin: function() {
     if (!this.data.agreedToTerms) {
       wx.showToast({
@@ -78,61 +78,31 @@ Page({
 
     this.setData({
       isLoading: true,
-      loadingText: '微信授权中...'
+      loadingText: '微信登录中...'
     });
 
-    // 并行调用 wx.login 和 wx.getUserProfile
-    // 两者都必须在用户点击事件的同步上下文中执行
-    Promise.all([
-      // 获取微信登录凭证
-      new Promise((resolve, reject) => {
-        wx.login({
-          success: (res) => resolve(res),
-          fail: (err) => reject(err)
-        });
-      }),
-      // 获取用户信息（必须在用户点击事件中直接调用）
-      new Promise((resolve, reject) => {
-        wx.getUserProfile({
-          desc: '用于完善用户资料',
-          success: (res) => resolve(res),
-          fail: (err) => reject(err)
-        });
-      })
-    ])
-    .then(([loginRes, profileRes]) => {
-      // 两者都成功，继续登录流程
-      if (loginRes.code) {
-        console.log('获取登录凭证和用户信息成功');
-        this.setData({ loadingText: '登录处理中...' });
+    // 仅使用 wx.login 获取登录凭证
+    // 不再依赖已废弃的 wx.getUserProfile API
+    wx.login({
+      success: (loginRes) => {
+        if (loginRes.code) {
+          console.log('[Login] 获取登录凭证成功');
+          this.setData({ loadingText: '登录处理中...' });
 
-        // 验证头像URL有效性
-        const userInfo = profileRes.userInfo;
-        if (userInfo.avatarUrl && this.isAvatarUrlValid(userInfo.avatarUrl)) {
-          this.proceedWithLogin(loginRes.code, userInfo);
-        } else {
-          const cleanUserInfo = {
-            ...userInfo,
-            avatarUrl: ''
+          // 使用最小化用户信息登录（微信不再提供真实头像昵称）
+          const minimalUserInfo = {
+            nickName: '微信用户',
+            avatarUrl: '',
+            gender: 0
           };
-          this.proceedWithLogin(loginRes.code, cleanUserInfo);
+          this.proceedWithLogin(loginRes.code, minimalUserInfo);
+        } else {
+          this.handleLoginFailure('获取登录凭证失败');
         }
-      } else {
-        this.handleLoginFailure('获取登录凭证失败');
-      }
-    })
-    .catch((error) => {
-      console.error('微信授权失败:', error);
-
-      // 判断是哪个接口失败
-      const isUserProfileError = error && error.errMsg &&
-        error.errMsg.includes('getUserProfile');
-
-      if (isUserProfileError) {
-        // 用户拒绝授权用户信息，降级到最小化登录
-        this.handleUserProfileDenied(error);
-      } else {
-        this.handleLoginFailure('微信授权失败，请重试');
+      },
+      fail: (err) => {
+        console.error('[Login] wx.login 失败:', err);
+        this.handleLoginFailure('微信登录失败，请重试');
       }
     });
   },
@@ -171,24 +141,19 @@ Page({
       });
   },
 
-  // 🔧 处理用户拒绝授权用户信息（降级登录）
+  // 🔧 处理用户拒绝授权或 API 不可用（降级登录）
   handleUserProfileDenied: function(error) {
-    console.log('用户拒绝授权用户信息，尝试最小化登录');
+    console.log('[Login] 用户信息获取失败，使用最小化登录:', error?.errMsg || error);
 
-    // 重新获取登录凭证（之前的可能已过期）
+    // 重新获取登录凭证
     wx.login({
       success: (loginRes) => {
         if (loginRes.code) {
-          // 使用最小化用户信息登录
           const minimalUserInfo = {
             nickName: '微信用户',
             avatarUrl: '',
-            gender: 0,
-            city: '',
-            province: '',
-            country: 'CN'
+            gender: 0
           };
-
           this.setData({ loadingText: '登录处理中...' });
           this.proceedWithLogin(loginRes.code, minimalUserInfo);
         } else {
@@ -414,7 +379,8 @@ Page({
                 userId: payload.userId || `guest_${Date.now()}`,
                 openid: payload.userId || '',
                 loginTime: new Date().toISOString(),
-                loginType: 'guest'
+                loginType: 'guest',
+                role: payload.role || 'guest'  // 游客角色
               };
               wx.setStorageSync('userInfo', guestInfo);
 
@@ -435,7 +401,8 @@ Page({
                 userId: `guest_${Date.now()}`,
                 openid: '',
                 loginTime: new Date().toISOString(),
-                loginType: 'guest'
+                loginType: 'guest',
+                role: 'guest'  // 游客角色
               };
               wx.setStorageSync('userInfo', guestInfo);
               // 清除任何旧 token，避免用过期/错误 token 发请求
@@ -491,26 +458,29 @@ Page({
   // 处理登录成功
   handleLoginSuccess: function(result, loginType) {
     console.log('[Login] handleLoginSuccess 接收到的数据:', result);
-    
+
     // 确保 userInfo 对象存在
     const rawUserInfo = result.userInfo || {};
-    
+
     // 🔧 修复：提取 token（可能是字符串或对象）
     let token = result.token || result.access_token || result.accessToken;
-    
+
     // 如果 token 是对象，提取其中的 token 字段
     if (typeof token === 'object' && token !== null) {
       console.log('[Login] token 是对象，提取内部字段:', token);
       token = token.token || token.access_token || token.accessToken;
     }
-    
+
     // 确保 token 是字符串
     if (token && typeof token !== 'string') {
       token = String(token);
     }
-    
+
     console.log('[Login] 最终提取的 token:', token ? token.substring(0, 30) + '...' : '无', '类型:', typeof token);
-    
+
+    // 🔧 新增：提取用户角色（用于前端权限判断）
+    const userRole = result.role || 'user';
+
     // 保存用户信息和token
     const userInfo = {
       isLoggedIn: true,
@@ -521,7 +491,8 @@ Page({
       avatar: rawUserInfo.avatarUrl || rawUserInfo.avatar || '',
       gender: rawUserInfo.gender || 0,
       loginTime: new Date().toISOString(),
-      loginType: loginType
+      loginType: loginType,
+      role: userRole  // 保存用户角色
     };
 
     wx.setStorageSync('userInfo', userInfo);

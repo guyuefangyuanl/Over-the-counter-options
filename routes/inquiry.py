@@ -479,3 +479,111 @@ def admin_export_inquiries():
     except Exception as e:
         logger.error(f"导出失败: {e}", exc_info=True)
         return flask_error_response("导出失败，请稍后重试", 500)
+
+
+# ==================== 文件上传相关API ====================
+
+@inquiry_bp.route('/upload/prepare', methods=['POST'])
+@require_auth
+def prepare_file_upload():
+    """
+    准备文件上传
+    
+    前端在调用微信云存储上传前，先调用此接口验证文件并获取上传参数
+    """
+    try:
+        data = request.json or {}
+        filename = data.get('filename', '')
+        file_size = int(data.get('fileSize', 0))
+        folder = data.get('folder', 'inquiries')
+        
+        if not filename:
+            return flask_error_response("文件名不能为空", 400)
+        if file_size <= 0:
+            return flask_error_response("文件大小无效", 400)
+        
+        from services.file_upload_service import file_upload_service
+        
+        result = file_upload_service.prepare_upload(filename, file_size, folder)
+        
+        if result.get('success'):
+            return flask_success_response(
+                data={
+                    'cloudPath': result.get('cloudPath'),
+                    'uploadParams': result.get('uploadParams'),
+                },
+                message="上传参数已生成"
+            )
+        else:
+            return flask_error_response(result.get('message', "文件验证失败"), 400)
+            
+    except Exception as e:
+        logger.error(f"准备上传失败: {e}", exc_info=True)
+        return flask_error_response("上传准备失败", 500)
+
+
+@inquiry_bp.route('/upload/confirm', methods=['POST'])
+@require_auth
+def confirm_file_upload():
+    """
+    确认文件上传完成
+    
+    前端在微信云存储上传成功后，调用此接口记录上传信息
+    """
+    try:
+        data = request.json or {}
+        cloud_path = data.get('cloudPath', '')
+        file_id = data.get('fileId', '')
+        
+        if not cloud_path:
+            return flask_error_response("云存储路径不能为空", 400)
+        
+        from services.file_upload_service import file_upload_service
+        
+        result = file_upload_service.confirm_upload(cloud_path, file_id)
+        
+        if result.get('success'):
+            logger.info(f"文件上传确认成功: {cloud_path}")
+            return flask_success_response(
+                data={
+                    'cloudPath': cloud_path,
+                    'fileId': file_id,
+                    'url': result.get('url', ''),
+                },
+                message="上传确认成功"
+            )
+        else:
+            return flask_error_response(result.get('message', "确认失败"), 500)
+            
+    except Exception as e:
+        logger.error(f"确认上传失败: {e}", exc_info=True)
+        return flask_error_response("确认失败", 500)
+
+
+@inquiry_bp.route('/upload/download-url', methods=['POST'])
+@require_auth
+def get_file_download_url():
+    """
+    获取文件下载链接
+    
+    前端调用此接口获取临时下载链接
+    """
+    try:
+        data = request.json or {}
+        file_id = data.get('fileId', '')
+        
+        if not file_id:
+            return flask_error_response("文件ID不能为空", 400)
+        
+        from services.file_upload_service import file_upload_service
+        
+        result = file_upload_service.get_download_url(file_id)
+        
+        return flask_success_response(
+            data=result,
+            message="请使用微信云开发API获取下载链接"
+        )
+            
+    except Exception as e:
+        logger.error(f"获取下载链接失败: {e}", exc_info=True)
+        return flask_error_response("获取失败", 500)

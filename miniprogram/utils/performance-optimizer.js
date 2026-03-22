@@ -53,8 +53,9 @@ class PerformanceOptimizer {
     // 记录应用启动时间
     this.performanceMetrics.appStartTime = Date.now();
     
-    // 启动定期监控
-    this.startPeriodicMonitoring();
+    // 启动定期监控（延迟启动，避免阻塞应用启动）
+    // this.startPeriodicMonitoring();
+    setTimeout(() => this.startPeriodicMonitoring(), 3000);
     
     // 监听页面性能
     this.setupPagePerformanceMonitoring();

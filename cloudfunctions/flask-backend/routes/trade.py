@@ -109,15 +109,28 @@ def create_position():
         role = current_user.get('role')
 
         # 角色权限检查：只有 user/admin/editor 可以创建持仓
+        # 注意：guest/viewer 角色已在 require_auth 装饰器中被拦截
+        # 此处作为双重保险，防止意外情况
         if role not in ['user', 'admin', 'editor']:
             current_app.logger.warning(f'[create_position] 权限拒绝: 用户 {current_user.get("sub")} 角色 {role} 无权创建持仓')
-            return flask_error_response(f"当前角色({role or '未知'})无法创建持仓。请使用微信登录后重试，或联系管理员。", 403)
+            role_desc = {'guest': '游客', 'viewer': '只读用户'}.get(role, role or '未知')
+            return flask_error_response(
+                f"当前账号角色（{role_desc}）无权创建持仓。请使用微信授权登录后重试，或联系管理员获取操作权限。",
+                403
+            )
 
-        # 普通用户只能给自己录入持仓，强制覆盖 customerId 防止越权
-        if role == 'user':
+        # 设置 customerId 和 customerName
+        # - user/editor: 只能为自己的账户创建持仓，强制覆盖 customerId
+        # - admin: 可以在请求体中指定任意 customerId，若未指定则使用自己的
+        if role in ['user', 'editor']:
+            # 强制使用当前用户的 ID，防止越权
             data['customerId'] = current_user.get('sub')
             data['customerName'] = current_user.get('nickname') or current_user.get('username') or '用户'
-        # admin/manager 可以在请求体中指定任意 customerId
+        elif role == 'admin':
+            # admin 可以指定任意 customerId，如果未指定则使用自己的
+            if not data.get('customerId'):
+                data['customerId'] = current_user.get('sub')
+                data['customerName'] = current_user.get('nickname') or current_user.get('username') or '管理员'
 
         position_id = trade_service.create_position(data)
         if position_id:

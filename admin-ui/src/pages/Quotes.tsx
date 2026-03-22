@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   App,
   Table,
@@ -25,44 +25,6 @@ import type { ColumnsType } from 'antd/es/table';
 import PageState from '../components/PageState';
 
 const { Title } = Typography;
-
-// 简单的防抖 Hook
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-  
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-    
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-  
-  return debouncedValue;
-}
-
-// 简单的内存缓存
-const queryCache = new Map<string, { data: unknown; timestamp: number }>();
-const CACHE_TTL = 30000; // 30 秒
-
-function getCachedData<T>(key: string): T | null {
-  const cached = queryCache.get(key);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.data as T;
-  }
-  queryCache.delete(key);
-  return null;
-}
-
-function setCachedData<T>(key: string, data: T): void {
-  queryCache.set(key, { data, timestamp: Date.now() });
-}
-
-function clearCache(): void {
-  queryCache.clear();
-}
 
 interface Quote {
   _id?: string;
@@ -737,14 +699,26 @@ const Quotes: React.FC = () => {
             if (status === 'processed') {
               const result = pollRes.data?.result;
               const processed = result?.processed ?? 0;
+              const codesCount = (result as { codesCount?: number })?.codesCount ?? 0;
+              const debugInputCodesCount = (result as { _debug_input_codes_count?: number })?._debug_input_codes_count ?? 0;
+
+              // 打印调试信息到控制台
+              console.log('[全量更新] 任务完成:', {
+                codesCount,
+                _debug_input_codes_count: debugInputCodesCount,
+                fetched: result?.fetched,
+                processed,
+                codes: (result as { codes?: string[] })?.codes?.slice(0, 5),
+                result,
+              });
 
               // 更新最终进度
               setSyncAllProgress({
                 percent: 100,
                 step: 'completed',
-                message: `全量同步完成：写入 ${processed} 条`,
+                message: `全量同步完成：获取 ${debugInputCodesCount || codesCount} 只股票，写入 ${processed} 条`,
                 current: processed,
-                total: processed,
+                total: debugInputCodesCount || codesCount || processed,
               });
 
               if (syncAllPollTimerRef.current !== null) {

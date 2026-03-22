@@ -11,7 +11,9 @@ Page({
       vipLevel: 'V1',
       vipId: '',
       memberType: '会员',
-      openid: ''
+      openid: '',
+      role: 'guest',  // 用户角色
+      isGuest: true   // 是否是游客/只读用户
     },
     userStatistics: {
       totalInquiries: 0,
@@ -123,10 +125,13 @@ Page({
 
       // 从后端获取用户信息
       const result = await accountService.getUserProfile();
-      console.log('后端用户信息:', result);
+      console.log('[profile] 后端用户信息:', result);
 
       if (result && result.data) {
         const userData = result.data;
+        const userRole = userData.role || 'user';
+        const isGuest = userRole === 'guest';
+
         this.setData({
           'userInfo.isLoggedIn': true,
           'userInfo.nickname': userData.nickname || userData.username || '用户',
@@ -134,21 +139,27 @@ Page({
           'userInfo.vipLevel': userData.vipLevel || 'V1',
           'userInfo.vipId': userData.vipId || userData.openid?.substring(0, 8) || '',
           'userInfo.memberType': userData.memberType || '会员',
-          'userInfo.openid': userData.openid || ''
+          'userInfo.openid': userData.openid || '',
+          'userInfo.role': userRole,
+          'userInfo.isGuest': isGuest
         });
 
-        // 同步到本地存储
+        // 同步到本地存储（保留完整的用户信息，包括 role）
+        const existingUserInfo = wx.getStorageSync('userInfo') || {};
         wx.setStorageSync('userInfo', {
+          ...existingUserInfo,  // 保留已有字段（如 loginTime, loginType 等）
           nickname: userData.nickname || userData.username,
           avatar: userData.avatar,
           vipLevel: userData.vipLevel || 'V1',
           vipId: userData.vipId || userData.openid?.substring(0, 8),
           memberType: userData.memberType || '会员',
-          openid: userData.openid
+          openid: userData.openid,
+          role: userRole,
+          isGuest: isGuest
         });
       }
     } catch (error) {
-      console.error('获取用户信息失败:', error);
+      console.error('[profile] 获取用户信息失败:', error);
       // 降级到本地存储
       this.loadLocalUserInfo();
     } finally {
@@ -163,6 +174,9 @@ Page({
       const token = wx.getStorageSync('token');
 
       if (userInfo && token) {
+        const userRole = userInfo.role || 'user';
+        const isGuest = userInfo.isGuest || userRole === 'guest';
+
         this.setData({
           'userInfo.isLoggedIn': true,
           'userInfo.nickname': userInfo.nickname || '用户',
@@ -170,7 +184,9 @@ Page({
           'userInfo.vipLevel': userInfo.vipLevel || 'V1',
           'userInfo.vipId': userInfo.vipId || '',
           'userInfo.memberType': userInfo.memberType || '会员',
-          'userInfo.openid': userInfo.openid || ''
+          'userInfo.openid': userInfo.openid || '',
+          'userInfo.role': userRole,
+          'userInfo.isGuest': isGuest
         });
       } else {
         // 清除无效数据
@@ -178,11 +194,13 @@ Page({
           'userInfo.isLoggedIn': false,
           'userInfo.nickname': '未登录',
           'userInfo.avatar': '',
-          'userInfo.vipId': ''
+          'userInfo.vipId': '',
+          'userInfo.role': 'guest',
+          'userInfo.isGuest': true
         });
       }
     } catch (e) {
-      console.error('获取本地用户信息失败:', e);
+      console.error('[profile] 获取本地用户信息失败:', e);
     }
   },
 

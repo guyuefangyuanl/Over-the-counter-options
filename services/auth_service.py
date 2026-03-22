@@ -566,3 +566,85 @@ class AuthService:
     def get_user_profile(self, openid: str) -> Optional[Dict[str, Any]]:
         model = self._get_model()
         return model.find_user_by_openid(openid)
+
+    def list_wx_users(self, page: int = 1, page_size: int = 10, keyword: str = '') -> Tuple[List[Dict[str, Any]], int]:
+        """获取小程序用户列表（分页）"""
+        model = self._get_model()
+        
+        users = []
+        total = 0
+        
+        try:
+            if model._is_cloud():
+                # 云数据库查询
+                import json
+                skip = (page - 1) * page_size
+                
+                # 构建查询条件
+                if keyword:
+                    # 关键词搜索（昵称或手机号）
+                    query = f'''db.collection("users").where(_.or([
+                        {{nickname: db.RegExp({{regexp: "{keyword}", options: "i"}})}},
+                        {{phone: db.RegExp({{regexp: "{keyword}", options: "i"}})}}
+                    ])).skip({skip}).limit({page_size}).get()'''
+                else:
+                    query = f'db.collection("users").skip({skip}).limit({page_size}).orderBy("created_at", "desc").get()'
+                
+                users = model.cloud_client.query(query)
+                
+                # 获取总数
+                if keyword:
+                    count_query = f'''db.collection("users").where(_.or([
+                        {{nickname: db.RegExp({{regexp: "{keyword}", options: "i"}})}},
+                        {{phone: db.RegExp({{regexp: "{keyword}", options: "i"}})}}
+                    ])).count()'''
+                else:
+                    count_query = 'db.collection("users").count()'
+                
+                count_result = model.cloud_client.query(count_query)
+                total = count_result[0].get('total', 0) if count_result else 0
+                
+            else:
+                # 本地 MongoDB 查询
+                if model.user_collection is not None:
+                    skip = (page - 1) * page_size
+                    
+                    query_filter = {}
+                    if keyword:
+                        import re
+                        query_filter = {
+                            '$or': [
+                                {'nickname': {'$regex': keyword, '$options': 'i'}},
+                                {'phone': {'$regex': keyword, '$options': 'i'}}
+                            ]
+                        }
+                    
+                    total = model.user_collection.count_documents(query_filter)
+                    cursor = model.user_collection.find(
+                        query_filter,
+                        {'password_hash': 0}
+                    ).skip(skip).limit(page_size).sort('created_at', -1)
+                    
+                    users = list(cursor)
+                    for u in users:
+                        u['_id'] = str(u['_id'])
+                        
+        except Exception as e:
+            logger.error(f"获取小程序用户列表失败: {e}")
+            raise
+        
+        # 清理敏感字段并格式化
+        for u in users:
+            u.pop('password_hash', None)
+            u.pop('unionid', None)
+            # 确保字段存在
+            u.setdefault('nickname', '用户')
+            u.setdefault('phone', '')
+            u.setdefault('avatar', '')
+            u.setdefault('balance', 0.0)
+            u.setdefault('status', 'active')
+            u.setdefault('remark', '')
+            if '_id' in u:
+                u['_id'] = str(u['_id'])
+        
+        return users, total

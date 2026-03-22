@@ -12,4 +12,5 @@ sys.path.insert(0, '.')
 from app import app
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    port = int(os.environ.get('FLASK_PORT', 5002))
+    app.run(host='127.0.0.1', port=port, debug=True)

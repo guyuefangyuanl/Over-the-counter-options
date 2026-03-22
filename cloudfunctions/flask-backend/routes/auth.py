@@ -48,13 +48,18 @@ def require_auth(fn: F) -> F:
             logger.warning(f"Request rejected: Invalid token - {str(e)}")
             return flask_error_response("无效的登录凭证", 401)
 
-        # 检查游客权限
+        # 检查游客/只读权限
         role = payload.get('role', 'viewer')
         logger.info(f"[require_auth] 用户: {payload.get('sub')}, 角色: {role}, 请求方法: {request.method}, 路径: {request.path}")
-        
-        if role == 'guest' and request.method not in ['GET', 'HEAD', 'OPTIONS']:
-            logger.warning(f"[require_auth] 游客权限受限: 用户 {payload.get('sub')} 尝试 {request.method} {request.path}")
-            return flask_error_response("游客模式仅支持查看功能。请登录后使用完整功能（持仓录入、平仓等操作需要登录）。", 403)
+
+        # guest 和 viewer 角色只允许只读操作（GET/HEAD/OPTIONS）
+        if role in ['guest', 'viewer'] and request.method not in ['GET', 'HEAD', 'OPTIONS']:
+            logger.warning(f"[require_auth] 只读权限受限: 用户 {payload.get('sub')} 角色 {role} 尝试 {request.method} {request.path}")
+            role_name = '游客' if role == 'guest' else '只读用户'
+            return flask_error_response(
+                f"{role_name}模式仅支持查看功能。请使用微信授权登录后使用完整功能（持仓录入、平仓等操作需要登录）。",
+                403
+            )
 
         g.admin = payload
         return fn(*args, **kwargs)
@@ -399,7 +404,8 @@ def phone_login():
                 "openid": user['openid'],
                 "nickname": user.get('nickname', ''),
                 "avatar": user.get('avatar', ''),
-                "phone": user.get('phone', '')
+                "phone": user.get('phone', ''),
+                "role": "user"
             },
             message="登录成功"
         )
@@ -419,7 +425,8 @@ def phone_login():
             "openid": user['openid'],
             "nickname": user.get('nickname', ''),
             "avatar": user.get('avatar', ''),
-            "phone": user.get('phone', '')
+            "phone": user.get('phone', ''),
+            "role": "user"
         },
         message="登录成功"
     )
@@ -522,7 +529,8 @@ def wechat_login():
             'unionid': user.get('unionid'),
             'nickname': user.get('nickname', '微信用户'),
             'avatar': user.get('avatar', ''),
-            'phone': user.get('phone', '')
+            'phone': user.get('phone', ''),
+            'role': 'user'  # 微信登录用户角色为 user
         }
         
         logger.info(f"[微信登录] 返回成功响应")

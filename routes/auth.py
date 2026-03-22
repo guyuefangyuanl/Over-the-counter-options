@@ -176,6 +176,106 @@ def list_admin_users():
     users = auth_service.list_admin_users()
     return flask_success_response(data=users)
 
+@auth_bp.route("/wx-users", methods=["GET"])
+@require_auth
+@require_roles("admin", "editor")
+def list_wx_users():
+    """获取小程序用户列表（分页）"""
+    try:
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('pageSize', 10))
+        keyword = request.args.get('keyword', '')
+        
+        users, total = auth_service.list_wx_users(page, page_size, keyword)
+        
+        return flask_success_response(
+            data={
+                'items': users,
+                'pagination': {
+                    'page': page,
+                    'per_page': page_size,
+                    'total': total,
+                }
+            }
+        )
+    except Exception as e:
+        logger.error(f"获取小程序用户列表失败: {e}")
+        return flask_error_response(str(e), 500)
+
+@auth_bp.route("/wx-users/<openid>", methods=["GET"])
+@require_auth
+@require_roles("admin", "editor")
+def get_wx_user(openid: str):
+    """获取小程序用户详情"""
+    try:
+        user = auth_service.get_user_profile(openid)
+        if not user:
+            return flask_error_response("用户不存在", 404)
+        
+        # 移除敏感信息
+        user.pop('password_hash', None)
+        
+        return flask_success_response(data=user)
+    except Exception as e:
+        logger.error(f"获取小程序用户详情失败: {e}")
+        return flask_error_response(str(e), 500)
+
+@auth_bp.route("/wx-users/<openid>", methods=["PUT"])
+@require_auth
+@require_roles("admin")
+def update_wx_user(openid: str):
+    """更新小程序用户信息"""
+    try:
+        data = request.get_json() or {}
+        
+        # 限制可更新的字段
+        allowed_fields = ['nickname', 'phone', 'email', 'status', 'balance', 'remark']
+        updates = {k: v for k, v in data.items() if k in allowed_fields}
+        
+        if not updates:
+            return flask_success_response(message="没有数据被修改")
+        
+        success = auth_service.update_user_profile(openid, updates)
+        
+        if success:
+            return flask_success_response(message="更新成功")
+        else:
+            return flask_error_response("更新失败", 500)
+    except Exception as e:
+        logger.error(f"更新小程序用户失败: {e}")
+        return flask_error_response(str(e), 500)
+
+@auth_bp.route("/wx-users/<openid>/balance", methods=["POST"])
+@require_auth
+@require_roles("admin")
+def adjust_wx_user_balance(openid: str):
+    """调整用户余额"""
+    try:
+        data = request.get_json() or {}
+        amount = float(data.get('amount', 0))
+        remark = data.get('remark', '管理员调整')
+        
+        if amount == 0:
+            return flask_error_response("调整金额不能为0", 400)
+        
+        from services.trade_service import TradeService
+        trade_service = TradeService()
+        
+        if amount > 0:
+            new_balance = trade_service.deposit(openid, amount, remark=remark)
+        else:
+            new_balance = trade_service.withdraw(openid, abs(amount), remark=remark)
+        
+        return flask_success_response(
+            data={"balance": new_balance},
+            message=f"余额调整成功，当前余额: {new_balance}"
+        )
+    except ValueError as e:
+        return flask_error_response(str(e), 400)
+    except Exception as e:
+        logger.error(f"调整用户余额失败: {e}")
+        return flask_error_response(str(e), 500)
+
 @auth_bp.route("/users", methods=["POST"])
 @require_auth
 @require_roles("admin")
