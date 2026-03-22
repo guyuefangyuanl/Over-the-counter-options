@@ -22,16 +22,17 @@ App({
       pageLoadTimes: {},
       errorCount: 0
     },
-    // 🔐 加密密钥配置
-    // 注意：生产环境必须替换为真实的密钥！
-    // 密钥生成方法：node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-    encryptionKey: 'CHANGE_ME_IN_PRODUCTION_ENV_32CHARS!!', // 32字节密钥
-    
+    // 🔐 加密密钥配置（从安全配置获取）
+    // 生产环境：通过云开发环境变量或后端接口获取
+    // 开发环境：使用本地配置或默认值
+    encryptionKey: null, // 运行时初始化，不再硬编码
+
     // 🚫 Mock登录控制（安全配置）
+    // 生产环境自动禁用Mock登录
     // true = 允许开发环境使用Mock登录（默认）
     // false = 禁止所有Mock登录，强制使用真实认证
     allowMockLogin: true,
-    
+
     // ⚠️ 当前是否处于Mock模式（运行时设置）
     isMockMode: false
   },
@@ -58,11 +59,73 @@ App({
 
     this.initializeCoreServices();
     this.updateAppLogs();
+    this.initEncryptionKey();
     this.checkAutoLogin();
     this.initPerformanceMonitoring();
     
     // 初始化错误处理
     this.initErrorHandling();
+  },
+  
+  // 🔐 安全初始化加密密钥
+  initEncryptionKey: function() {
+    const self = this;
+    
+    // 优先从云开发环境变量获取
+    if (typeof wx !== 'undefined' && wx.cloud) {
+      try {
+        wx.cloud.callFunction({
+          name: 'getSecureConfig',
+          data: { key: 'encryptionKey' }
+        }).then(res => {
+          if (res.result && res.result.encryptionKey) {
+            self.globalData.encryptionKey = res.result.encryptionKey;
+            console.log('✅ 加密密钥从云环境加载成功');
+          } else {
+            // 云函数未返回，使用本地存储的密钥
+            self.loadLocalEncryptionKey();
+          }
+        }).catch(err => {
+          console.warn('云函数获取加密密钥失败，使用本地配置:', err.message);
+          self.loadLocalEncryptionKey();
+        });
+      } catch (e) {
+        console.warn('加密密钥初始化异常:', e.message);
+        self.loadLocalEncryptionKey();
+      }
+    } else {
+      self.loadLocalEncryptionKey();
+    }
+  },
+  
+  // 从本地存储加载加密密钥（开发环境）
+  loadLocalEncryptionKey: function() {
+    try {
+      // 尝试从本地存储获取
+      const storedKey = wx.getStorageSync('encryption_key');
+      if (storedKey && storedKey.length >= 32) {
+        this.globalData.encryptionKey = storedKey;
+        console.log('✅ 加密密钥从本地存储加载');
+        return;
+      }
+      
+      // 开发环境：检查是否为生产环境
+      const accountInfo = wx.getAccountInfoSync();
+      const envVersion = accountInfo?.miniProgram?.envVersion || 'develop';
+      
+      if (envVersion === 'release') {
+        // 生产环境但没有密钥，记录严重警告
+        console.error('🚨 生产环境缺少加密密钥！请配置云环境变量或后端服务');
+        this.globalData.encryptionKey = null; // 强制为空，不允许使用默认值
+      } else {
+        // 开发环境：生成临时密钥（仅用于开发测试）
+        console.warn('⚠️ 开发环境使用临时密钥，生产环境请配置安全密钥');
+        this.globalData.encryptionKey = 'DEV_TEMP_KEY_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2);
+      }
+    } catch (e) {
+      console.error('加载本地加密密钥失败:', e);
+      this.globalData.encryptionKey = null;
+    }
   },
   
   // 初始化错误处理

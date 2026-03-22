@@ -264,11 +264,30 @@ class PerformanceOptimizer {
 
   /**
    * 分包预下载
+   * 自动检测项目中配置的分包并进行预下载
    */
   predownloadSubpackages() {
     // 仅在小程序环境中执行
     if (typeof wx !== 'undefined' && wx.preloadSubpackage) {
-      const subpackages = ['charts', 'advanced-tools'];
+      // 动态获取分包配置
+      let subpackages = [];
+      
+      try {
+        // 从 __wxConfig 中读取分包配置
+        if (typeof __wxConfig !== 'undefined' && __wxConfig.subPackages) {
+          subpackages = __wxConfig.subPackages.map(pkg => pkg.root || pkg.name);
+        } else if (typeof __wxConfig !== 'undefined' && __wxConfig.subpackages) {
+          subpackages = __wxConfig.subpackages.map(pkg => pkg.root || pkg.name);
+        }
+      } catch (e) {
+        console.warn('无法读取分包配置:', e.message);
+      }
+      
+      // 如果没有配置分包，跳过预下载
+      if (subpackages.length === 0) {
+        console.log('当前项目未配置分包，跳过分包预下载');
+        return;
+      }
       
       subpackages.forEach(subpackage => {
         wx.preloadSubpackage({
@@ -277,7 +296,7 @@ class PerformanceOptimizer {
             console.log(`分包预下载成功: ${subpackage}`);
           },
           fail: (error) => {
-            console.error(`分包预下载失败: ${subpackage}`, error);
+            console.warn(`分包预下载失败: ${subpackage}`, error.errMsg || error);
           }
         });
       });
