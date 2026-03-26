@@ -564,7 +564,7 @@ Page({
     // 表单验证
     const errors = {};
     const { inquiryForm } = this.data;
-    
+
     if (!inquiryForm.selectedProduct) {
       errors.selectedProduct = '请选择标的';
     }
@@ -603,90 +603,43 @@ Page({
     if (inquiryForm.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inquiryForm.contactEmail)) {
       errors.contactEmail = '邮箱格式不正确';
     }
-    
+
     if (Object.keys(errors).length > 0) {
       this.setData({ formErrors: errors });
       wx.showToast({ title: '请完善信息', icon: 'none' });
       return;
     }
-    
+
     this.setData({ isSubmitting: true });
-    
-    // 获取用户信息，支持未登录用户提交询价
-    const storedUserInfo = wx.getStorageSync('userInfo') || {};
-    
-    // 从登录服务获取当前用户信息
-    const loginService = require('../../utils/loginService.js');
-    const currentUser = loginService.getCurrentUser() || {};
-    
-    // 组合用户信息：优先使用当前登录用户，其次是存储的用户信息
-    const userInfo = {
-      ...storedUserInfo,
-      ...currentUser,
-      userId: currentUser.userId || storedUserInfo.userId || 'anonymous_' + Date.now(),
-      openid: currentUser.openid || storedUserInfo.openid || 'anonymous',
-      nickname: currentUser.nickName || storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || inquiryForm.contactName || '匿名用户'
-    };
-    
-    // 构造提交数据（与后台格式保持一致）
-    const submitData = {
-      // 产品信息
-      selectedProduct: {
-        name: inquiryForm.selectedProduct.name,
-        code: inquiryForm.selectedProduct.code,
-        type: inquiryForm.selectedProduct.type || 'stock'
-      },
-      productName: inquiryForm.selectedProduct.name,
-      productCode: inquiryForm.selectedProduct.code,
-      
-      // 询价参数
+
+    // 使用简化的数据构建方法（用户身份由后端处理）
+    const inquiryService = require('../../utils/inquiryService.js');
+    const submitData = inquiryService.buildSubmitData({
+      selectedProduct: inquiryForm.selectedProduct,
       optionType: inquiryForm.optionType,
       structure: inquiryForm.structure,
       term: inquiryForm.term,
       notionalAmount: inquiryForm.notionalAmount,
       strikePrice: inquiryForm.strikePrice,
       selectedDealers: inquiryForm.selectedDealers || [],
-      
-      // 联系信息
       contactName: inquiryForm.contactName,
-      phone: inquiryForm.contactPhone,  // 注意：后台使用 phone 字段
       contactPhone: inquiryForm.contactPhone,
       contactEmail: inquiryForm.contactEmail || '',
       notes: inquiryForm.notes || '',
-      
-      // 状态与时间
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      
-      // 用户信息
-      userId: userInfo.userId || userInfo.openid || 'anonymous_' + Date.now(),
-      userName: userInfo.nickname || inquiryForm.contactName || '匿名用户',
-      openid: userInfo.openid || 'anonymous',
-      
-      // 额外字段（便于后台管理）
-      source: 'miniprogram',
-      history: [],
-      
-      // 确保联系信息也被保存
-      contactInfo: {
-        name: inquiryForm.contactName,
-        phone: inquiryForm.contactPhone,
-        email: inquiryForm.contactEmail
-      }
-    };
-    
-    console.log('提交询价:', { productCode: submitData.productCode, optionType: submitData.optionType, structure: submitData.structure, term: submitData.term });
-    
-    // 通过云函数提交询价（带服务端校验）
-    submitInquiry(submitData).then(result => {
-      console.log('询价提交成功，ID:', result.data.inquiryId);
-      wx.showToast({ 
-        title: '询价提交成功', 
+      source: 'miniprogram'
+    });
+
+    console.log('提交询价:', { productCode: submitData.productCode, optionType: submitData.optionType });
+
+    // 提交询价
+    inquiryService.submitInquiry(submitData).then(result => {
+      console.log('询价提交成功，ID:', result.data?.id);
+      wx.showToast({
+        title: '询价提交成功',
         icon: 'success',
         duration: 2000
       });
-      
+
       // 重置表单
       this.setData({
         inquiryForm: {
@@ -703,17 +656,15 @@ Page({
           notes: ''
         }
       });
-      
+
       this.hideInquiryForm();
     }).catch(err => {
       console.error('提交询价失败:', err);
-      // 失败时不跳转，保持在当前页面显示错误提示，让用户可以重新尝试
-      wx.showToast({ 
-        title: '提交失败：' + (err.message || '请检查网络后重试'), 
+      wx.showToast({
+        title: '提交失败：' + (err.message || '请检查网络后重试'),
         icon: 'none',
         duration: 3000
       });
-      // 不跳转，用户可以修改信息后重新提交
     }).finally(() => {
       this.setData({ isSubmitting: false });
     });
@@ -826,17 +777,17 @@ Page({
       batchFailCount: 0
     });
 
-    const loginService = require('../../utils/loginService.js');
-    const currentUser = loginService.getCurrentUser() || {};
-    const storedUserInfo = wx.getStorageSync('userInfo') || {};
-
+    const inquiryService = require('../../utils/inquiryService.js');
     let successCount = 0;
     let failCount = 0;
     const total = batchProducts.length;
 
-    // 串行提交，避免云函数限流
-    const submitNext = (index) => {
-      if (index >= total) {
+    // 并发控制提交：每批3条，批次间隔100ms
+    const BATCH_SIZE = 3;
+    const BATCH_DELAY = 100;
+
+    const submitBatch = async (startIndex) => {
+      if (startIndex >= total) {
         this.setData({
           isBatchSubmitting: false,
           showBatchResult: true,
@@ -846,46 +797,50 @@ Page({
         return;
       }
 
-      const product = batchProducts[index];
-      const submitData = {
-        selectedProduct: { name: product.name, code: product.code, type: product.type || 'stock' },
-        productName: product.name,
-        productCode: product.code,
-        optionType: batchForm.optionType,
-        structure: batchForm.structure,
-        term: batchForm.term,
-        notionalAmount: batchForm.notionalAmount,
-        strikePrice: batchForm.strikePrice,
-        selectedDealers: batchForm.selectedDealers || [],
-        contactName: batchForm.contactName,
-        phone: batchForm.contactPhone,
-        contactPhone: batchForm.contactPhone,
-        contactEmail: batchForm.contactEmail || '',
-        notes: batchForm.notes || '',
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        userId: currentUser.userId || storedUserInfo.userId || 'anonymous_' + Date.now(),
-        userName: currentUser.nickName || storedUserInfo.nickName || batchForm.contactName || '匿名用户',
-        openid: currentUser.openid || storedUserInfo.openid || 'anonymous',
-        source: 'miniprogram_batch',
-        contactInfo: { name: batchForm.contactName, phone: batchForm.contactPhone, email: batchForm.contactEmail }
-      };
+      const endIndex = Math.min(startIndex + BATCH_SIZE, total);
+      const batch = batchProducts.slice(startIndex, endIndex);
 
-      submitInquiry(submitData).then(() => {
-        successCount++;
-      }).catch(err => {
-        console.error('批量询价失败 [' + product.code + ']:', err.message);
-        failCount++;
-      }).finally(() => {
-        const progress = Math.round(((index + 1) / total) * 100);
-        this.setData({ batchProgress: progress, batchSuccessCount: successCount, batchFailCount: failCount });
-        // 200ms间隔防限流
-        setTimeout(() => submitNext(index + 1), 200);
+      // 并行提交当前批次
+      const promises = batch.map(product => {
+        const submitData = inquiryService.buildSubmitData({
+          selectedProduct: { name: product.name, code: product.code, type: product.type || 'stock' },
+          optionType: batchForm.optionType,
+          structure: batchForm.structure,
+          term: batchForm.term,
+          notionalAmount: batchForm.notionalAmount,
+          strikePrice: batchForm.strikePrice,
+          selectedDealers: batchForm.selectedDealers || [],
+          contactName: batchForm.contactName,
+          contactPhone: batchForm.contactPhone,
+          contactEmail: batchForm.contactEmail || '',
+          notes: batchForm.notes || '',
+          source: 'miniprogram_batch'
+        });
+
+        return inquiryService.submitInquiry(submitData)
+          .then(() => { successCount++; return true; })
+          .catch(err => {
+            console.error('批量询价失败 [' + product.code + ']:', err.message);
+            failCount++;
+            return false;
+          });
       });
+
+      await Promise.all(promises);
+
+      // 更新进度
+      const progress = Math.round((endIndex / total) * 100);
+      this.setData({
+        batchProgress: progress,
+        batchSuccessCount: successCount,
+        batchFailCount: failCount
+      });
+
+      // 批次间隔后继续下一批
+      setTimeout(() => submitBatch(endIndex), BATCH_DELAY);
     };
 
-    submitNext(0);
+    submitBatch(0);
   },
 
   // 关闭批量结果弹窗
@@ -1015,14 +970,10 @@ Page({
 
     this.setData({ isQuickSubmitting: true });
 
-    const loginService = require('../../utils/loginService.js');
-    const currentUser = loginService.getCurrentUser() || {};
-    const storedUserInfo = wx.getStorageSync('userInfo') || {};
-
-    const submitData = {
+    // 使用简化的数据构建方法
+    const inquiryService = require('../../utils/inquiryService.js');
+    const submitData = inquiryService.buildSubmitData({
       selectedProduct: { name: form.productName, code: form.productCode, type: 'stock' },
-      productName: form.productName,
-      productCode: form.productCode,
       optionType: form.optionType,
       structure: form.structure,
       term: form.term,
@@ -1030,22 +981,14 @@ Page({
       strikePrice: form.strikePrice,
       selectedDealers: form.selectedDealers || [],
       contactName: form.contactName,
-      phone: form.contactPhone,
       contactPhone: form.contactPhone,
       contactEmail: form.contactEmail || '',
       notes: form.notes || '',
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      userId: currentUser.userId || storedUserInfo.userId || 'anonymous_' + Date.now(),
-      userName: currentUser.nickName || storedUserInfo.nickName || form.contactName || '匿名用户',
-      openid: currentUser.openid || storedUserInfo.openid || 'anonymous',
-      source: 'miniprogram_quick',
-      contactInfo: { name: form.contactName, phone: form.contactPhone, email: form.contactEmail }
-    };
+      source: 'miniprogram_quick'
+    });
 
-    submitInquiry(submitData).then(result => {
-      console.log('快速询价成功:', result.data.inquiryId);
+    inquiryService.submitInquiry(submitData).then(result => {
+      console.log('快速询价成功:', result.data?.id);
       wx.showToast({ title: '询价提交成功', icon: 'success', duration: 2000 });
       this.setData({
         quickForm: {
@@ -1057,9 +1000,7 @@ Page({
       this.hideQuickForm();
     }).catch(err => {
       console.error('快速询价失败:', err);
-      // 失败时不跳转，保持在当前页面显示错误提示，让用户可以重新尝试
       wx.showToast({ title: '提交失败：' + (err.message || '请检查网络后重试'), icon: 'none', duration: 3000 });
-      // 不跳转，用户可以修改信息后重新提交
     }).finally(() => {
       this.setData({ isQuickSubmitting: false });
     });

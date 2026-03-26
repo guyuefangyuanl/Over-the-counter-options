@@ -1,0 +1,36 @@
+<view class="section">
+  <!-- 标题栏 -->
+  <view class="section-header">
+    <view class="section-title-wrapper">
+      <view class="section-title-icon hot-icon"></view>
+      <text class="section-title">热门产品</text>
+    </view>
+    <text class="more-btn" bindtap="onViewMoreTap">></text>
+  </view>
+
+  <!-- 产品列表 -->
+  <view class="option-list">
+    <view
+      class="option-card enhanced-card"
+      wx:for="{{options}}"
+      wx:key="code"
+      data-code="{{item.code}}"
+      data-name="{{item.name}}"
+      data-market="{{item.market}}"
+      data-structure="{{item.structure}}"
+      bindtap="onOptionTap"
+    >
+      <view class="option-header">
+        <view class="option-info-row">
+          <view class="market-badge {{item.market === 'SH' ? 'sh' : 'sz'}}">{{item.market || 'SH'}}</view>
+          <text class="option-name">{{item.name}}</text>
+          <text class="option-code">{{item.code}}</text>
+          <text class="option-structure">{{item.structure || '100C6m'}}</text>
+        </view>
+        <view class="option-tags">
+          <text class="tag-vanilla">香草</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

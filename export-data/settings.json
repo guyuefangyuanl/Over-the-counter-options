@@ -1,0 +1,2 @@
+{"_id":"system_config","appName":"场外期权交易平台","version":"1.0.0","lastUpdateTime":"2026-03-22T10:45:48.846Z","features":{"inquiryEnabled":true,"quoteEnabled":true,"notificationEnabled":true}}
+{"_id":"trading_hours","morningStart":"09:30","morningEnd":"11:30","afternoonStart":"13:00","afternoonEnd":"15:00","timezone":"Asia/Shanghai"}

@@ -3,6 +3,135 @@ const { getBaseUrl: getConfigBaseUrl } = require('../config/api.config.js');
 let BASE_URL = getConfigBaseUrl();
 const performanceOptimizer = require('./performance-optimizer.js').getInstance();
 
+// ================== 用户友好的错误消息映射 ==================
+const USER_FRIENDLY_MESSAGES = {
+  // 认证相关 (2000-2999)
+  2000: '请先登录',
+  2001: '登录已过期，正在重新登录...',
+  2002: '登录凭证无效，请重新登录',
+  2003: '您没有权限执行此操作',
+  2004: '请先登录',
+  2005: '需要进行二次验证',
+  
+  // 用户相关 (3000-3999)
+  3000: '用户不存在',
+  3001: '账户已被禁用',
+  3002: '密码错误，请重试',
+  3003: '手机号已注册',
+  3004: '用户已存在',
+  
+  // 交易相关 (4000-4999)
+  4000: '账户余额不足，请充值后重试',
+  4001: '持仓信息不存在',
+  4002: '持仓已平仓',
+  4003: '订单不存在',
+  4004: '订单已成交',
+  4005: '超过交易限额',
+  4006: '交易风险过高，请调整交易参数',
+  4007: '询价单不存在',
+  4008: '询价已过期',
+  4009: '报价不可用',
+  
+  // 数据相关 (5000-5999)
+  5000: '数据库暂时不可用，请稍后重试',
+  5001: '数据不存在',
+  5002: '数据格式错误',
+  5003: '数据库响应超时',
+  5004: '数据库连接失败',
+  
+  // 限流相关 (6000-6099) - 可重试
+  6000: '请求过于频繁，请稍后再试',
+  6001: 'API调用额度已用尽，请稍后重试',
+  
+  // 资源冲突 (7000-7099) - 可重试
+  7000: '资源冲突，请重试',
+  7001: '数据已被修改，请刷新后重试',
+  7002: '并发操作冲突，请重试',
+  
+  // 系统相关 (9000-9999)
+  9000: '系统繁忙，请稍后重试',
+  9001: '服务暂时不可用，正在恢复中...',
+  9002: '数据库暂不可用',
+  9003: '外部服务错误',
+  9004: '请求超时，请检查网络',
+  9005: '网络连接失败，请检查网络设置',
+  9006: '服务熔断中，请稍后重试',
+  
+  // 通用错误 (1000-1999)
+  1000: '系统错误，请稍后重试',
+  1001: '请求参数有误',
+  1002: '数据验证失败',
+  1003: '资源不存在',
+  1004: '资源已存在',
+  1005: '文件格式不支持',
+  1006: '文件大小超过限制',
+};
+
+// 可重试的错误码
+const RETRYABLE_ERROR_CODES = [
+  5000, 5003, 5004,  // 数据库错误
+  6000, 6001,        // 限流错误
+  7000, 7001, 7002,  // 资源冲突
+  9000, 9001, 9002, 9003, 9004, 9005, 9006  // 系统错误
+];
+
+/**
+ * 获取用户友好的错误消息
+ * @param {number} errorCode 业务错误码
+ * @param {string} defaultMessage 默认消息
+ * @returns {string} 用户友好的错误消息
+ */
+function getUserFriendlyMessage(errorCode, defaultMessage) {
+  return USER_FRIENDLY_MESSAGES[errorCode] || defaultMessage || '操作失败，请重试';
+}
+
+/**
+ * 判断错误是否可重试
+ * @param {object} error 错误对象
+ * @returns {boolean} 是否可重试
+ */
+function shouldRetry(error) {
+  // 明确标记为不可重试
+  if (error.noRetry) return false;
+  
+  // 检查响应中的 retryable 字段
+  if (error.retryable === false) return false;
+  if (error.retryable === true) return true;
+  
+  // 根据错误码判断
+  if (error.error_code && RETRYABLE_ERROR_CODES.includes(error.error_code)) {
+    return true;
+  }
+  
+  // 根据错误类型判断
+  const retryableTypes = ['rate_limit', 'timeout', 'connection', 'server_error'];
+  if (error.errorType && retryableTypes.includes(error.errorType)) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * 显示错误提示（用户友好）
+ * @param {object} error 错误对象
+ * @param {object} options 选项
+ */
+function showErrorToast(error, options = {}) {
+  const { duration = 3000, silent = false } = options;
+  
+  if (silent) return;
+  
+  const message = getUserFriendlyMessage(error.error_code, error.message);
+  
+  wx.showToast({
+    title: message,
+    icon: 'none',
+    duration: duration
+  });
+}
+
+// ================== API 响应缓存 ==================
 // API响应缓存
 const apiCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5分钟缓存
@@ -25,7 +154,10 @@ const apiStats = {
   successCount: 0,
   errorCount: 0,
   averageResponseTime: 0,
-  retryCount: 0
+  retryCount: 0,
+  // 新增错误分类统计
+  errorsByCode: {},
+  errorsByType: {}
 };
 
 // 环境配置
@@ -230,7 +362,7 @@ function redirectToLogin() {
  */
 function handleUnauthorized() {
   // 尝试使用refreshToken刷新token
-  const refreshToken = wx.getStorageSync('refreshToken');
+  const refreshToken = wx.getStorageSync('refresh_token');  // 统一使用下划线格式
   
   if (refreshToken) {
     // 刷新token
@@ -256,7 +388,7 @@ function handleUnauthorized() {
 function clearAuthData() {
   wx.removeStorageSync('userInfo');
   wx.removeStorageSync('token');
-  wx.removeStorageSync('refreshToken');
+  wx.removeStorageSync('refresh_token');  // 统一使用下划线格式
 }
 
 /**
@@ -406,15 +538,40 @@ async function performRequestWithRetry(url, method, data, header, timeout, retri
             console.log(`API请求成功 ${method} ${url}:`, res.data);
           }
           
-          // 🔧 修复：处理HTTP状态码和响应体中的code字段
+          // 处理HTTP状态码和响应体中的code字段
           if (res.statusCode === 200 || res.statusCode === 201) {
-            // 检查响应体中的code字段（后端可能返回HTTP 200但body中code为401）
-            if (res.data && (res.data.code === 401 || res.data.code === '401')) {
-              console.warn('[API] 响应体中code=401，视为未授权');
-              handleUnauthorized();
-              const authError = new Error(res.data.message || '登录已过期，请重新登录');
-              authError.noRetry = true;
-              reject(authError);
+            // 检查业务错误码
+            if (res.data && res.data.success === false) {
+              // 业务失败，构造错误对象
+              const error = new Error(getUserFriendlyMessage(res.data.error_code, res.data.message));
+              error.error_code = res.data.error_code;
+              error.trace_id = res.data.trace_id;
+              error.retryable = res.data.retryable;
+              error.retry_after = res.data.retry_after;
+              error.category = res.data.category;
+              error.noRetry = !shouldRetry(res.data);
+              
+              // 记录错误统计
+              if (res.data.error_code) {
+                apiStats.errorsByCode[res.data.error_code] = (apiStats.errorsByCode[res.data.error_code] || 0) + 1;
+              }
+              if (res.data.category) {
+                apiStats.errorsByType[res.data.category] = (apiStats.errorsByType[res.data.category] || 0) + 1;
+              }
+              
+              // 特殊处理认证错误
+              if (res.data.error_code === 2001 || res.data.code === 401) {
+                console.warn('[API] 认证失败:', res.data.message);
+                handleUnauthorized();
+                error.noRetry = true;
+              }
+              
+              // 显示用户友好的错误提示
+              if (!requestItem.options.silent) {
+                showErrorToast(error);
+              }
+              
+              reject(error);
               return;
             }
             
@@ -424,20 +581,42 @@ async function performRequestWithRetry(url, method, data, header, timeout, retri
             handleUnauthorized();
             const authError = new Error('登录已过期，请重新登录');
             authError.noRetry = true;
+            authError.error_code = 2001;
+            showErrorToast(authError, { silent: requestItem.options.silent });
             reject(authError);
           } else if (res.statusCode === 403) {
-            // 检查是否是业务层返回的403（HTTP 200但code=403）
             console.warn('[API] 403 Forbidden:', res.data);
             const forbiddenError = new Error(res.data?.message || '没有权限访问该资源');
             forbiddenError.noRetry = true;
+            forbiddenError.error_code = 2003;
             forbiddenError.details = res.data;
+            showErrorToast(forbiddenError, { silent: requestItem.options.silent });
             reject(forbiddenError);
           } else if (res.statusCode === 404) {
-            reject(new Error('请求的资源不存在'));
+            const notFoundError = new Error('请求的资源不存在');
+            notFoundError.noRetry = true;
+            notFoundError.error_code = 1003;
+            showErrorToast(notFoundError, { silent: requestItem.options.silent });
+            reject(notFoundError);
+          } else if (res.statusCode === 429) {
+            // 限流错误，可重试
+            const rateLimitError = new Error('请求过于频繁，请稍后重试');
+            rateLimitError.error_code = 6000;
+            rateLimitError.retryable = true;
+            rateLimitError.retry_after = res.data?.retry_after || 3;
+            showErrorToast(rateLimitError, { silent: requestItem.options.silent });
+            reject(rateLimitError);
           } else if (res.statusCode >= 500) {
-            reject(new Error('服务器内部错误，请稍后重试'));
+            const serverError = new Error('服务器内部错误，请稍后重试');
+            serverError.error_code = 9000;
+            serverError.retryable = true;
+            showErrorToast(serverError, { silent: requestItem.options.silent });
+            reject(serverError);
           } else {
-            reject(new Error(res.data.message || `请求失败: ${res.statusCode}`));
+            const otherError = new Error(res.data?.message || `请求失败: ${res.statusCode}`);
+            otherError.error_code = 1000;
+            showErrorToast(otherError, { silent: requestItem.options.silent });
+            reject(otherError);
           }
         },
         fail: (err) => {
@@ -450,14 +629,26 @@ async function performRequestWithRetry(url, method, data, header, timeout, retri
             console.error(`API请求失败 ${method} ${url}:`, err);
           }
           
-          // 处理网络错误
+          // 处理网络错误，构造带错误码的错误对象
+          let networkError;
           if (err.errMsg.includes('timeout')) {
-            reject(new Error('请求超时，请检查网络连接'));
+            networkError = new Error('请求超时，请检查网络连接');
+            networkError.error_code = 9004;
+            networkError.errorType = 'timeout';
+            networkError.retryable = true;
           } else if (err.errMsg.includes('fail')) {
-            reject(new Error('网络连接失败，请检查网络设置'));
+            networkError = new Error('网络连接失败，请检查网络设置');
+            networkError.error_code = 9005;
+            networkError.errorType = 'connection';
+            networkError.retryable = true;
           } else {
-            reject(new Error(err.errMsg || '网络请求失败'));
+            networkError = new Error(err.errMsg || '网络请求失败');
+            networkError.error_code = 9000;
+            networkError.retryable = true;
           }
+          
+          showErrorToast(networkError, { silent: requestItem.options.silent });
+          reject(networkError);
         }
       });
     });
@@ -477,6 +668,11 @@ async function performRequestWithRetry(url, method, data, header, timeout, retri
     if (error.noRetry) {
       throw error;
     }
+    
+    // 检查是否可重试
+    if (!shouldRetry(error)) {
+      throw error;
+    }
 
     // 重试逻辑
     if (retriesLeft > 0) {
@@ -485,10 +681,15 @@ async function performRequestWithRetry(url, method, data, header, timeout, retri
         console.log(`请求重试 (${retriesLeft} 次剩余): ${url}`);
       }
       
-      // 指数退避延迟
-      const delay = retryConfig.exponentialBackoff ? 
-        retryConfig.retryDelay * Math.pow(2, retryConfig.maxRetries - retriesLeft) : 
-        retryConfig.retryDelay;
+      // 使用后端建议的重试延迟，或指数退避
+      let delay;
+      if (error.retry_after) {
+        delay = error.retry_after * 1000;
+      } else if (retryConfig.exponentialBackoff) {
+        delay = retryConfig.retryDelay * Math.pow(2, retryConfig.maxRetries - retriesLeft);
+      } else {
+        delay = retryConfig.retryDelay;
+      }
       
       await new Promise(resolve => setTimeout(resolve, delay));
       
@@ -652,6 +853,8 @@ function resetApiStats() {
   apiStats.errorCount = 0;
   apiStats.averageResponseTime = 0;
   apiStats.retryCount = 0;
+  apiStats.errorsByCode = {};
+  apiStats.errorsByType = {};
   console.log('API统计已重置');
 }
 
@@ -737,5 +940,11 @@ module.exports = {
   setBaseUrl,
   getBaseUrl: getCurrentBaseUrl,
   configureRetry,
-  configureConcurrency
+  configureConcurrency,
+  // 新增错误处理工具
+  getUserFriendlyMessage,
+  shouldRetry,
+  showErrorToast,
+  USER_FRIENDLY_MESSAGES,
+  RETRYABLE_ERROR_CODES
 };

@@ -6,6 +6,8 @@
   "usingComponents": {
     "van-loading": "@vant/weapp/loading/index",
     "van-icon": "@vant/weapp/icon/index",
-    "van-tag": "@vant/weapp/tag/index"
+    "van-tag": "@vant/weapp/tag/index",
+    "holding-card": "/components/holding-card/holding-card",
+    "hot-option-card": "/components/hot-option-card/hot-option-card"
   }
 }

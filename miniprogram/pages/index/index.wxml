@@ -1,4 +1,4 @@
-<view class="container" style="position: relative; left: 0rpx; top: -188rpx">
+<view class="container">
   <!-- 加载状态 -->
   <view class="loading-container" wx:if="{{loading}}">
     <van-loading type="spinner" color="#409EFF" size="48rpx" vertical>加载中...</van-loading>
@@ -120,7 +120,7 @@
     </view>
 
     <!-- 首页内容 -->
-    <view class="home-content" wx:if="{{!showSearchResults}}" style="height: 2025rpx; display: flex; box-sizing: border-box">
+    <view class="home-content" wx:if="{{!showSearchResults}}">
 
       <!-- 市场指数 -->
       <view class="section market-indices-section" wx:if="{{marketIndices.length > 0}}">
@@ -271,14 +271,14 @@
 
       <!-- 知识 -->
       <view class="section knowledge-section-outer">
-         <view class="section-header" style="position: relative; left: 0rpx; top: 31rpx">
+         <view class="section-header knowledge-header">
             <view class="section-title-wrapper">
                <view class="section-title-icon knowledge-icon"></view>
                <text class="section-title">知识</text>
             </view>
             <text class="more-btn" data-type="knowledge" bindtap="onViewMore">></text>
          </view>
-         <view class="knowledge-list enhanced-card" style="height: 354rpx; display: block; box-sizing: border-box; position: relative; left: -2rpx; top: 62rpx">
+         <view class="knowledge-list enhanced-card">
             <block wx:for="{{holdingsData.knowledge}}" wx:key="id">
               <view class="knowledge-item" data-id="{{item.id}}" bindtap="onKnowledgeItemTap">
                 <view class="knowledge-info">

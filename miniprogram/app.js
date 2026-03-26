@@ -269,14 +269,14 @@ App({
     }
   },
   
-  // 性能监控初始?
+  // 性能监控初始化
   initPerformanceMonitoring: function() {
     // 使用新的性能优化器，避免重写Page函数
     const self = this;
-    
+
     // 记录应用启动时间
     self.globalData.performance.appLaunchTime = Date.now();
-    
+
     // 监听页面性能（不重写Page函数）
     wx.onMemoryWarning && wx.onMemoryWarning(function() {
       console.warn('内存警告，正在清理缓存..');
@@ -284,23 +284,139 @@ App({
         self.globalData.performanceOptimizer.clearLowPriorityCache();
       }
     });
-    
-    // 定期生成性能报告
-    setInterval(() => {
-      if (self.globalData.performanceOptimizer) {
-        // 添加安全检查，确保方法存在
-        if (typeof self.globalData.performanceOptimizer.getPerformanceReport === 'function') {
-          const report = self.globalData.performanceOptimizer.getPerformanceReport();
-          console.log('性能报告:', report);
-        } else if (typeof performanceOptimizer.getReport === 'function') {
-          // 备用调用方式
-          const report = performanceOptimizer.getReport();
-          console.log('性能报告:', report);
-        } else {
-          console.warn('无法获取性能报告，getReport方法不存在');
-        }
-      }
+
+    // 添加性能告警处理器
+    const performanceOptimizer = require('./utils/performance-optimizer.js');
+    if (performanceOptimizer.addAlertHandler) {
+      performanceOptimizer.addAlertHandler(function(alert) {
+        // 处理性能告警
+        self._handlePerformanceAlert(alert);
+      });
+    }
+
+    // 定期生成性能报告并同步到后端
+    self._performanceReportTimer = setInterval(() => {
+      self._generateAndSyncPerformanceReport();
     }, 60000); // 每分钟一次
+
+    // 每5分钟同步一次到后端
+    self._backendSyncTimer = setInterval(() => {
+      self._syncPerformanceToBackend();
+    }, 300000); // 5分钟
+
+    console.log('性能监控初始化完成');
+  },
+
+  /**
+   * 处理性能告警
+   */
+  _handlePerformanceAlert: function(alert) {
+    const self = this;
+
+    // 根据告警级别处理
+    if (alert.level === 'critical' || alert.level === 'error') {
+      // 严重告警：记录到错误缓存
+      console.error(`[性能告警][${alert.level.toUpperCase()}] ${alert.message}`);
+
+      // 可选：上报到服务器
+      self.reportError({
+        type: 'performance_alert',
+        message: alert.message,
+        level: alert.level,
+        alertType: alert.alertType,
+        metricValue: alert.metricValue,
+        threshold: alert.threshold
+      });
+    } else {
+      console.warn(`[性能告警][${alert.level.toUpperCase()}] ${alert.message}`);
+    }
+  },
+
+  /**
+   * 生成并同步性能报告
+   */
+  _generateAndSyncPerformanceReport: function() {
+    const self = this;
+    const performanceOptimizer = require('./utils/performance-optimizer.js');
+
+    try {
+      // 使用增强版报告
+      let report;
+      if (typeof performanceOptimizer.getEnhancedReport === 'function') {
+        report = performanceOptimizer.getEnhancedReport();
+      } else if (typeof performanceOptimizer.getReport === 'function') {
+        report = performanceOptimizer.getReport();
+      } else {
+        console.warn('无法获取性能报告');
+        return;
+      }
+
+      // 输出到控制台（开发环境）
+      if (__wxConfig && __wxConfig.envVersion !== 'release') {
+        console.log('📊 性能报告:', JSON.stringify(report, null, 2));
+      }
+
+      // 更新全局数据
+      self.globalData.performance.lastReport = report;
+      self.globalData.performance.lastReportTime = Date.now();
+
+    } catch (e) {
+      console.error('生成性能报告失败:', e);
+    }
+  },
+
+  /**
+   * 同步性能数据到后端
+   */
+  _syncPerformanceToBackend: function() {
+    const self = this;
+    const performanceOptimizer = require('./utils/performance-optimizer.js');
+    const api = require('./utils/api.js');
+
+    // 仅在已登录时同步
+    if (!self.globalData.userInfo || !self.globalData.userInfo.isLoggedIn) {
+      return;
+    }
+
+    try {
+      // 获取性能数据
+      const cacheStats = performanceOptimizer.cacheStats ? performanceOptimizer.cacheStats() : {};
+      const dedupStats = performanceOptimizer.dedupStats ? performanceOptimizer.dedupStats() : {};
+      const alerts = performanceOptimizer.getAlerts ? performanceOptimizer.getAlerts(null, 20) : [];
+
+      const payload = {
+        source: 'miniprogram',
+        timestamp: Date.now(),
+        metrics: {
+          cacheHitRates: self.globalData.performance.lastReport?.metrics?.cachePerformance || {},
+          apiResponseTimes: self.globalData.performance.lastReport?.metrics?.apiPerformance || {}
+        },
+        cacheStats: cacheStats,
+        dedupStats: dedupStats,
+        alerts: alerts
+      };
+
+      // 发送到后端
+      if (api && api.request) {
+        api.request('/performance/metrics', 'POST', payload).catch(function(err) {
+          console.warn('同步性能数据失败:', err);
+        });
+      }
+
+    } catch (e) {
+      console.error('同步性能数据失败:', e);
+    }
+  },
+
+  /**
+   * 获取性能报告
+   */
+  getPerformanceReport: function() {
+    const performanceOptimizer = require('./utils/performance-optimizer.js');
+    if (typeof performanceOptimizer.getEnhancedReport === 'function') {
+      return performanceOptimizer.getEnhancedReport();
+    }
+    return this.globalData.performance.lastReport || null;
   },
 
   onShow: function() {

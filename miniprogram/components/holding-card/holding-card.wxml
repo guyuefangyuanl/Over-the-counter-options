@@ -1,0 +1,77 @@
+<view class="holding-section">
+  <!-- 标题栏 -->
+  <view class="section-header">
+    <view class="section-title-wrapper">
+      <view class="section-title-icon case-icon"></view>
+      <text class="section-title">持仓案例</text>
+      <text class="holdings-mock-badge" wx:if="{{isMock}}">示例</text>
+    </view>
+    <text class="more-btn" bindtap="onViewAllTap">查看全部</text>
+  </view>
+
+  <!-- 卡片容器 -->
+  <view class="holding-card enhanced-card">
+    <!-- Tab 导航 -->
+    <view class="holding-tabs">
+      <view
+        wx:for="{{tabs}}"
+        wx:key="key"
+        class="holding-tab-item {{activeTab === item.key ? 'active' : ''}}"
+        data-tab="{{item.key}}"
+        bindtap="onTabChange"
+      >{{item.label}}</view>
+    </view>
+
+    <!-- 加载错误提示 -->
+    <view class="holding-error-tip" wx:if="{{hasError}}">
+      <text class="holding-error-text">持仓数据暂时无法加载，下拉刷新重试</text>
+    </view>
+
+    <!-- 持仓列表 -->
+    <block wx:elif="{{positions.length > 0}}">
+      <view class="holding-list {{animate ? 'fade-in' : ''}}">
+        <view
+          class="holding-item"
+          wx:for="{{positions}}"
+          wx:key="id"
+          data-id="{{item.id}}"
+          data-indexstatus="{{item.indexStatus}}"
+          bindtap="onItemTap"
+        >
+          <view class="holding-left">
+            <text class="holding-name">{{item.productName}}</text>
+            <view class="holding-row">
+              <text class="holding-code">{{item.productCode}}</text>
+              <text class="holding-dealer">{{item.dealer}}</text>
+            </view>
+            <view class="holding-row">
+              <text class="holding-notional">{{item.notionalWan}}万</text>
+              <text
+                class="holding-days {{item.daysLeft <= 7 && item.status === 'CONTINUING' ? 'expiring-tip' : ''}}"
+                wx:if="{{item.status === 'CONTINUING'}}"
+              >剩{{item.daysLeft}}天</text>
+            </view>
+          </view>
+          <view class="holding-right">
+            <view class="holding-profit">
+              <text class="profit {{item.pnl >= 0 ? 'up' : 'down'}}">{{item.pnl >= 0 ? '+' : ''}}{{item.pnl}}</text>
+              <text class="profit-rate {{item.pnlRate >= 0 ? 'up' : 'down'}}">{{item.pnlRate >= 0 ? '+' : ''}}{{item.pnlRate}}%</text>
+            </view>
+            <text class="holding-nav-hint">查看详情 ›</text>
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <!-- 空状态 -->
+    <view class="holding-empty" wx:else>
+      <text class="holding-empty-icon">∅</text>
+      <text class="holding-empty-text">
+        {{activeTab === 'active' ? '暂无存续中持仓' : (activeTab === 'expiring' ? '暂无临近到期持仓' : '暂无已完结持仓')}}
+      </text>
+      <view class="holding-empty-action" bindtap="onEmptyActionTap">
+        <text>前往账户录入持仓</text>
+      </view>
+    </view>
+  </view>
+</view>

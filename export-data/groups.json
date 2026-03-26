@@ -1,0 +1,4 @@
+{"_id":"group_index","name":"指数","code":"index","sort":1,"description":"主要市场指数","createdAt":"2026-03-22T10:45:48.846Z"}
+{"_id":"group_etf","name":"ETF基金","code":"etf","sort":2,"description":"交易型开放式指数基金","createdAt":"2026-03-22T10:45:48.846Z"}
+{"_id":"group_stock","name":"股票","code":"stock","sort":3,"description":"A股主要股票","createdAt":"2026-03-22T10:45:48.846Z"}
+{"_id":"group_option","name":"期权","code":"option","sort":4,"description":"场外期权品种","createdAt":"2026-03-22T10:45:48.846Z"}

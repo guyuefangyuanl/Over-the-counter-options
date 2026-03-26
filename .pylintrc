@@ -1,0 +1,54 @@
+[pylint]
+# Pylint配置文件
+
+[MASTER]
+# 忽略的目录
+ignore=.venv,venv,node_modules,.git,__pycache__,.pytest_cache,build,dist
+
+# 加载的插件
+load-plugins=pylint.extensions.docparams
+
+[MESSAGES CONTROL]
+# 禁用的检查项
+disable=
+    C0114,  # missing-module-docstring
+    C0115,  # missing-class-docstring
+    C0116,  # missing-function-docstring
+    C0301,  # line-too-long (由flake8处理)
+    C0413,  # wrong-import-position
+    E1101,  # no-member (Flask动态属性常见误报)
+    R0903,  # too-few-public-methods
+    R0913,  # too-many-arguments
+    R0914,  # too-many-locals
+    R0915,  # too-many-statements
+    R1705,  # no-else-return
+    W0212,  # protected-access
+    W0511,  # fixme/todo
+    W0613,  # unused-argument (Flask路由常见)
+
+[BASIC]
+# 变量命名规范
+variable-rgx=[a-z_][a-z0-9_]{1,50}$
+argument-rgx=[a-z_][a-z0-9_]{1,50}$
+method-rgx=[a-z_][a-z0-9_]{1,50}$
+
+[FORMAT]
+# 最大行长度
+max-line-length=120
+
+# 缩进字符串
+indent-string='    '
+
+[DESIGN]
+# 最大属性数
+max-attributes=15
+
+# 最大分支数
+max-branches=15
+
+# 最大返回数
+max-returns=10
+
+[TYPECHECK]
+# 忽略类型检查的模块
+ignored-modules=flask,flask_cors,pymongo,bson,scipy,numpy

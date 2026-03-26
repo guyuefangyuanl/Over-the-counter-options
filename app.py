@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 # from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 # import akshare as ak  # 云托管环境暂不需要
 from services.cloud_db import CloudDbClient, CloudDbConfigError
+from services.token_blacklist import init_token_blacklist
+from backend_utils.security import add_security_headers
 from flask.json.provider import DefaultJSONProvider
 from datetime import datetime
 
@@ -180,6 +182,11 @@ def create_app() -> Flask:
     else:
         logger.warning("⚠️ 无可用数据库，部分功能将受限")
 
+    # ✅ 初始化Token黑名单（支持Redis或内存存储）
+    redis_url = os.getenv('REDIS_URL')
+    init_token_blacklist(redis_url)
+    logger.info("✅ Token黑名单已初始化")
+
     # CORS配置
     allowed_origins = os.getenv('ALLOWED_ORIGINS', '').split(',')
     allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
@@ -213,6 +220,14 @@ def create_app() -> Flask:
             }
         },
     )
+
+    # 初始化Swagger API文档
+    try:
+        from backend_utils.swagger_config import init_swagger
+        init_swagger(flask_app)
+        logger.info("✅ Swagger API文档初始化成功，访问 /apidocs")
+    except ImportError:
+        logger.warning("⚠️ Flasgger未安装，跳过Swagger初始化")
 
     api_v1 = Blueprint('api_v1', __name__, url_prefix='/api/v1')
 
@@ -279,6 +294,8 @@ def create_app() -> Flask:
     @flask_app.after_request
     def log_response_info(response):
         logger.info(f"<<< Response: {response.status}")
+        # 添加安全响应头
+        add_security_headers(response)
         return response
 
     # 启动后台任务

@@ -210,6 +210,13 @@ class TradeService:
             position_id = model.create_position(data)
             logger.info(f'[create_position] 持仓创建成功: id={position_id}')
             return position_id
+        except RuntimeError as e:
+            # 集合不存在等配置问题，直接抛出友好错误
+            err_msg = str(e)
+            if '集合' in err_msg and '不存在' in err_msg:
+                logger.error(f'[create_position] 数据库配置错误: {err_msg}')
+                raise ValueError(err_msg)
+            raise
         except Exception as e:
             logger.error(f'[create_position] 数据库写入失败: {e}')
             raise

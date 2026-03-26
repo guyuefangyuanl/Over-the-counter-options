@@ -138,10 +138,25 @@ def create_position():
         else:
             return flask_error_response("持仓创建失败", 500)
     except ValueError as ve:
-        return flask_error_response(str(ve), 400)
+        # 集合不存在等配置问题，返回友好提示
+        err_msg = str(ve)
+        if '集合' in err_msg and '不存在' in err_msg:
+            current_app.logger.error(f'[create_position] 数据库配置错误: {err_msg}')
+            return flask_error_response(
+                "数据库配置未完成，请联系管理员在微信云开发控制台创建必要的数据库集合。",
+                500
+            )
+        return flask_error_response(err_msg, 400)
     except Exception as e:
         current_app.logger.error(f'创建持仓失败: {e}')
-        return flask_error_response(str(e), 500)
+        # 检查是否是集合不存在的错误
+        err_msg = str(e)
+        if 'ResourceNotFound' in err_msg or 'Db or Table not exist' in err_msg or '集合不存在' in err_msg:
+            return flask_error_response(
+                "数据库配置未完成，请联系管理员在微信云开发控制台创建必要的数据库集合。",
+                500
+            )
+        return flask_error_response("服务器内部错误，请稍后重试", 500)
 
 @trade_bp.route('/positions/<position_id>', methods=['PUT'])
 @require_auth

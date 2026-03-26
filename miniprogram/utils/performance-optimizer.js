@@ -1,14 +1,56 @@
 // utils/performance-optimizer.js
 /**
  * 小程序性能优化管理器
- * 实现懒加载、代码分割、缓存管理等性能优化功能
+ *
+ * 与后端 services/unified_performance_service.py 保持一致的API设计
+ * 实现：
+ * - 智能缓存淘汰机制（LRU + LFU + TTL）
+ * - 请求去重和防抖节流
+ * - 自动化性能告警
+ * - 统一的性能指标收集
  */
+
+// 性能指标类型枚举（与后端保持一致）
+const MetricType = {
+  API_RESPONSE: 'api_response',
+  PAGE_LOAD: 'page_load',
+  CACHE_HIT: 'cache_hit',
+  DB_QUERY: 'db_query',
+  RENDER: 'render',
+  INTERACTION: 'interaction',
+  MEMORY: 'memory',
+  NETWORK: 'network',
+  ERROR: 'error'
+};
+
+// 告警级别枚举
+const AlertLevel = {
+  INFO: 'info',
+  WARNING: 'warning',
+  ERROR: 'error',
+  CRITICAL: 'critical'
+};
 
 class PerformanceOptimizer {
   constructor() {
+    // 智能缓存系统
     this.cache = new Map();
+    this.cacheOrder = []; // LRU顺序
+    this.accessCount = {}; // LFU计数
+    this.cacheTTL = {}; // TTL数据
+
+    // 请求去重
+    this.pendingRequests = new Map();
+    this.requestTimestamps = new Map();
+
+    // 防抖节流
+    this.throttleTimers = {};
+    this.debounceTimers = {};
+
     this.loadingStates = new Map();
     this.lazyLoadObserver = null;
+
+    // 性能指标存储
     this.performanceMetrics = {
       pageLoadTimes: {},
       apiResponseTimes: {},
@@ -17,21 +59,53 @@ class PerformanceOptimizer {
       networkSpeed: [],
       renderTimes: {},
       interactionDelays: {},
-      cacheHitRates: {}
+      cacheHitRates: {},
+      // 新增：统一指标存储
+      metrics: {},
+      aggregatedStats: {}
     };
-    
+
+    // 告警系统
+    this.alerts = [];
+    this.alertHandlers = [];
+
     // 性能监控配置
     this.monitoringConfig = {
       memoryCheckInterval: 30000, // 30秒检查一次内存
       performanceReportInterval: 1800000, // 30分钟生成一次报告
       alertThresholds: {
-        memoryUsage: 80, // 内存使用率阈值 80%
-        apiResponseTime: 3000, // API响应时间阈值 3秒
-        pageLoadTime: 2000, // 页面加载时间阈值 2秒
-        renderTime: 16 // 渲染时间阈值 16ms (60fps)
+        // 与后端 unified_performance_service.py 保持一致
+        api_response: { warning: 2000, error: 5000, critical: 10000 },
+        page_load: { warning: 3000, error: 5000, critical: 10000 },
+        db_query: { warning: 1000, error: 3000, critical: 5000 },
+        cache_hit: { warning: 50, error: 30, critical: 10 }, // 命中率低于阈值
+        memory: { warning: 80, error: 90, critical: 95 },
+        error: { warning: 5, error: 10, critical: 20 } // 错误率%
+      },
+      // 缓存配置
+      cacheConfig: {
+        maxSize: 500,
+        defaultTTL: 300, // 5分钟
+        cleanupInterval: 60000 // 1分钟清理一次
       }
     };
-    
+
+    // 缓存统计
+    this.cacheStats = {
+      hits: 0,
+      misses: 0,
+      evictions: 0,
+      expirations: 0,
+      totalRequests: 0
+    };
+
+    // 去重统计
+    this.dedupStats = {
+      totalRequests: 0,
+      deduplicated: 0,
+      unique: 0
+    };
+
     this.initPerformanceMonitoring();
   }
 
@@ -762,6 +836,481 @@ class PerformanceOptimizer {
     });
   }
   
+  // ==================== 智能缓存系统 ====================
+
+  /**
+   * 智能缓存获取（LRU + LFU + TTL）
+   * 参考: services/unified_performance_service.py SmartCache
+   */
+  smartCacheGet(key) {
+    this.cacheStats.totalRequests++;
+
+    // 检查是否存在
+    if (!this.cache.has(key)) {
+      this.cacheStats.misses++;
+      return null;
+    }
+
+    // 检查TTL
+    if (this.cacheTTL[key]) {
+      const { expiry } = this.cacheTTL[key];
+      if (Date.now() > expiry) {
+        this._removeCacheEntry(key);
+        this.cacheStats.misses++;
+        this.cacheStats.expirations++;
+        return null;
+      }
+    }
+
+    // LRU: 移到末尾
+    const idx = this.cacheOrder.indexOf(key);
+    if (idx > -1) {
+      this.cacheOrder.splice(idx, 1);
+      this.cacheOrder.push(key);
+    }
+
+    // LFU: 增加访问计数
+    this.accessCount[key] = (this.accessCount[key] || 0) + 1;
+
+    this.cacheStats.hits++;
+    return this.cache.get(key);
+  }
+
+  /**
+   * 智能缓存设置
+   */
+  smartCacheSet(key, value, ttl = null) {
+    ttl = ttl || this.monitoringConfig.cacheConfig.defaultTTL * 1000;
+    const now = Date.now();
+    const expiry = now + ttl;
+
+    // 如果已存在，更新
+    if (this.cache.has(key)) {
+      this.cache.set(key, value);
+      this.cacheTTL[key] = { expiry, created: now };
+      // LRU: 移到末尾
+      const idx = this.cacheOrder.indexOf(key);
+      if (idx > -1) {
+        this.cacheOrder.splice(idx, 1);
+        this.cacheOrder.push(key);
+      }
+      return true;
+    }
+
+    // 检查容量
+    if (this.cache.size >= this.monitoringConfig.cacheConfig.maxSize) {
+      this._evictCache();
+    }
+
+    // 添加新条目
+    this.cache.set(key, value);
+    this.cacheOrder.push(key);
+    this.cacheTTL[key] = { expiry, created: now };
+    this.accessCount[key] = 0;
+
+    return true;
+  }
+
+  /**
+   * 移除缓存条目
+   */
+  _removeCacheEntry(key) {
+    this.cache.delete(key);
+    delete this.cacheTTL[key];
+    delete this.accessCount[key];
+    const idx = this.cacheOrder.indexOf(key);
+    if (idx > -1) {
+      this.cacheOrder.splice(idx, 1);
+    }
+  }
+
+  /**
+   * 混合淘汰策略
+   */
+  _evictCache() {
+    const now = Date.now();
+
+    // 1. 清理过期条目
+    for (const key of Object.keys(this.cacheTTL)) {
+      if (now > this.cacheTTL[key].expiry) {
+        this._removeCacheEntry(key);
+        this.cacheStats.expirations++;
+      }
+    }
+
+    if (this.cache.size < this.monitoringConfig.cacheConfig.maxSize) {
+      return;
+    }
+
+    // 2. LFU+LRU混合淘汰
+    const items = [];
+    for (const key of this.cacheOrder) {
+      const accessFreq = this.accessCount[key] || 0;
+      const created = this.cacheTTL[key]?.created || now;
+      const age = (now - created) / 1000;
+
+      // 分数 = 访问频率 * 10 - 年龄(秒) * 0.1
+      const score = accessFreq * 10 - age * 0.1;
+      items.push({ key, score });
+    }
+
+    // 按分数升序排列
+    items.sort((a, b) => a.score - b.score);
+    const evictCount = Math.max(1, Math.floor(this.cache.size * 0.1));
+
+    for (let i = 0; i < evictCount && i < items.length; i++) {
+      this._removeCacheEntry(items[i].key);
+      this.cacheStats.evictions++;
+    }
+  }
+
+  /**
+   * 获取缓存统计
+   */
+  getCacheStats() {
+    const total = this.cacheStats.totalRequests;
+    const hitRate = total > 0 ? (this.cacheStats.hits / total * 100).toFixed(2) : 0;
+    return {
+      size: this.cache.size,
+      maxSize: this.monitoringConfig.cacheConfig.maxSize,
+      hits: this.cacheStats.hits,
+      misses: this.cacheStats.misses,
+      hitRate: parseFloat(hitRate),
+      evictions: this.cacheStats.evictions,
+      expirations: this.cacheStats.expirations,
+      totalRequests: total
+    };
+  }
+
+  // ==================== 请求去重系统 ====================
+
+  /**
+   * 检查请求是否重复
+   * 参考: services/unified_performance_service.py RequestDeduplicator
+   */
+  checkDuplicateRequest(requestId, params = null) {
+    this.dedupStats.totalRequests++;
+
+    // 生成请求key
+    let key = requestId;
+    if (params) {
+      const paramsStr = JSON.stringify(params);
+      const paramsHash = this._simpleHash(paramsStr);
+      key = `${requestId}:${paramsHash}`;
+    }
+
+    // 清理过期的pending请求（超过2秒）
+    const now = Date.now();
+    for (const [k, ts] of this.requestTimestamps.entries()) {
+      if (now - ts > 2000) {
+        this.pendingRequests.delete(k);
+        this.requestTimestamps.delete(k);
+      }
+    }
+
+    if (this.pendingRequests.has(key)) {
+      this.dedupStats.deduplicated++;
+      return { isDuplicate: true, key };
+    }
+
+    this.dedupStats.unique++;
+    this.pendingRequests.set(key, true);
+    this.requestTimestamps.set(key, now);
+    return { isDuplicate: false, key };
+  }
+
+  /**
+   * 标记请求完成
+   */
+  markRequestComplete(key) {
+    this.pendingRequests.delete(key);
+    this.requestTimestamps.delete(key);
+  }
+
+  /**
+   * 简单哈希函数
+   */
+  _simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(16).slice(0, 8);
+  }
+
+  /**
+   * 获取去重统计
+   */
+  getDedupStats() {
+    const total = this.dedupStats.totalRequests;
+    const dedupRate = total > 0 ? (this.dedupStats.deduplicated / total * 100).toFixed(2) : 0;
+    return {
+      totalRequests: total,
+      deduplicated: this.dedupStats.deduplicated,
+      unique: this.dedupStats.unique,
+      dedupRate: parseFloat(dedupRate),
+      pendingCount: this.pendingRequests.size
+    };
+  }
+
+  // ==================== 防抖节流系统 ====================
+
+  /**
+   * 节流执行
+   */
+  throttleExecute(key, func, interval) {
+    const now = Date.now();
+    const lastExec = this.throttleTimers[key] || 0;
+
+    if (now - lastExec >= interval) {
+      this.throttleTimers[key] = now;
+      return func();
+    }
+    return null;
+  }
+
+  /**
+   * 防抖执行
+   */
+  debounceExecute(key, func, delay) {
+    // 取消之前的计时器
+    if (this.debounceTimers[key]) {
+      clearTimeout(this.debounceTimers[key]);
+    }
+
+    // 创建新计时器
+    this.debounceTimers[key] = setTimeout(() => {
+      func();
+      delete this.debounceTimers[key];
+    }, delay);
+  }
+
+  // ==================== 增强告警系统 ====================
+
+  /**
+   * 添加告警处理器
+   */
+  addAlertHandler(handler) {
+    if (typeof handler === 'function') {
+      this.alertHandlers.push(handler);
+    }
+  }
+
+  /**
+   * 触发告警
+   */
+  triggerAlert(alertType, level, message, metricValue, threshold) {
+    const alert = {
+      alertType,
+      level,
+      message,
+      metricValue,
+      threshold,
+      timestamp: Date.now(),
+      resolved: false
+    };
+
+    this.alerts.push(alert);
+
+    // 保持最近100条
+    if (this.alerts.length > 100) {
+      this.alerts.shift();
+    }
+
+    // 触发处理器
+    for (const handler of this.alertHandlers) {
+      try {
+        handler(alert);
+      } catch (e) {
+        console.error('告警处理器执行失败:', e);
+      }
+    }
+
+    // 控制台输出
+    const levelMap = {
+      [AlertLevel.INFO]: console.log,
+      [AlertLevel.WARNING]: console.warn,
+      [AlertLevel.ERROR]: console.error,
+      [AlertLevel.CRITICAL]: console.error
+    };
+    const logFunc = levelMap[level] || console.log;
+    logFunc(`[性能告警][${level.toUpperCase()}] ${message}`);
+  }
+
+  /**
+   * 检查并触发告警
+   */
+  checkAndAlert(metricType, metricName, value) {
+    const thresholds = this.monitoringConfig.alertThresholds[metricType];
+    if (!thresholds) return null;
+
+    let level = null;
+    let threshold = null;
+
+    // 缓存命中率的判断逻辑相反
+    if (metricType === 'cache_hit') {
+      if (value < thresholds.critical) {
+        level = AlertLevel.CRITICAL;
+        threshold = thresholds.critical;
+      } else if (value < thresholds.error) {
+        level = AlertLevel.ERROR;
+        threshold = thresholds.error;
+      } else if (value < thresholds.warning) {
+        level = AlertLevel.WARNING;
+        threshold = thresholds.warning;
+      }
+    } else {
+      if (value > thresholds.critical) {
+        level = AlertLevel.CRITICAL;
+        threshold = thresholds.critical;
+      } else if (value > thresholds.error) {
+        level = AlertLevel.ERROR;
+        threshold = thresholds.error;
+      } else if (value > thresholds.warning) {
+        level = AlertLevel.WARNING;
+        threshold = thresholds.warning;
+      }
+    }
+
+    if (level) {
+      const unit = metricType === 'cache_hit' ? '%' : 'ms';
+      this.triggerAlert(
+        metricType,
+        level,
+        `${metricName} ${level}: ${value}${unit} (阈值: ${threshold})`,
+        value,
+        threshold
+      );
+    }
+
+    return level ? { level, threshold } : null;
+  }
+
+  /**
+   * 获取告警列表
+   */
+  getAlerts(level = null, limit = 50) {
+    let alerts = this.alerts;
+    if (level) {
+      alerts = alerts.filter(a => a.level === level);
+    }
+    return alerts.slice(-limit);
+  }
+
+  /**
+   * 获取告警统计
+   */
+  getAlertStats() {
+    const stats = {
+      total: this.alerts.length,
+      byLevel: {},
+      byType: {},
+      recentCount: 0
+    };
+
+    const oneHourAgo = Date.now() - 3600000;
+
+    for (const alert of this.alerts) {
+      // 按级别统计
+      stats.byLevel[alert.level] = (stats.byLevel[alert.level] || 0) + 1;
+      // 按类型统计
+      stats.byType[alert.alertType] = (stats.byType[alert.alertType] || 0) + 1;
+      // 最近1小时
+      if (alert.timestamp > oneHourAgo) {
+        stats.recentCount++;
+      }
+    }
+
+    return stats;
+  }
+
+  // ==================== 统一性能报告 ====================
+
+  /**
+   * 生成增强版性能报告
+   * 参考: services/unified_performance_service.py get_performance_report
+   */
+  getEnhancedPerformanceReport() {
+    const basicReport = this.getPerformanceReport();
+
+    const report = {
+      generatedAt: new Date().toISOString(),
+      uptime: Date.now() - (this.performanceMetrics.appStartTime || Date.now()),
+      summary: {
+        ...basicReport.overview,
+        cacheStats: this.getCacheStats(),
+        dedupStats: this.getDedupStats(),
+        alertStats: this.getAlertStats()
+      },
+      metrics: basicReport,
+      alerts: {
+        recent: this.getAlerts(null, 20),
+        stats: this.getAlertStats()
+      },
+      recommendations: basicReport.recommendations || []
+    };
+
+    // 添加智能建议
+    const cacheStats = this.getCacheStats();
+    if (cacheStats.totalRequests > 10 && cacheStats.hitRate < 60) {
+      report.recommendations.push({
+        type: 'cache',
+        priority: 'high',
+        message: `缓存命中率 ${cacheStats.hitRate}% 较低，建议优化缓存策略或增加TTL`
+      });
+    }
+
+    const dedupStats = this.getDedupStats();
+    if (dedupStats.dedupRate > 20) {
+      report.recommendations.push({
+        type: 'network',
+        priority: 'medium',
+        message: `请求去重率 ${dedupStats.dedupRate}%，存在较多重复请求，建议优化前端请求逻辑`
+      });
+    }
+
+    return report;
+  }
+
+  // ==================== 与后端同步 ====================
+
+  /**
+   * 同步性能数据到后端
+   */
+  async syncToBackend(apiUrl) {
+    try {
+      const report = this.getEnhancedPerformanceReport();
+
+      // 使用 wx.request 发送到后端
+      if (typeof wx !== 'undefined') {
+        return new Promise((resolve, reject) => {
+          wx.request({
+            url: `${apiUrl}/performance/metrics`,
+            method: 'POST',
+            data: {
+              source: 'miniprogram',
+              timestamp: Date.now(),
+              metrics: report.metrics,
+              cacheStats: report.summary.cacheStats,
+              dedupStats: report.summary.dedupStats,
+              alerts: report.alerts.recent
+            },
+            success: (res) => resolve(res),
+            fail: (err) => {
+              console.warn('同步性能数据到后端失败:', err);
+              reject(err);
+            }
+          });
+        });
+      }
+    } catch (e) {
+      console.error('同步性能数据失败:', e);
+    }
+    return null;
+  }
+
   /**
    * 销毁性能优化器
    */
@@ -770,7 +1319,7 @@ class PerformanceOptimizer {
       this.lazyLoadObserver.disconnect();
       this.lazyLoadObserver = null;
     }
-    
+
     // 清理定时器
     if (this.memoryCheckTimer) {
       clearInterval(this.memoryCheckTimer);
@@ -778,10 +1327,13 @@ class PerformanceOptimizer {
     if (this.reportTimer) {
       clearInterval(this.reportTimer);
     }
-    
+
     this.cache.clear();
     this.loadingStates.clear();
-    
+    this.pendingRequests.clear();
+    this.alerts = [];
+    this.alertHandlers = [];
+
     console.log('性能优化器已销毁');
   }
 }
@@ -789,48 +1341,76 @@ class PerformanceOptimizer {
 // 创建全局实例
 const performanceOptimizer = new PerformanceOptimizer();
 
-// 导出工具函数
+// 导出工具函数和常量
 module.exports = {
   PerformanceOptimizer,
-  
+  MetricType,
+  AlertLevel,
+
   // 便捷方法
-  lazyLoad: (moduleName, loader, options) => 
+  lazyLoad: (moduleName, loader, options) =>
     performanceOptimizer.lazyLoadModule(moduleName, loader, options),
-  
-  monitorApi: (apiName, requestFn) => 
+
+  monitorApi: (apiName, requestFn) =>
     performanceOptimizer.monitorApiRequest(apiName, requestFn),
-  
-  preloadCritical: () => 
+
+  preloadCritical: () =>
     performanceOptimizer.preloadCriticalResources(),
-  
-  setupImageLazy: (selector) => 
+
+  setupImageLazy: (selector) =>
     performanceOptimizer.setupImageLazyLoading(selector),
-  
-  clearCache: () => 
+
+  clearCache: () =>
     performanceOptimizer.clearLowPriorityCache(),
-  
-  getReport: () => 
+
+  getReport: () =>
     performanceOptimizer.getPerformanceReport(),
-  
+
+  getEnhancedReport: () =>
+    performanceOptimizer.getEnhancedPerformanceReport(),
+
   preprocessData: (dataKey, processFn, rawData, options) =>
     performanceOptimizer.preprocessAndCache(dataKey, processFn, rawData, options),
-  
-  // 新增的增强功能
+
+  // 智能缓存
+  cacheGet: (key) => performanceOptimizer.smartCacheGet(key),
+  cacheSet: (key, value, ttl) => performanceOptimizer.smartCacheSet(key, value, ttl),
+  cacheStats: () => performanceOptimizer.getCacheStats(),
+
+  // 请求去重
+  checkDuplicate: (requestId, params) => performanceOptimizer.checkDuplicateRequest(requestId, params),
+  markComplete: (key) => performanceOptimizer.markRequestComplete(key),
+  dedupStats: () => performanceOptimizer.getDedupStats(),
+
+  // 防抖节流
+  throttle: (key, func, interval) => performanceOptimizer.throttleExecute(key, func, interval),
+  debounce: (key, func, delay) => performanceOptimizer.debounceExecute(key, func, delay),
+
+  // 告警系统
+  addAlertHandler: (handler) => performanceOptimizer.addAlertHandler(handler),
+  getAlerts: (level, limit) => performanceOptimizer.getAlerts(level, limit),
+  alertStats: () => performanceOptimizer.getAlertStats(),
+
+  // 渲染和交互监控
   monitorRender: (componentName, renderFunction) =>
     performanceOptimizer.monitorRenderPerformance(componentName, renderFunction),
-  
+
   monitorInteraction: (eventName, handler) =>
     performanceOptimizer.monitorInteractionDelay(eventName, handler),
-  
+
   recordMemory: () =>
     performanceOptimizer.recordMemoryUsage(),
-  
+
+  // 配置
   configure: (config) => {
     performanceOptimizer.monitoringConfig = {
       ...performanceOptimizer.monitoringConfig,
       ...config
     };
   },
+
+  // 后端同步
+  syncToBackend: (apiUrl) => performanceOptimizer.syncToBackend(apiUrl),
 
   // 获取全局实例
   getInstance: () => performanceOptimizer

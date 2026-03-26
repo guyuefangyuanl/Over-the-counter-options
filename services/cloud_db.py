@@ -152,13 +152,26 @@ class CloudDbClient:
         self._thread_local = threading.local()
         self._request_semaphore = threading.BoundedSemaphore(self._load_max_inflight())
         self._max_retries = self._load_max_retries()
-        # 📊 连接池性能指标
+        # 📊 连接池性能指标（扩展版）
         self._metrics = {
+            # 基础计数
             'total_requests': 0,
             'successful_requests': 0,
             'failed_requests': 0,
             'retried_requests': 0,
-            'timeout_requests': 0
+            'timeout_requests': 0,
+            # 错误分类计数
+            'rate_limited_count': 0,
+            'connection_error_count': 0,
+            'server_error_count': 0,
+            'validation_error_count': 0,
+            'not_found_error_count': 0,
+            'auth_error_count': 0,
+            # 延迟统计
+            'total_latency_ms': 0,
+            'max_latency_ms': 0,
+            # 重试统计
+            'total_retry_delay_ms': 0,
         }
         self._metrics_lock = threading.Lock()
 
@@ -549,15 +562,18 @@ class CloudDbClient:
         发送API请求并处理重试
         
         重试策略：
-        1. 限流错误(429/QPS)：使用指数退避，最大延迟3秒
-        2. 服务器错误(5xx)：立即重试，最多3次
-        3. 连接超时：使用线性退避，最大延迟2秒
-        4. 其他错误：简单线性退避
+        1. 限流错误(429/QPS)：使用指数退避，最大延迟5秒
+        2. 服务器错误(5xx)：使用指数退避，最大延迟4秒
+        3. 连接超时：使用快速重试，最大延迟2秒
+        4. 超时错误：使用线性退避，最大延迟3秒
+        5. 验证/认证/资源不存在错误：不重试
         """
         access_token = self._token_provider.get_access_token()
         url = f"https://api.weixin.qq.com/{api_path}?access_token={access_token}"
 
         last_err: Optional[str] = None
+        start_time = time.time()
+        total_retry_delay_ms = 0
         
         with self._metrics_lock:
             self._metrics['total_requests'] += 1
@@ -593,15 +609,20 @@ class CloudDbClient:
                             )
                         raise CloudDbRequestError(errmsg)
                     
-                    # 记录成功请求
+                    # 记录成功请求和延迟
+                    latency_ms = int((time.time() - start_time) * 1000)
                     with self._metrics_lock:
                         self._metrics['successful_requests'] += 1
+                        self._metrics['total_latency_ms'] += latency_ms
+                        if latency_ms > self._metrics['max_latency_ms']:
+                            self._metrics['max_latency_ms'] = latency_ms
                     
-                    # 记录重试次数
+                    # 记录重试次数和延迟
                     if attempt > 0:
                         with self._metrics_lock:
                             self._metrics['retried_requests'] += 1
-                        logger.info(f"🔄 请求重试成功 (第{attempt+1}次尝试)")
+                            self._metrics['total_retry_delay_ms'] += total_retry_delay_ms
+                        logger.info(f"🔄 请求重试成功 (第{attempt+1}次尝试, 延迟{total_retry_delay_ms}ms)")
                     
                     return data
                 finally:
@@ -611,61 +632,182 @@ class CloudDbClient:
                 last_err = str(e)
                 error_type = self._classify_error(last_err)
                 
+                # 按错误类型记录计数
+                error_count_key = f'{error_type}_count'
+                with self._metrics_lock:
+                    if error_count_key in self._metrics:
+                        self._metrics[error_count_key] += 1
+                
+                # 判断是否可重试
+                if not self._is_retryable_error(error_type):
+                    # 不可重试错误，直接失败
+                    with self._metrics_lock:
+                        self._metrics['failed_requests'] += 1
+                    logger.error(f"❌ 不可重试错误 ({error_type}): {last_err}")
+                    raise CloudDbRequestError(last_err)
+                
                 if attempt < (self._max_retries - 1):
                     delay = self._calculate_retry_delay(error_type, attempt)
+                    delay_ms = int(delay * 1000)
+                    total_retry_delay_ms += delay_ms
                     logger.warning(f"⚠️ 请求失败 ({attempt+1}/{self._max_retries}): {error_type}, {delay:.2f}s后重试...")
                     time.sleep(delay)
                 else:
                     # 最后一次尝试失败
                     with self._metrics_lock:
                         self._metrics['failed_requests'] += 1
+                        self._metrics['total_retry_delay_ms'] += total_retry_delay_ms
                     logger.error(f"❌ 请求失败 (已重试{self._max_retries}次): {last_err}")
                     
         raise CloudDbRequestError(last_err or "云数据库请求失败")
     
     def _classify_error(self, error_msg: str) -> str:
-        """分类错误类型"""
+        """
+        分类错误类型
+        
+        错误类型分类:
+        - rate_limit: 限流错误，可重试，指数退避
+        - timeout: 超时错误，可重试，线性退避
+        - connection: 连接错误，可重试，快速重试
+        - server_error: 服务器错误，可重试，指数退避
+        - validation: 验证错误，不可重试
+        - not_found: 资源不存在，不可重试
+        - auth: 认证错误，不可重试
+        - unknown: 未知错误，可重试（保守策略）
+        """
         error_lower = error_msg.lower()
-        if any(kw in error_lower for kw in ['rate', 'qps', 'freq', 'too many', 'limit']):
+        
+        # 限流相关
+        if any(kw in error_lower for kw in ['rate', 'qps', 'freq', 'too many', 'limit', '429', 'throttl']):
             return 'rate_limit'
-        elif any(kw in error_lower for kw in ['timeout', 'timed out']):
+        # 超时相关
+        elif any(kw in error_lower for kw in ['timeout', 'timed out', 'time out']):
             return 'timeout'
-        elif any(kw in error_lower for kw in ['connection', 'refused', 'reset']):
+        # 连接相关
+        elif any(kw in error_lower for kw in ['connection', 'refused', 'reset', 'network', 'unreachable']):
             return 'connection'
-        elif any(kw in error_lower for kw in ['5', 'server', 'internal']):
+        # 服务器错误
+        elif any(kw in error_lower for kw in ['500', '502', '503', '504', 'server', 'internal', 'service unavailable']):
             return 'server_error'
+        # 验证错误（不可重试）
+        elif any(kw in error_lower for kw in ['invalid', 'validation', 'format', 'parse', 'schema']):
+            return 'validation'
+        # 资源不存在（不可重试）
+        elif any(kw in error_lower for kw in ['not found', 'not exist', '404', 'resource not found', 'db or table not exist']):
+            return 'not_found'
+        # 认证错误（不可重试）
+        elif any(kw in error_lower for kw in ['unauthorized', 'forbidden', '401', '403', 'auth', 'permission', 'access denied']):
+            return 'auth'
         else:
             return 'unknown'
     
+    def _is_retryable_error(self, error_type: str) -> bool:
+        """判断错误是否可重试"""
+        retryable_types = {'rate_limit', 'timeout', 'connection', 'server_error', 'unknown'}
+        return error_type in retryable_types
+    
     def _calculate_retry_delay(self, error_type: str, attempt: int) -> float:
-        """根据错误类型计算重试延迟"""
-        jitter = random.random() * 0.15
+        """
+        根据错误类型计算重试延迟
+        
+        Args:
+            error_type: 错误类型
+            attempt: 当前重试次数（从0开始）
+            
+        Returns:
+            重试延迟秒数
+        """
+        jitter = random.random() * 0.2  # 增加抖动范围
         
         if error_type == 'rate_limit':
-            # 限流错误：指数退避，最大3秒
-            return min(3.0, 0.6 * (2 ** attempt) + jitter)
+            # 限流错误：指数退避，最大5秒
+            return min(5.0, 0.8 * (2 ** attempt) + jitter)
         elif error_type == 'timeout':
-            # 超时错误：线性退避，最大2秒
-            return min(2.0, 0.5 * (attempt + 1) + jitter)
+            # 超时错误：线性退避，最大3秒
+            return min(3.0, 0.6 * (attempt + 1) + jitter)
         elif error_type == 'connection':
-            # 连接错误：简单退避，最大1.5秒
-            return min(1.5, 0.3 * (attempt + 1) + jitter)
+            # 连接错误：快速重试，最大2秒
+            return min(2.0, 0.2 * (attempt + 1) + jitter)
+        elif error_type == 'server_error':
+            # 服务器错误：指数退避，最大4秒
+            return min(4.0, 0.5 * (2 ** attempt) + jitter)
         else:
-            # 其他错误：基础退避，最大1秒
-            return min(1.0, 0.2 * (attempt + 1) + jitter)
+            # 其他错误：基础退避，最大2秒
+            return min(2.0, 0.3 * (attempt + 1) + jitter)
     
-    def get_metrics(self) -> Dict[str, int]:
+    def get_metrics(self) -> Dict[str, Any]:
         """获取连接池性能指标"""
         with self._metrics_lock:
-            return self._metrics.copy()
+            metrics = self._metrics.copy()
+        
+        # 计算衍生指标
+        if metrics['total_requests'] > 0:
+            metrics['success_rate'] = metrics['successful_requests'] / metrics['total_requests']
+            metrics['error_rate'] = metrics['failed_requests'] / metrics['total_requests']
+        else:
+            metrics['success_rate'] = 0.0
+            metrics['error_rate'] = 0.0
+        
+        # 计算平均延迟
+        if metrics.get('total_latency_ms', 0) > 0 and metrics['total_requests'] > 0:
+            metrics['avg_latency_ms'] = metrics['total_latency_ms'] / metrics['total_requests']
+        else:
+            metrics['avg_latency_ms'] = 0.0
+        
+        return metrics
     
     def reset_metrics(self):
         """重置性能指标"""
         with self._metrics_lock:
             self._metrics = {
+                # 基础计数
                 'total_requests': 0,
                 'successful_requests': 0,
                 'failed_requests': 0,
                 'retried_requests': 0,
-                'timeout_requests': 0
+                'timeout_requests': 0,
+                # 错误分类计数
+                'rate_limited_count': 0,
+                'connection_error_count': 0,
+                'server_error_count': 0,
+                'validation_error_count': 0,
+                'not_found_error_count': 0,
+                'auth_error_count': 0,
+                # 延迟统计
+                'total_latency_ms': 0,
+                'max_latency_ms': 0,
+                # 重试统计
+                'total_retry_delay_ms': 0,
             }
+    
+    def get_error_rate(self) -> float:
+        """获取错误率"""
+        with self._metrics_lock:
+            total = self._metrics['total_requests']
+            if total == 0:
+                return 0.0
+            return self._metrics['failed_requests'] / total
+    
+    def get_health_status(self) -> Dict[str, Any]:
+        """获取健康状态"""
+        metrics = self.get_metrics()
+        
+        # 判断健康状态
+        if metrics['error_rate'] > 0.5:
+            status = 'unhealthy'
+        elif metrics['error_rate'] > 0.1:
+            status = 'degraded'
+        elif metrics['avg_latency_ms'] > 2000:
+            status = 'slow'
+        else:
+            status = 'healthy'
+        
+        return {
+            'status': status,
+            'error_rate': metrics['error_rate'],
+            'success_rate': metrics['success_rate'],
+            'avg_latency_ms': metrics['avg_latency_ms'],
+            'total_requests': metrics['total_requests'],
+            'failed_requests': metrics['failed_requests'],
+            'last_updated': _utc_now_iso()
+        }

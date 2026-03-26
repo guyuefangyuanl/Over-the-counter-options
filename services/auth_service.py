@@ -238,7 +238,19 @@ class AuthService:
         # TODO: Store token in Redis with expiry
         return True, "验证码已发送"
 
-    def authenticate_admin(self, username: str, password: str) -> Tuple[bool, Optional[str], Optional[str]]:
+    def authenticate_admin(self, username: str, password: str) -> Tuple[bool, Optional[str], Optional[str], bool]:
+        """
+        验证管理员登录
+
+        Returns:
+            Tuple[bool, Optional[str], Optional[str], bool]:
+            - 是否验证成功
+            - 角色（验证成功时）
+            - 错误信息（验证失败时）
+            - 是否需要修改密码（首次使用默认密码）
+        """
+        require_password_change = False
+
         # 1. Check Env/Default Admin
         if username == self.admin_username:
             # Support both plain text and hashed passwords
@@ -248,9 +260,12 @@ class AuthService:
             else:
                 # Plain text password (for development/first setup)
                 password_match = (password == self.admin_password)
-            
+                # 如果使用明文默认密码，标记需要修改
+                if password_match and password in ['admin123', 'admin', 'password', '123456']:
+                    require_password_change = True
+
             if password_match:
-                return True, self._normalize_role(self.admin_role), None
+                return True, self._normalize_role(self.admin_role), None, require_password_change
 
         # 2. Check DB Admin (only if database is available)
         try:
@@ -260,11 +275,13 @@ class AuthService:
                 stored_hash = user.get("password_hash")
                 if isinstance(stored_hash, str) and self._verify_password(password, stored_hash):
                     role = self._normalize_role(str(user.get("role") or "viewer"))
-                    return True, role, None
+                    # 检查是否首次登录或使用弱密码
+                    require_password_change = user.get('require_password_change', False)
+                    return True, role, None, require_password_change
         except Exception as e:
             logger.warning(f"数据库查询失败，仅使用环境变量配置的管理员: {e}")
-        
-        return False, None, "用户名或密码错误"
+
+        return False, None, "用户名或密码错误", False
 
     def upsert_admin_user(self, username: str, password: str, role: str):
         normalized_role = self._normalize_role(role)

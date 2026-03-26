@@ -33,6 +33,105 @@ def check_risk():
     except Exception as e:
         return flask_error_response(str(e), 500)
 
+
+@trade_bp.route('/risk/assessment', methods=['GET'])
+@require_auth
+def get_risk_assessment():
+    """
+    获取用户完整风险评估报告
+    
+    包括：
+    - 风险等级
+    - 持仓集中度
+    - 总敞口
+    - 盈亏状况
+    - 风险警告
+    """
+    try:
+        user_id = getattr(g, 'admin', {}).get('sub')
+        
+        # 获取风险评估
+        risk_result = risk_service.check_post_trade_risk(user_id)
+        
+        # 获取持仓信息
+        positions, _ = trade_service.get_positions(limit=100, customer_id=user_id)
+        
+        # 计算持仓统计
+        active_positions = [p for p in positions if p.get('status') == 'active']
+        total_market_value = sum(p.get('marketValue', 0) for p in active_positions)
+        total_pnl = sum(p.get('profitLoss', 0) for p in active_positions)
+        
+        # 计算持仓集中度
+        position_concentration = {}
+        for p in active_positions:
+            code = p.get('productCode', 'UNKNOWN')
+            value = p.get('marketValue', 0)
+            position_concentration[code] = position_concentration.get(code, 0) + value
+        
+        # 计算单一标的最大占比
+        max_single_ratio = 0
+        max_single_code = None
+        if total_market_value > 0:
+            for code, value in position_concentration.items():
+                ratio = value / total_market_value
+                if ratio > max_single_ratio:
+                    max_single_ratio = ratio
+                    max_single_code = code
+        
+        # 获取账户摘要
+        account_summary = trade_service.get_account_summary(user_id)
+        
+        # 风险等级颜色和文本
+        risk_level_map = {
+            'low': {'text': '低风险', 'color': '#52c41a', 'score': 25},
+            'medium': {'text': '中风险', 'color': '#faad14', 'score': 50},
+            'high': {'text': '高风险', 'color': '#ff7875', 'score': 75},
+            'very_high': {'text': '极高风险', 'color': '#f5222d', 'score': 100},
+            'unknown': {'text': '未知', 'color': '#d9d9d9', 'score': 0}
+        }
+        
+        risk_level = risk_result.get('risk_level', 'unknown')
+        level_info = risk_level_map.get(risk_level, risk_level_map['unknown'])
+        
+        # 生成建议
+        recommendations = []
+        if risk_level in ['high', 'very_high']:
+            recommendations.append('建议降低持仓比例，控制风险敞口')
+        if max_single_ratio > 0.5:
+            recommendations.append(f'持仓过于集中在{max_single_code}，建议分散投资')
+        if total_pnl < 0:
+            recommendations.append(f'当前持仓亏损 {abs(total_pnl):,.2f}，请关注市场变化')
+        if account_summary.get('balance', 0) < total_market_value * 0.1:
+            recommendations.append('可用资金较低，建议保留更多现金储备')
+        
+        return flask_success_response(
+            data={
+                'riskLevel': risk_level,
+                'riskLevelText': level_info['text'],
+                'riskLevelColor': level_info['color'],
+                'riskScore': level_info['score'],
+                'totalExposure': total_market_value,
+                'totalPnL': total_pnl,
+                'positionCount': len(active_positions),
+                'concentrationRisk': risk_result.get('concentration_risk', 0),
+                'maxSinglePosition': {
+                    'code': max_single_code,
+                    'ratio': round(max_single_ratio * 100, 2),
+                    'value': position_concentration.get(max_single_code, 0)
+                },
+                'positionConcentration': position_concentration,
+                'availableBalance': account_summary.get('balance', 0),
+                'totalAsset': account_summary.get('total_asset', 0),
+                'warnings': risk_result.get('warnings', []),
+                'recommendations': recommendations
+            },
+            message='获取风险评估成功'
+        )
+    except Exception as e:
+        current_app.logger.error(f'获取风险评估失败: {e}')
+        return flask_error_response(str(e), 500)
+
+
 @trade_bp.route('/risk/greeks', methods=['POST'])
 @require_auth
 def calculate_greeks():
@@ -125,10 +224,25 @@ def create_position():
         else:
             return flask_error_response("持仓创建失败", 500)
     except ValueError as ve:
-        return flask_error_response(str(ve), 400)
+        # 集合不存在等配置问题，返回友好提示
+        err_msg = str(ve)
+        if '集合' in err_msg and '不存在' in err_msg:
+            current_app.logger.error(f'[create_position] 数据库配置错误: {err_msg}')
+            return flask_error_response(
+                "数据库配置未完成，请联系管理员在微信云开发控制台创建必要的数据库集合。",
+                500
+            )
+        return flask_error_response(err_msg, 400)
     except Exception as e:
         current_app.logger.error(f'创建持仓失败: {e}')
-        return flask_error_response(str(e), 500)
+        # 检查是否是集合不存在的错误
+        err_msg = str(e)
+        if 'ResourceNotFound' in err_msg or 'Db or Table not exist' in err_msg or '集合不存在' in err_msg:
+            return flask_error_response(
+                "数据库配置未完成，请联系管理员在微信云开发控制台创建必要的数据库集合。",
+                500
+            )
+        return flask_error_response("服务器内部错误，请稍后重试", 500)
 
 @trade_bp.route('/positions/<position_id>', methods=['PUT'])
 @require_auth

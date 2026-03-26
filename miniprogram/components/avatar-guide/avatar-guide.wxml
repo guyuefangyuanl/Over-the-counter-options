@@ -1,0 +1,90 @@
+<view class="avatar-guide-mask" wx:if="{{show}}" bindtap="onClose">
+  <view class="avatar-guide-container" catchtap="stopPropagation">
+    <!-- 头部 -->
+    <view class="guide-header">
+      <text class="guide-title">完善个人资料</text>
+      <view class="guide-close" bindtap="onClose" wx:if="{{!required}}">×</view>
+    </view>
+
+    <!-- 步骤1: 选择头像方式 -->
+    <view class="guide-step" wx:if="{{currentStep === 0}}">
+      <view class="step-title">选择头像</view>
+      <view class="avatar-preview">
+        <image class="preview-image" src="{{tempAvatarUrl || '/images/default-avatar.png'}}" mode="aspectFill" />
+        <view class="preview-tip">点击下方选择头像</view>
+      </view>
+
+      <view class="avatar-options">
+        <view class="option-item" data-type="choose" bindtap="onChooseAvatarType">
+          <view class="option-icon">🖼️</view>
+          <text class="option-text">从相册选择</text>
+        </view>
+        <view class="option-item" data-type="camera" bindtap="onChooseAvatarType">
+          <view class="option-icon">📷</view>
+          <text class="option-text">拍照</text>
+        </view>
+        <view class="option-item" data-type="default" bindtap="onChooseAvatarType">
+          <view class="option-icon">🎭</view>
+          <text class="option-text">默认头像</text>
+        </view>
+      </view>
+
+      <!-- 默认头像选择 -->
+      <view class="default-avatars" wx:if="{{isChoosingAvatar}}">
+        <view class="default-title">选择一个默认头像</view>
+        <view class="default-list">
+          <view
+            class="default-item {{tempAvatarUrl === item ? 'selected' : ''}}"
+            wx:for="{{defaultAvatars}}"
+            wx:key="*this"
+            data-url="{{item}}"
+            bindtap="onDefaultAvatarTap"
+          >
+            <image class="default-avatar-img" src="{{item}}" mode="aspectFill" />
+          </view>
+        </view>
+      </view>
+
+      <view class="guide-actions">
+        <view class="btn-skip" bindtap="onSkipAvatar" wx:if="{{!required}}">跳过</view>
+        <view class="btn-next" bindtap="onConfirm">确定</view>
+      </view>
+    </view>
+
+    <!-- 步骤2: 设置昵称 -->
+    <view class="guide-step" wx:if="{{currentStep === 1}}">
+      <view class="step-title">设置昵称</view>
+
+      <view class="avatar-preview small">
+        <image class="preview-image" src="{{tempAvatarUrl || '/images/default-avatar.png'}}" mode="aspectFill" />
+        <view class="change-avatar" bindtap="onPrevStep">更换</view>
+      </view>
+
+      <view class="nickname-input-wrapper">
+        <input
+          class="nickname-input"
+          type="text"
+          placeholder="请输入您的昵称"
+          maxlength="20"
+          value="{{tempNickname}}"
+          bindinput="onNicknameInput"
+        />
+        <text class="nickname-count">{{tempNickname.length || 0}}/20</text>
+      </view>
+
+      <view class="nickname-tips">
+        <text>• 昵称长度1-20个字符</text>
+        <text>• 支持中英文、数字和常见符号</text>
+        <text>• 请勿使用敏感词汇</text>
+      </view>
+
+      <view class="guide-actions">
+        <view class="btn-prev" bindtap="onPrevStep">上一步</view>
+        <view class="btn-confirm {{uploading ? 'loading' : ''}}" bindtap="onConfirm">
+          <text wx:if="{{!uploading}}">保存</text>
+          <text wx:else>保存中...</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

@@ -6,10 +6,297 @@ import re
 import tempfile
 import time
 import uuid
+import hashlib
 from typing import Any, Dict, List, Optional, Tuple
+from contextlib import contextmanager
 
 # 配置日志
 logger = logging.getLogger(__name__)
+
+
+# ================== 安全配置 ==================
+
+# 允许的文件扩展名
+ALLOWED_EXTENSIONS = {'.xlsx', '.xls', '.csv'}
+
+# 文件大小限制（字节）
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
+
+# 最大单元格数量（防止DoS攻击）
+MAX_CELLS = 1_000_000
+
+# 最大行列数
+MAX_ROWS = 100_000
+MAX_COLS = 500
+
+# 文件名最大长度
+MAX_FILENAME_LENGTH = 255
+
+# 允许的MIME类型
+ALLOWED_MIME_TYPES = {
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',  # xlsx
+    'application/vnd.ms-excel',  # xls
+    'application/excel',
+    'application/x-excel',
+    'application/x-msexcel',
+    'text/csv',
+    'text/plain',
+    'application/csv',
+}
+
+# 危险的文件名字符（需要移除）
+DANGEROUS_FILENAME_CHARS = ['..', '/', '\\', '\x00', '\n', '\r', '\t', '<', '>', ':', '"', '|', '?', '*']
+
+
+class FileValidationError(Exception):
+    """文件验证错误"""
+    def __init__(self, message: str, code: str = None):
+        self.message = message
+        self.code = code or 'FILE_VALIDATION_ERROR'
+        super().__init__(self.message)
+
+
+# ================== 安全函数 ==================
+
+def sanitize_filename(filename: str) -> str:
+    """
+    清理文件名，防止路径遍历攻击
+    
+    Args:
+        filename: 原始文件名
+        
+    Returns:
+        安全的文件名
+        
+    Raises:
+        FileValidationError: 文件名无效
+    """
+    if not filename:
+        raise FileValidationError("文件名不能为空", "EMPTY_FILENAME")
+    
+    # 截断过长的文件名
+    if len(filename) > MAX_FILENAME_LENGTH:
+        filename = filename[-MAX_FILENAME_LENGTH:]
+    
+    # 移除危险字符
+    clean = filename
+    for char in DANGEROUS_FILENAME_CHARS:
+        clean = clean.replace(char, '_')
+    
+    # 移除控制字符
+    clean = ''.join(c for c in clean if ord(c) >= 32 or c in '\t')
+    
+    # 移除首尾空格和点
+    clean = clean.strip(' .')
+    
+    if not clean:
+        raise FileValidationError("文件名无效", "INVALID_FILENAME")
+    
+    # 检查扩展名
+    ext = os.path.splitext(clean)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise FileValidationError(
+            f"不支持的文件类型: {ext}，仅支持: {', '.join(ALLOWED_EXTENSIONS)}",
+            "UNSUPPORTED_EXTENSION"
+        )
+    
+    return clean
+
+
+def generate_safe_filename(original_filename: str) -> str:
+    """
+    生成安全的唯一文件名
+    
+    Args:
+        original_filename: 原始文件名
+        
+    Returns:
+        安全的唯一文件名（UUID + 扩展名）
+    """
+    ext = os.path.splitext(original_filename)[1].lower() if original_filename else '.xlsx'
+    if ext not in ALLOWED_EXTENSIONS:
+        ext = '.xlsx'  # 默认扩展名
+    return f"{uuid.uuid4().hex}{ext}"
+
+
+def validate_file_size(content: bytes, filename: str = None) -> None:
+    """
+    验证文件大小
+    
+    Args:
+        content: 文件内容
+        filename: 文件名（用于日志）
+        
+    Raises:
+        FileValidationError: 文件大小超限
+    """
+    size = len(content)
+    if size == 0:
+        raise FileValidationError("文件内容为空", "EMPTY_FILE")
+    
+    if size > MAX_FILE_SIZE:
+        size_mb = size / (1024 * 1024)
+        max_mb = MAX_FILE_SIZE / (1024 * 1024)
+        logger.warning(f"文件大小超限: {filename or 'unknown'}, {size_mb:.2f}MB > {max_mb}MB")
+        raise FileValidationError(
+            f"文件大小超过限制 ({size_mb:.2f}MB > {max_mb}MB)",
+            "FILE_TOO_LARGE"
+        )
+
+
+def detect_mime_type(content: bytes) -> Optional[str]:
+    """
+    检测文件MIME类型（基于魔数）
+    
+    Args:
+        content: 文件内容（前1024字节足够）
+        
+    Returns:
+        MIME类型字符串，如果无法识别则返回None
+    """
+    if len(content) < 4:
+        return None
+    
+    # 检查常见文件签名
+    # XLSX (ZIP格式): 50 4B 03 04 或 50 4B 05 06 或 50 4B 07 08
+    if content[:4] in (b'PK\x03\x04', b'PK\x05\x06', b'PK\x07\x08'):
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    
+    # XLS (OLE格式): D0 CF 11 E0
+    if content[:4] == b'\xD0\xCF\x11\xE0':
+        return 'application/vnd.ms-excel'
+    
+    # CSV/文本: 检查是否为可打印文本
+    try:
+        sample = content[:512]
+        # 尝试解码为UTF-8
+        sample.decode('utf-8')
+        # 检查是否主要是可打印字符
+        printable_ratio = sum(1 for c in sample if 32 <= c < 127 or c in (9, 10, 13)) / len(sample)
+        if printable_ratio > 0.85:
+            # 检查是否包含CSV特征（逗号或制表符分隔）
+            if b',' in sample or b'\t' in sample:
+                return 'text/csv'
+            return 'text/plain'
+    except UnicodeDecodeError:
+        pass
+    
+    return None
+
+
+def validate_file_content(content: bytes, filename: str = None) -> Tuple[bool, str]:
+    """
+    验证文件内容安全性
+    
+    Args:
+        content: 文件内容
+        filename: 文件名（用于日志）
+        
+    Returns:
+        (是否有效, MIME类型)
+        
+    Raises:
+        FileValidationError: 文件内容无效
+    """
+    # 验证文件大小
+    validate_file_size(content, filename)
+    
+    # 检测MIME类型
+    mime_type = detect_mime_type(content)
+    
+    if mime_type is None:
+        logger.warning(f"无法识别文件类型: {filename}")
+        raise FileValidationError(
+            "无法识别的文件格式",
+            "UNKNOWN_FILE_FORMAT"
+        )
+    
+    if mime_type not in ALLOWED_MIME_TYPES:
+        logger.warning(f"不支持的文件类型: {filename}, mime={mime_type}")
+        raise FileValidationError(
+            f"不支持的文件格式: {mime_type}",
+            "UNSUPPORTED_MIME_TYPE"
+        )
+    
+    return True, mime_type
+
+
+def calculate_file_hash(content: bytes) -> str:
+    """
+    计算文件SHA256哈希值（用于审计）
+    
+    Args:
+        content: 文件内容
+        
+    Returns:
+        哈希值字符串
+    """
+    return hashlib.sha256(content).hexdigest()[:32]
+
+
+@contextmanager
+def parsing_timeout(seconds: int = 30):
+    """
+    解析超时上下文管理器（仅Unix系统有效）
+    
+    Args:
+        seconds: 超时秒数
+    """
+    import signal
+    
+    def timeout_handler(signum, frame):
+        raise TimeoutError(f"文件解析超时 ({seconds}秒)")
+    
+    # 仅在支持signal.SIGALRM的系统上使用
+    if hasattr(signal, 'SIGALRM'):
+        old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(seconds)
+        try:
+            yield
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
+    else:
+        # Windows系统不支持SIGALRM，直接执行
+        yield
+
+
+def validate_dataframe_size(df: Any) -> None:
+    """
+    验证DataFrame大小，防止内存耗尽
+    
+    Args:
+        df: pandas DataFrame
+        
+    Raises:
+        FileValidationError: DataFrame过大
+    """
+    try:
+        rows = len(df)
+        cols = len(df.columns)
+        cells = rows * cols
+        
+        if rows > MAX_ROWS:
+            raise FileValidationError(
+                f"行数超过限制 ({rows} > {MAX_ROWS})",
+                "TOO_MANY_ROWS"
+            )
+        
+        if cols > MAX_COLS:
+            raise FileValidationError(
+                f"列数超过限制 ({cols} > {MAX_COLS})",
+                "TOO_MANY_COLS"
+            )
+        
+        if cells > MAX_CELLS:
+            raise FileValidationError(
+                f"单元格数量超过限制 ({cells:,} > {MAX_CELLS:,})",
+                "TOO_MANY_CELLS"
+            )
+    except FileValidationError:
+        raise
+    except Exception as e:
+        logger.warning(f"验证DataFrame大小失败: {e}")
 
 
 def _utc_now_iso() -> str:
@@ -160,86 +447,113 @@ def parse_quotes_file(*, filename: str, content: bytes, sheet_name: Optional[str
     """
     解析报价文件（支持 .xlsx/.xls/.csv 格式）
     
+    安全措施：
+    1. 文件名清理（防止路径遍历）
+    2. 文件大小验证
+    3. MIME类型检测
+    4. DataFrame大小限制
+    5. 解析超时保护
+    
     支持两种格式：
     1. 期权矩阵格式：多行表头，包含 type/term/trader/rate 字段
     2. 简单行情格式：标准列头，包含 stock_code/name/price 等字段
     
     返回解析后的数据列表
+    
+    Raises:
+        FileValidationError: 文件验证失败
     """
     import pandas as pd
     
+    # ========== 安全验证 ==========
+    # 1. 清理文件名
+    safe_filename = sanitize_filename(filename)
+    
+    # 2. 验证文件内容
+    is_valid, mime_type = validate_file_content(content, safe_filename)
+    
+    # 3. 计算文件哈希（用于审计日志）
+    file_hash = calculate_file_hash(content)
+    
+    logger.info(f"开始解析文件: {safe_filename}, size={len(content)}bytes, hash={file_hash}, mime={mime_type}")
+    
     items: List[Dict[str, Any]] = []
-    errors: List[Dict[str, Any]] = []
+    parsing_errors: List[Dict[str, Any]] = []
     
     try:
-        # 根据文件扩展名选择解析方式
-        ext = os.path.splitext(filename)[1].lower()
-        
-        if ext == '.csv':
-            # CSV 文件
-            try:
-                df = pd.read_csv(io.BytesIO(content), encoding='utf-8')
-            except UnicodeDecodeError:
-                df = pd.read_csv(io.BytesIO(content), encoding='gbk')
-        elif ext in ('.xlsx', '.xls'):
-            # Excel 文件
-            df = pd.read_excel(io.BytesIO(content), sheet_name=sheet_name or 0, header=None)
-        else:
-            logger.warning(f"不支持的文件格式: {ext}")
-            return []
-        
-        if df.empty:
-            logger.warning(f"文件为空或无法解析: {filename}")
-            return []
-        
-        logger.info(f"解析文件 {filename}, 行数: {len(df)}, 列数: {len(df.columns)}")
-        
-        # 检测文件格式
-        file_format, data_start_row = _detect_file_format(df)
-        logger.info(f"检测到文件格式: {file_format}, 数据起始行: {data_start_row}")
-        
-        if file_format == 'options_matrix':
-            # 期权矩阵格式
-            header_rows = df.iloc[:4]  # 前4行是表头
-            data_df = df.iloc[data_start_row:]
-            items = _parse_complex_matrix(data_df, header_rows)
+        # 使用超时保护（仅Unix系统有效）
+        with parsing_timeout(seconds=30):
+            # 根据文件扩展名选择解析方式
+            ext = os.path.splitext(safe_filename)[1].lower()
             
-        elif file_format == 'simple_quotes':
-            # 简单行情格式
-            now = _utc_now_iso()
-            
-            # 尝试识别列头
-            if data_start_row > 0:
-                headers = df.iloc[data_start_row - 1].values
-                data_df = df.iloc[data_start_row:]
+            if ext == '.csv':
+                # CSV 文件
+                try:
+                    df = pd.read_csv(io.BytesIO(content), encoding='utf-8')
+                except UnicodeDecodeError:
+                    df = pd.read_csv(io.BytesIO(content), encoding='gbk')
+            elif ext in ('.xlsx', '.xls'):
+                # Excel 文件
+                df = pd.read_excel(io.BytesIO(content), sheet_name=sheet_name or 0, header=None)
             else:
-                # 假设第一行是列头
-                headers = df.iloc[0].values
-                data_df = df.iloc[1:]
+                logger.warning(f"不支持的文件格式: {ext}")
+                raise FileValidationError(f"不支持的文件格式: {ext}", "UNSUPPORTED_EXTENSION")
             
-            # 构建列名映射
-            col_map = {}
-            for i, h in enumerate(headers):
-                h_lower = str(h).strip().lower()
-                if h_lower in ('代码', 'code', 'stock_code', '股票代码'):
-                    col_map['stock_code'] = i
-                elif h_lower in ('名称', 'name', 'stock_name', '股票名称'):
-                    col_map['name'] = i
-                elif h_lower in ('价格', 'price', '现价'):
-                    col_map['price'] = i
-                elif h_lower in ('涨跌幅', 'changepercent', '涨跌'):
-                    col_map['changePercent'] = i
-                elif h_lower in ('开盘价', 'open'):
-                    col_map['open'] = i
-                elif h_lower in ('最高价', 'high'):
-                    col_map['high'] = i
-                elif h_lower in ('最低价', 'low'):
-                    col_map['low'] = i
-                elif h_lower in ('昨收', 'pre_close'):
-                    col_map['pre_close'] = i
-                elif h_lower in ('成交量', 'volume'):
-                    col_map['volume'] = i
-                elif h_lower in ('成交额', 'amount'):
+            if df.empty:
+                logger.warning(f"文件为空或无法解析: {safe_filename}")
+                return []
+            
+            # 4. 验证DataFrame大小
+            validate_dataframe_size(df)
+            
+            logger.info(f"解析文件 {safe_filename}, 行数: {len(df)}, 列数: {len(df.columns)}")
+            
+            # 检测文件格式
+            file_format, data_start_row = _detect_file_format(df)
+            logger.info(f"检测到文件格式: {file_format}, 数据起始行: {data_start_row}")
+            
+            if file_format == 'options_matrix':
+                # 期权矩阵格式
+                header_rows = df.iloc[:4]  # 前4行是表头
+                data_df = df.iloc[data_start_row:]
+                items = _parse_complex_matrix(data_df, header_rows)
+                
+            elif file_format == 'simple_quotes':
+                # 简单行情格式
+                now = _utc_now_iso()
+                
+                # 尝试识别列头
+                if data_start_row > 0:
+                    headers = df.iloc[data_start_row - 1].values
+                    data_df = df.iloc[data_start_row:]
+                else:
+                    # 假设第一行是列头
+                    headers = df.iloc[0].values
+                    data_df = df.iloc[1:]
+                
+                # 构建列名映射
+                col_map = {}
+                for i, h in enumerate(headers):
+                    h_lower = str(h).strip().lower()
+                    if h_lower in ('代码', 'code', 'stock_code', '股票代码'):
+                        col_map['stock_code'] = i
+                    elif h_lower in ('名称', 'name', 'stock_name', '股票名称'):
+                        col_map['name'] = i
+                    elif h_lower in ('价格', 'price', '现价'):
+                        col_map['price'] = i
+                    elif h_lower in ('涨跌幅', 'changepercent', '涨跌'):
+                        col_map['changePercent'] = i
+                    elif h_lower in ('开盘价', 'open'):
+                        col_map['open'] = i
+                    elif h_lower in ('最高价', 'high'):
+                        col_map['high'] = i
+                    elif h_lower in ('最低价', 'low'):
+                        col_map['low'] = i
+                    elif h_lower in ('昨收', 'pre_close'):
+                        col_map['pre_close'] = i
+                    elif h_lower in ('成交量', 'volume'):
+                        col_map['volume'] = i
+                    elif h_lower in ('成交额', 'amount'):
                     col_map['amount'] = i
             
             # 解析数据行
@@ -282,7 +596,7 @@ def parse_quotes_file(*, filename: str, content: bytes, sheet_name: Optional[str
                     
                     items.append(item)
                 except Exception as e:
-                    errors.append({"row": idx, "error": str(e)})
+                    parsing_errors.append({"row": idx, "error": str(e)})
                     continue
         else:
             # 未知格式，尝试通用解析
@@ -316,11 +630,17 @@ def parse_quotes_file(*, filename: str, content: bytes, sheet_name: Optional[str
                 except Exception:
                     continue
         
-        logger.info(f"文件解析完成: {filename}, 共解析 {len(items)} 条记录, 错误 {len(errors)} 条")
+        logger.info(f"文件解析完成: {safe_filename}, 共解析 {len(items)} 条记录, 错误 {len(parsing_errors)} 条")
         
+    except FileValidationError:
+        # 文件验证错误直接抛出
+        raise
+    except TimeoutError as e:
+        logger.error(f"解析文件超时: {safe_filename}, 错误: {e}")
+        raise FileValidationError(f"文件解析超时，请检查文件大小或格式", "PARSE_TIMEOUT")
     except Exception as e:
-        logger.error(f"解析文件失败: {filename}, 错误: {e}")
-        return []
+        logger.error(f"解析文件失败: {safe_filename}, 错误: {e}")
+        raise FileValidationError(f"文件解析失败: {str(e)}", "PARSE_ERROR")
     
     return items
 

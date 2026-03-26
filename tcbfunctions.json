@@ -1,0 +1,28 @@
+{
+  "functions": [
+    {
+      "name": "login",
+      "handler": "index.main",
+      "runtime": "Nodejs18.15",
+      "timeout": 30,
+      "installDependency": true,
+      "type": "Event"
+    },
+    {
+      "name": "handleInquiry",
+      "handler": "index.main",
+      "runtime": "Nodejs18.15",
+      "timeout": 30,
+      "installDependency": true,
+      "type": "Event"
+    },
+    {
+      "name": "initDatabase",
+      "handler": "index.main",
+      "runtime": "Nodejs18.15",
+      "timeout": 60,
+      "installDependency": true,
+      "type": "Event"
+    }
+  ]
+}

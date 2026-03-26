@@ -1,15 +1,45 @@
 {
-  "env": { "es6": true, "browser": true, "node": true },
+  "env": { "es6": true, "browser": true, "node": true, "jest": true },
   "extends": ["eslint:recommended"],
   "parserOptions": { "ecmaVersion": 2020, "sourceType": "module" },
+  "globals": {
+    "wx": "readonly",
+    "App": "readonly",
+    "Page": "readonly",
+    "Component": "readonly",
+    "getApp": "readonly",
+    "getCurrentPages": "readonly",
+    "Behavior": "readonly"
+  },
   "rules": {
-    "no-unused-vars": ["warn", { "args": "none" }],
+    "no-unused-vars": ["warn", { "args": "none", "argsIgnorePattern": "^_" }],
     "no-undef": "error",
     "no-console": ["off"],
-    "eqeqeq": ["error", "always"],
-    "curly": "error",
+    "no-debugger": "warn",
+    "eqeqeq": ["error", "always", { "null": "ignore" }],
+    "curly": ["error", "multi-line"],
     "no-var": "error",
-    "prefer-const": "warn"
+    "prefer-const": "warn",
+    "prefer-arrow-callback": "warn",
+    "indent": ["error", 2, { "SwitchCase": 1 }],
+    "quotes": ["warn", "single", { "avoidEscape": true }],
+    "semi": ["warn", "always"],
+    "comma-dangle": ["warn", "never"],
+    "no-multiple-empty-lines": ["warn", { "max": 2 }],
+    "no-trailing-spaces": "warn",
+    "arrow-spacing": ["warn", { "before": true, "after": true }],
+    "key-spacing": ["warn", { "beforeColon": false, "afterColon": true }],
+    "keyword-spacing": ["warn", { "before": true, "after": true }],
+    "space-before-blocks": ["warn", "always"],
+    "max-len": ["warn", { "code": 120, "ignoreUrls": true }]
   },
-  "ignorePatterns": ["pages/inquiry/*.md", "**/__tests__/**"]
+  "ignorePatterns": ["pages/inquiry/*.md", "**/__tests__/**", "node_modules/**"],
+  "overrides": [
+    {
+      "files": ["**/*.test.js", "**/*.spec.js"],
+      "rules": {
+        "no-unused-vars": "off"
+      }
+    }
+  ]
 }

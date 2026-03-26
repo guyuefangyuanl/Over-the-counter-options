@@ -10,3 +10,9 @@ timestamp | issue_id | status | description | summary
 2026-03-10T00:08:00 | P1-4 | 已修复 | 短信验证码校验接口路径不一致 | 后端新增 /auth/verify-sms-code
 2026-03-10T00:09:00 | P1-5 | 已修复 | 短信验证码发送返回值不一致 | 统一返回 phone 与 expiresIn 开发环境含 code
 2026-03-10T00:10:00 | P1-6 | 已修复 | 密码重置缺少验证码校验与存储 | 新增验证码内存存储并用于校验
+2026-03-25T12:00:00 | SEC-1 | 已完成 | Token黑名单机制 | 实现Token黑名单服务(services/token_blacklist.py)，支持Redis和内存存储，在app.py中初始化
+2026-03-25T12:10:00 | SEC-2 | 已完成 | 安全响应头 | 在app.py中添加add_security_headers中间件
+2026-03-25T12:20:00 | SEC-3 | 已完成 | 敏感操作二次验证 | 新增require_verification装饰器，支持密码和短信验证
+2026-03-25T12:30:00 | SEC-4 | 已完成 | 双因素认证(2FA) | 新增services/two_factor_auth.py，支持TOTP验证和备用码
+2026-03-25T12:40:00 | SEC-5 | 已完成 | 2FA API接口 | 新增/auth/2fa/setup、enable、disable、status、regenerate-backup-codes接口
+2026-03-25T12:50:00 | SEC-6 | 已完成 | 前端密码强度验证 | 新增miniprogram/utils/passwordValidator.js，实时验证密码强度

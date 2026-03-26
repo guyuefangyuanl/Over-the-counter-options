@@ -1,0 +1,33 @@
+[flake8]
+# Flake8配置文件
+max-line-length = 120
+max-complexity = 15
+
+# 忽略的目录
+exclude =
+    .venv,
+    venv,
+    node_modules,
+    .git,
+    __pycache__,
+    .pytest_cache,
+    build,
+    dist,
+    *.egg-info
+
+# 忽略的规则
+# E501: line too long (由其他工具处理)
+# W503: line break before binary operator (与W504冲突)
+# E203: whitespace before ':' (black格式化会触发)
+ignore =
+    E501,
+    W503,
+    E203,
+    E722,  # bare except (项目中有使用)
+    C901,  # too complex
+
+# 每个文件的最大复杂度
+max-complexity = 15
+
+# 文件编码
+encoding = utf-8

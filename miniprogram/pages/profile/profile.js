@@ -421,7 +421,7 @@ Page({
           // 清除本地存储
           wx.removeStorageSync('userInfo');
           wx.removeStorageSync('token');
-          wx.removeStorageSync('refreshToken');
+          wx.removeStorageSync('refresh_token');  // 统一使用下划线格式
 
           this.setData({
             'userInfo.isLoggedIn': false,

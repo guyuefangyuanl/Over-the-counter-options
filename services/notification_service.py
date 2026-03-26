@@ -369,3 +369,246 @@ class NotificationService:
             'timestamp': datetime.utcnow().isoformat()
         }
         logger.info(f"[NOTIFICATION] {json.dumps(log_entry, ensure_ascii=False)}")
+
+    # --- 询价状态变更通知 ---
+
+    def notify_inquiry_status_change(
+        self,
+        user_id: str,
+        inquiry_id: str,
+        new_status: str,
+        product_name: str = '',
+        remark: str = '',
+        channels: List[str] = None
+    ) -> Dict[str, bool]:
+        """
+        询价状态变更通知
+
+        Args:
+            user_id: 用户ID (openid)
+            inquiry_id: 询价ID
+            new_status: 新状态
+            product_name: 产品名称
+            remark: 备注
+            channels: 通知渠道列表，默认 ['inapp']
+
+        Returns:
+            各渠道发送结果
+        """
+        from models.inquiry_status import InquiryStatus
+
+        status_label = InquiryStatus.get_label(new_status)
+        title = '询价状态更新'
+        content = f'您的询价 {product_name or inquiry_id[:8]} 状态已更新为: {status_label}'
+        if remark:
+            content += f'。{remark}'
+
+        if channels is None:
+            channels = ['inapp']
+
+        # 根据状态决定是否添加额外通知渠道
+        if new_status == 'quoted':
+            # 已报价：重要通知，多渠道发送
+            channels = ['inapp', 'wechat']
+        elif new_status == 'rejected':
+            # 已拒绝：重要通知
+            channels = ['inapp', 'wechat']
+        elif new_status == 'completed':
+            # 已成交：重要通知
+            channels = ['inapp']
+
+        results = {}
+        for channel in channels:
+            try:
+                result = self.send_notification(
+                    user_id,
+                    title,
+                    content,
+                    channel=channel,
+                    extra_data={
+                        'type': 'inquiry_status',
+                        'inquiry_id': inquiry_id,
+                        'status': new_status
+                    }
+                )
+                results[channel] = result
+            except Exception as e:
+                logger.error(f"询价状态通知发送失败 (channel={channel}): {e}")
+                results[channel] = False
+
+        return results
+
+    def notify_inquiry_quoted(
+        self,
+        user_id: str,
+        inquiry_id: str,
+        product_name: str,
+        quote_info: Dict[str, Any] = None
+    ) -> bool:
+        """
+        询价已报价通知（重点通知）
+
+        Args:
+            user_id: 用户ID
+            inquiry_id: 询价ID
+            product_name: 产品名称
+            quote_info: 报价信息 {rate, dealer, validUntil}
+
+        Returns:
+            是否发送成功
+        """
+        title = '询价已报价'
+        content = f'您的询价 {product_name} 已有报价'
+
+        if quote_info:
+            if quote_info.get('rate'):
+                content += f"，费率 {quote_info['rate']*100:.2f}%"
+            if quote_info.get('dealer'):
+                content += f"，报价方: {quote_info['dealer']}"
+
+        content += '。请及时查看并确认。'
+
+        # 同时发送站内信和微信消息
+        inapp_result = self.send_notification(
+            user_id, title, content, channel='inapp',
+            extra_data={
+                'type': 'inquiry_quoted',
+                'inquiry_id': inquiry_id,
+                'quote_info': quote_info
+            }
+        )
+
+        wechat_result = self.send_notification(
+            user_id, title, content, channel='wechat',
+            page=f'pages/inquiry-history/detail?id={inquiry_id}'
+        )
+
+        return inapp_result or wechat_result
+
+    def notify_inquiry_expired(
+        self,
+        user_id: str,
+        inquiry_id: str,
+        product_name: str
+    ) -> bool:
+        """
+        询价过期提醒
+
+        Args:
+            user_id: 用户ID
+            inquiry_id: 询价ID
+            product_name: 产品名称
+
+        Returns:
+            是否发送成功
+        """
+        title = '询价即将过期'
+        content = f'您的询价 {product_name} 即将过期，请及时处理。'
+
+        return self.send_notification(
+            user_id, title, content, channel='inapp',
+            extra_data={
+                'type': 'inquiry_expiring',
+                'inquiry_id': inquiry_id
+            }
+        )
+
+    def get_user_unread_notifications(
+        self,
+        user_id: str,
+        limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """
+        获取用户未读通知列表
+
+        Args:
+            user_id: 用户ID
+            limit: 返回数量限制
+
+        Returns:
+            未读通知列表
+        """
+        try:
+            ensure_db = getattr(current_app, "ensure_db", None)
+            db = ensure_db() if callable(ensure_db) else getattr(current_app, "db", None)
+
+            if not db:
+                return []
+
+            notifications = list(
+                db['notifications']
+                .find({'openid': user_id, 'is_read': False})
+                .sort('created_at', -1)
+                .limit(limit)
+            )
+
+            for n in notifications:
+                n['_id'] = str(n['_id'])
+                if hasattr(n.get('created_at'), 'isoformat'):
+                    n['created_at'] = n['created_at'].isoformat()
+
+            return notifications
+
+        except Exception as e:
+            logger.error(f"获取未读通知失败: {e}")
+            return []
+
+    def mark_notification_read(self, notification_id: str, user_id: str) -> bool:
+        """
+        标记通知为已读
+
+        Args:
+            notification_id: 通知ID
+            user_id: 用户ID
+
+        Returns:
+            是否成功
+        """
+        try:
+            ensure_db = getattr(current_app, "ensure_db", None)
+            db = ensure_db() if callable(ensure_db) else getattr(current_app, "db", None)
+
+            if not db:
+                return False
+
+            from bson import ObjectId
+            result = db['notifications'].update_one(
+                {'_id': ObjectId(notification_id), 'openid': user_id},
+                {'$set': {'is_read': True, 'read_at': datetime.utcnow()}}
+            )
+
+            return result.modified_count > 0
+
+        except Exception as e:
+            logger.error(f"标记通知已读失败: {e}")
+            return False
+
+    def get_unread_count(self, user_id: str) -> int:
+        """
+        获取用户未读通知数量
+
+        Args:
+            user_id: 用户ID
+
+        Returns:
+            未读数量
+        """
+        try:
+            ensure_db = getattr(current_app, "ensure_db", None)
+            db = ensure_db() if callable(ensure_db) else getattr(current_app, "db", None)
+
+            if not db:
+                return 0
+
+            return db['notifications'].count_documents({
+                'openid': user_id,
+                'is_read': False
+            })
+
+        except Exception as e:
+            logger.error(f"获取未读数量失败: {e}")
+            return 0
+
+
+# 单例实例
+notification_service = NotificationService()

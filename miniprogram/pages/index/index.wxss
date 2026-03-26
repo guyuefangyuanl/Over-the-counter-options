@@ -2,7 +2,7 @@
 .container {
   min-height: 100vh;
   background: #f5f7fa;
-  padding-bottom: 200rpx;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 200rpx);
   box-sizing: border-box;
 }
 
@@ -771,10 +771,17 @@
   margin-bottom: 24rpx;
 }
 
+/* 知识模块响应式布局 */
+.knowledge-header {
+  margin-top: 16rpx;
+}
+
 .knowledge-list {
   background: #fff;
   border-radius: 16rpx;
   padding: 0 24rpx;
+  margin-top: 16rpx;
+  min-height: 200rpx;
 }
 
 .knowledge-item {
