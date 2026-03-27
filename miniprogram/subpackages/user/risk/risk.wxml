@@ -1,0 +1,113 @@
+<!--pages/risk/risk.wxml-->
+<view class="risk-container">
+  <!-- 风险等级卡片 -->
+  <view class="risk-level-card">
+    <view class="level-header">
+      <text class="level-title">风险等级</text>
+      <view class="refresh-btn" bindtap="refreshAssessment">
+        <text>刷新评估</text>
+      </view>
+    </view>
+
+    <view class="level-content">
+      <view class="level-indicator" style="background: linear-gradient(to right, #67C23A 0%, #E6A23C 50%, #F56C6C 100%);">
+        <view class="level-pointer" style="left: {{riskAssessment.riskScore}}%;"></view>
+      </view>
+
+      <view class="level-info">
+        <view class="level-badge" style="background-color: {{riskAssessment.riskLevelColor}};">
+          {{riskAssessment.riskLevelText}}
+        </view>
+        <text class="level-score">风险评分: {{riskAssessment.riskScore}}</text>
+      </view>
+    </view>
+
+    <view class="refresh-time" wx:if="{{lastRefreshTime}}">
+      上次评估: {{lastRefreshTime}}
+    </view>
+  </view>
+
+  <!-- 资产概览 -->
+  <view class="overview-section">
+    <view class="section-title">资产概览</view>
+    <view class="overview-grid">
+      <view class="overview-item">
+        <text class="overview-value">{{riskAssessment.totalAsset}}</text>
+        <text class="overview-label">总资产</text>
+      </view>
+      <view class="overview-item">
+        <text class="overview-value">{{riskAssessment.availableBalance}}</text>
+        <text class="overview-label">可用余额</text>
+      </view>
+      <view class="overview-item">
+        <text class="overview-value">{{riskAssessment.totalExposure}}</text>
+        <text class="overview-label">总敞口</text>
+      </view>
+      <view class="overview-item">
+        <text class="overview-value">{{riskAssessment.positionCount}}</text>
+        <text class="overview-label">持仓数量</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 盈亏状况 -->
+  <view class="pnl-section">
+    <view class="section-title">盈亏状况</view>
+    <view class="pnl-card">
+      <view class="pnl-item">
+        <text class="pnl-label">总盈亏</text>
+        <text class="pnl-value {{riskAssessment.totalPnL >= 0 ? 'profit' : 'loss'}}">
+          {{riskAssessment.totalPnL >= 0 ? '+' : ''}}{{riskAssessment.totalPnL}}
+        </text>
+      </view>
+      <view class="pnl-item">
+        <text class="pnl-label">集中度风险</text>
+        <text class="pnl-value">{{riskAssessment.concentrationRisk}}%</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 风险预警 -->
+  <view class="warnings-section" wx:if="{{riskWarnings.length > 0}}">
+    <view class="section-title">风险预警</view>
+    <view class="warnings-list">
+      <view class="warning-item {{item.level}}" wx:for="{{riskWarnings}}" wx:key="index">
+        <view class="warning-icon">
+          <text wx:if="{{item.level === 'danger'}}">!</text>
+          <text wx:elif="{{item.level === 'warning'}}">!</text>
+          <text wx:else>i</text>
+        </view>
+        <view class="warning-content">
+          <view class="warning-title">{{item.title}}</view>
+          <view class="warning-desc">{{item.content}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 风险建议 -->
+  <view class="recommendations-section" wx:if="{{recommendations.length > 0}}">
+    <view class="section-title">风险建议</view>
+    <view class="recommendations-list">
+      <view class="recommendation-item" wx:for="{{recommendations}}" wx:key="index">
+        <view class="recommendation-icon">
+          <text>{{index + 1}}</text>
+        </view>
+        <text class="recommendation-text">{{item}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 操作按钮 -->
+  <view class="action-section">
+    <view class="action-btn" bindtap="goToPosition">查看持仓</view>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading-overlay" wx:if="{{loading}}">
+    <view class="loading-content">
+      <view class="loading-spinner"></view>
+      <text>加载中...</text>
+    </view>
+  </view>
+</view>

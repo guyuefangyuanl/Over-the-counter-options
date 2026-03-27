@@ -8,6 +8,7 @@ page {
   --danger-color: #F56C6C;
   --info-color: #909399;
   --background-color: #f5f7fa;
+  --bg-secondary: #F2F3F5;
   --text-color-primary: #303133;
   --text-color-regular: #606266;
   --white: #fff;

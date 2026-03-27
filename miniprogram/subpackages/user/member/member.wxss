@@ -1,0 +1,256 @@
+/* pages/member/member.wxss */
+
+.member-container {
+  min-height: 100vh;
+  background-color: #f5f7fa;
+  padding: 24rpx;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 120rpx);
+  box-sizing: border-box;
+}
+
+/* 当前会员卡片 */
+.current-member-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 20rpx;
+  padding: 32rpx;
+  color: #fff;
+  margin-bottom: 24rpx;
+}
+
+.member-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24rpx;
+}
+
+.member-badge {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  font-weight: 600;
+  margin-right: 20rpx;
+}
+
+.member-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.member-name {
+  font-size: 36rpx;
+  font-weight: 600;
+  margin-bottom: 8rpx;
+}
+
+.member-expiry {
+  font-size: 24rpx;
+  opacity: 0.8;
+}
+
+.member-privileges {
+  margin-bottom: 24rpx;
+}
+
+.privileges-title {
+  font-size: 26rpx;
+  opacity: 0.9;
+  margin-bottom: 16rpx;
+  display: block;
+}
+
+.privileges-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.privilege-item {
+  display: flex;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.2);
+  padding: 8rpx 16rpx;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+}
+
+.privilege-icon {
+  margin-right: 8rpx;
+  color: #67C23A;
+}
+
+.upgrade-btn {
+  background-color: rgba(255, 255, 255, 0.2);
+  text-align: center;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  font-size: 30rpx;
+  font-weight: 500;
+}
+
+/* 区块标题 */
+.section-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 16rpx;
+}
+
+/* 会员等级列表 */
+.levels-section {
+  margin-bottom: 24rpx;
+}
+
+.levels-list {
+  background-color: #fff;
+  border-radius: 16rpx;
+  overflow: hidden;
+}
+
+.level-card {
+  display: flex;
+  align-items: center;
+  padding: 24rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.level-card:last-child {
+  border-bottom: none;
+}
+
+.level-card.current {
+  background-color: #f0f7ff;
+}
+
+.level-badge {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #fff;
+  margin-right: 20rpx;
+}
+
+.level-info {
+  flex: 1;
+}
+
+.level-name {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 8rpx;
+}
+
+.level-condition {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.level-arrow {
+  font-size: 28rpx;
+  color: #ccc;
+}
+
+/* 合作方案 */
+.cooperation-section {
+  margin-bottom: 24rpx;
+}
+
+.cooperation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.cooperation-card {
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+}
+
+.cooperation-header {
+  margin-bottom: 12rpx;
+}
+
+.cooperation-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.cooperation-desc {
+  font-size: 26rpx;
+  color: #666;
+  margin-bottom: 16rpx;
+}
+
+.cooperation-benefits {
+  margin-bottom: 20rpx;
+}
+
+.benefit-item {
+  display: flex;
+  align-items: center;
+  padding: 8rpx 0;
+}
+
+.benefit-icon {
+  color: #409EFF;
+  margin-right: 8rpx;
+}
+
+.benefit-text {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.cooperation-btn {
+  background-color: #409EFF;
+  color: #fff;
+  text-align: center;
+  padding: 16rpx;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+}
+
+/* 底部联系 */
+.contact-section {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  padding: 24rpx;
+  padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
+  background-color: #fff;
+  box-shadow: 0 -2rpx 12rpx rgba(0, 0, 0, 0.05);
+  gap: 20rpx;
+}
+
+.contact-btn {
+  flex: 1;
+  text-align: center;
+  padding: 24rpx;
+  border-radius: 12rpx;
+  font-size: 30rpx;
+}
+
+.contact-btn:first-child {
+  background-color: #fff;
+  color: #409EFF;
+  border: 1rpx solid #409EFF;
+}
+
+.contact-btn:last-child {
+  background-color: #409EFF;
+  color: #fff;
+}

@@ -228,16 +228,18 @@
           <van-field
             label="标的代码"
             placeholder="如 510050"
+            value="{{positionForm.productCode}}"
             data-field="productCode"
-            bind:blur="onPositionFormInput"
+            bind:change="onPositionFormInput"
             error-message="{{positionFormErrors.productCode || ''}}"
             required
           />
           <van-field
             label="标的名称"
             placeholder="如 上评50ETF"
+            value="{{positionForm.productName}}"
             data-field="productName"
-            bind:blur="onPositionFormInput"
+            bind:change="onPositionFormInput"
             error-message="{{positionFormErrors.productName || ''}}"
             required
           />
@@ -249,10 +251,11 @@
           <van-field
             label="名义本金"
             placeholder="请输入名义本金"
+            value="{{positionForm.quantity}}"
             type="number"
             use-button-slot
             data-field="quantity"
-            bind:blur="onPositionFormInput"
+            bind:change="onPositionFormInput"
             error-message="{{positionFormErrors.quantity || ''}}"
             required
           >
@@ -261,24 +264,27 @@
           <van-field
             label="成本价"
             placeholder="如 3.250"
+            value="{{positionForm.price}}"
             type="digit"
             data-field="price"
-            bind:blur="onPositionFormInput"
+            bind:change="onPositionFormInput"
             error-message="{{positionFormErrors.price || ''}}"
             required
           />
           <van-field
             label="交易商"
             placeholder="可选，如 自营"
+            value="{{positionForm.dealer}}"
             data-field="dealer"
-            bind:blur="onPositionFormInput"
+            bind:change="onPositionFormInput"
           />
           <van-field
             label="剩余天数"
             placeholder="可选，默认 30 天"
+            value="{{positionForm.daysLeft}}"
             type="number"
             data-field="daysLeft"
-            bind:blur="onPositionFormInput"
+            bind:change="onPositionFormInput"
           />
         </view>
       </scroll-view>
@@ -322,7 +328,7 @@
             placeholder="如 510050"
             value="{{positionForm.productCode}}"
             data-field="productCode"
-            bind:blur="onPositionFormInput"
+            bind:change="onPositionFormInput"
             error-message="{{positionFormErrors.productCode || ''}}"
             required
           />
@@ -331,7 +337,7 @@
             placeholder="如 上证50ETF"
             value="{{positionForm.productName}}"
             data-field="productName"
-            bind:blur="onPositionFormInput"
+            bind:change="onPositionFormInput"
             error-message="{{positionFormErrors.productName || ''}}"
             required
           />
@@ -347,7 +353,7 @@
             type="number"
             use-button-slot
             data-field="quantity"
-            bind:blur="onPositionFormInput"
+            bind:change="onPositionFormInput"
             error-message="{{positionFormErrors.quantity || ''}}"
             required
           >
@@ -359,7 +365,7 @@
             value="{{positionForm.price}}"
             type="digit"
             data-field="price"
-            bind:blur="onPositionFormInput"
+            bind:change="onPositionFormInput"
             error-message="{{positionFormErrors.price || ''}}"
             required
           />
@@ -368,7 +374,7 @@
             placeholder="可选，如 自营"
             value="{{positionForm.dealer}}"
             data-field="dealer"
-            bind:blur="onPositionFormInput"
+            bind:change="onPositionFormInput"
           />
           <van-field
             label="剩余天数"
@@ -376,7 +382,7 @@
             value="{{positionForm.daysLeft}}"
             type="number"
             data-field="daysLeft"
-            bind:blur="onPositionFormInput"
+            bind:change="onPositionFormInput"
           />
         </view>
       </scroll-view>

@@ -9,7 +9,6 @@
  */
 
 const { getApiUrl } = require('../config/api.config.js');
-const fileUpload = require('./fileUpload.js');
 const loginService = require('./loginService.js');
 
 /**

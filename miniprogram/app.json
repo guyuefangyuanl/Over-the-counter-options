@@ -1,30 +1,92 @@
 {
+  "lazyCodeLoading": "requiredComponents",
   "pages": [
     "pages/index/index",
     "pages/quotes/quotes",
-    "pages/quotes/detail/detail",
-    "pages/quotes/inquiry-complete",
-    "pages/stock-detail/stock-detail",
-    "pages/calculator/calculator",
-    "pages/profile/profile",
-    "pages/login/login",
-    "pages/agreement/user-agreement",
-    "pages/agreement/privacy-policy",
-    "pages/feedback/feedback",
-    "pages/chart/chart",
     "pages/account/account",
-    "pages/workspace/workspace",
-    "pages/option-matrix/option-matrix",
-    "pages/data-explanation/data-explanation",
-    "pages/knowledge-detail/knowledge-detail",
-    "pages/position/position",
-    "pages/search/search",
-    "pages/search-stock/search-stock",
-    "pages/inquiry/inquiry",
-    "pages/inquiry/detail/detail",
-    "pages/inquiry-history/inquiry-history",
-    "pages/test/test"
+    "pages/profile/profile",
+    "pages/login/login"
   ],
+  "subPackages": [
+    {
+      "root": "subpackages/quotes",
+      "name": "quotes",
+      "pages": [
+        "detail/detail",
+        "inquiry-complete/inquiry-complete",
+        "search/search",
+        "search-stock/search-stock",
+        "stock-detail/stock-detail"
+      ]
+    },
+    {
+      "root": "subpackages/tools",
+      "name": "tools",
+      "pages": [
+        "calculator/calculator",
+        "chart/chart",
+        "option-matrix/option-matrix",
+        "workspace/workspace",
+        "workbench/workbench",
+        "data-explanation/data-explanation"
+      ]
+    },
+    {
+      "root": "subpackages/user",
+      "name": "user",
+      "pages": [
+        "orders/orders",
+        "transaction/transaction",
+        "user-info/user-info",
+        "risk/risk",
+        "member/member",
+        "position/position",
+        "inquiry-history/inquiry-history",
+        "feedback/feedback"
+      ]
+    },
+    {
+      "root": "subpackages/info",
+      "name": "info",
+      "pages": [
+        "knowledge/knowledge",
+        "knowledge-detail/knowledge-detail",
+        "news/news",
+        "market/market",
+        "analysis/analysis"
+      ]
+    },
+    {
+      "root": "subpackages/agreement",
+      "name": "agreement",
+      "pages": [
+        "user-agreement/user-agreement",
+        "privacy-policy/privacy-policy"
+      ]
+    },
+    {
+      "root": "subpackages/inquiry",
+      "name": "inquiry",
+      "pages": [
+        "inquiry/inquiry",
+        "inquiry/detail/detail"
+      ]
+    }
+  ],
+  "preloadRule": {
+    "pages/index/index": {
+      "network": "all",
+      "packages": ["quotes", "tools"]
+    },
+    "pages/quotes/quotes": {
+      "network": "all",
+      "packages": ["inquiry"]
+    },
+    "pages/account/account": {
+      "network": "all",
+      "packages": ["user"]
+    }
+  },
   "window": {
     "backgroundTextStyle": "light",
     "navigationBarBackgroundColor": "#409EFF",

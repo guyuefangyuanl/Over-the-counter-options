@@ -1,0 +1,327 @@
+/* pages/risk/risk.wxss */
+
+.risk-container {
+  min-height: 100vh;
+  background-color: #f5f7fa;
+  padding: 24rpx;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 120rpx);
+  box-sizing: border-box;
+}
+
+/* 风险等级卡片 */
+.risk-level-card {
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 32rpx;
+  margin-bottom: 24rpx;
+}
+
+.level-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24rpx;
+}
+
+.level-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.refresh-btn {
+  padding: 12rpx 24rpx;
+  background-color: #409EFF;
+  color: #fff;
+  font-size: 24rpx;
+  border-radius: 8rpx;
+}
+
+.level-content {
+  margin-bottom: 16rpx;
+}
+
+.level-indicator {
+  position: relative;
+  height: 16rpx;
+  border-radius: 8rpx;
+  margin-bottom: 16rpx;
+}
+
+.level-pointer {
+  position: absolute;
+  top: -8rpx;
+  width: 32rpx;
+  height: 32rpx;
+  background-color: #fff;
+  border: 4rpx solid #333;
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+
+.level-info {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.level-badge {
+  padding: 8rpx 24rpx;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  color: #fff;
+}
+
+.level-score {
+  font-size: 28rpx;
+  color: #666;
+}
+
+.refresh-time {
+  font-size: 24rpx;
+  color: #999;
+  text-align: center;
+}
+
+/* 区块标题 */
+.section-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 16rpx;
+  padding-left: 8rpx;
+}
+
+/* 资产概览 */
+.overview-section {
+  margin-bottom: 24rpx;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16rpx;
+}
+
+.overview-item {
+  background-color: #fff;
+  border-radius: 12rpx;
+  padding: 24rpx;
+  text-align: center;
+}
+
+.overview-value {
+  display: block;
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8rpx;
+}
+
+.overview-label {
+  font-size: 24rpx;
+  color: #999;
+}
+
+/* 盈亏状况 */
+.pnl-section {
+  margin-bottom: 24rpx;
+}
+
+.pnl-card {
+  background-color: #fff;
+  border-radius: 12rpx;
+  padding: 24rpx;
+}
+
+.pnl-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.pnl-item:last-child {
+  border-bottom: none;
+}
+
+.pnl-label {
+  font-size: 28rpx;
+  color: #666;
+}
+
+.pnl-value {
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.pnl-value.profit {
+  color: #67C23A;
+}
+
+.pnl-value.loss {
+  color: #F56C6C;
+}
+
+/* 风险预警 */
+.warnings-section {
+  margin-bottom: 24rpx;
+}
+
+.warnings-list {
+  background-color: #fff;
+  border-radius: 12rpx;
+  overflow: hidden;
+}
+
+.warning-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 20rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.warning-item:last-child {
+  border-bottom: none;
+}
+
+.warning-icon {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16rpx;
+  flex-shrink: 0;
+}
+
+.warning-item.danger .warning-icon {
+  background-color: #fef0f0;
+  color: #F56C6C;
+}
+
+.warning-item.warning .warning-icon {
+  background-color: #fdf6ec;
+  color: #E6A23C;
+}
+
+.warning-item.info .warning-icon {
+  background-color: #ecf5ff;
+  color: #409EFF;
+}
+
+.warning-content {
+  flex: 1;
+}
+
+.warning-title {
+  font-size: 28rpx;
+  color: #333;
+  margin-bottom: 8rpx;
+}
+
+.warning-desc {
+  font-size: 24rpx;
+  color: #999;
+}
+
+/* 风险建议 */
+.recommendations-section {
+  margin-bottom: 24rpx;
+}
+
+.recommendations-list {
+  background-color: #fff;
+  border-radius: 12rpx;
+  padding: 16rpx;
+}
+
+.recommendation-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 16rpx 0;
+}
+
+.recommendation-icon {
+  width: 40rpx;
+  height: 40rpx;
+  background-color: #409EFF;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  margin-right: 16rpx;
+  flex-shrink: 0;
+}
+
+.recommendation-text {
+  font-size: 28rpx;
+  color: #666;
+  line-height: 1.6;
+}
+
+/* 操作按钮 */
+.action-section {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 24rpx;
+  padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
+  background-color: #fff;
+  box-shadow: 0 -2rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.action-btn {
+  background-color: #409EFF;
+  color: #fff;
+  text-align: center;
+  padding: 24rpx;
+  border-radius: 12rpx;
+  font-size: 32rpx;
+}
+
+/* 加载状态 */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.loading-spinner {
+  width: 60rpx;
+  height: 60rpx;
+  border: 4rpx solid #f0f0f0;
+  border-top-color: #409EFF;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20rpx;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-content text {
+  font-size: 28rpx;
+  color: #999;
+}

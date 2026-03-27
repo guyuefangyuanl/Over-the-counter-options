@@ -22,3 +22,128 @@ body {
   min-width: 320px;
   background: #f5f5f5;
 }
+
+/* ==================== 响应式布局 ==================== */
+
+/* 移动端适配 (< 768px) */
+@media screen and (max-width: 767px) {
+  /* 表格响应式：水平滚动 */
+  .ant-table-wrapper {
+    overflow-x: auto;
+  }
+  
+  .ant-table {
+    min-width: 600px;
+  }
+
+  /* 卡片间距调整 */
+  .ant-card {
+    margin-bottom: 12px;
+  }
+
+  /* 按钮组换行 */
+  .ant-space-horizontal {
+    flex-wrap: wrap;
+    gap: 8px !important;
+  }
+
+  /* 表单项占满宽度 */
+  .ant-form-item {
+    margin-bottom: 12px;
+  }
+
+  /* 模态框全宽 */
+  .ant-modal {
+    max-width: calc(100vw - 32px);
+    margin: 16px auto;
+  }
+
+  .ant-modal-content {
+    padding: 16px;
+  }
+
+  /* 分页器紧凑模式 */
+  .ant-pagination {
+    text-align: center;
+  }
+
+  .ant-pagination-item,
+  .ant-pagination-prev,
+  .ant-pagination-next {
+    min-width: 28px;
+    height: 28px;
+    line-height: 28px;
+  }
+
+  /* 搜索栏紧凑 */
+  .ant-input-search .ant-input-group-addon {
+    display: none;
+  }
+
+  /* 统计卡片紧凑 */
+  .ant-statistic-title {
+    font-size: 12px;
+  }
+
+  .ant-statistic-content {
+    font-size: 18px;
+  }
+}
+
+/* 平板适配 (768px - 1024px) */
+@media screen and (min-width: 768px) and (max-width: 1024px) {
+  .ant-table {
+    font-size: 13px;
+  }
+
+  .ant-card-body {
+    padding: 16px;
+  }
+}
+
+/* 大屏幕优化 (> 1200px) */
+@media screen and (min-width: 1200px) {
+  .ant-layout-content {
+    padding: 24px 48px;
+  }
+}
+
+/* ==================== 通用响应式工具类 ==================== */
+
+/* 移动端隐藏 */
+.hide-mobile {
+  display: block;
+}
+
+@media screen and (max-width: 767px) {
+  .hide-mobile {
+    display: none !important;
+  }
+}
+
+/* 桌面端隐藏 */
+.hide-desktop {
+  display: none;
+}
+
+@media screen and (max-width: 767px) {
+  .hide-desktop {
+    display: block !important;
+  }
+}
+
+/* 响应式网格 */
+.responsive-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+/* 紧凑模式 */
+.compact-mode .ant-table-cell {
+  padding: 8px 4px !important;
+}
+
+.compact-mode .ant-card-body {
+  padding: 12px;
+}

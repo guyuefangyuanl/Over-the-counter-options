@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "资讯中心",
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "dark",
+  "usingComponents": {}
+}

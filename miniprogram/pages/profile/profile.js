@@ -28,7 +28,7 @@ Page({
         icon: 'member',
         path: '/pages/member/member',
         showArrow: true,
-        devMode: true
+        devMode: false
       },
       {
         id: 'profile',
@@ -36,7 +36,7 @@ Page({
         icon: 'profile',
         path: '/pages/user-info/user-info',
         showArrow: true,
-        devMode: true
+        devMode: false
       },
       {
         id: 'orders',
@@ -44,7 +44,7 @@ Page({
         icon: 'orders',
         path: '/pages/orders/orders',
         showArrow: true,
-        devMode: true
+        devMode: false
       },
       {
         id: 'service',

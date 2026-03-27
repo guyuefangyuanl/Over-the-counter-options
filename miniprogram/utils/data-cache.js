@@ -24,14 +24,17 @@ const CACHE_PREFIX = {
   SUGGESTIONS: 'suggestions'
 };
 
-// 默认 TTL 配置（毫秒）
+// 默认 TTL 配置（毫秒）- 优化：适当延长缓存时间以提高命中率
 const DEFAULT_TTL = {
-  MARKET_INDICES: 60 * 1000,    // 1分钟
-  HOT_OPTIONS: 5 * 60 * 1000,   // 5分钟
-  HOLDINGS: 60 * 1000,          // 1分钟
-  SEARCH: 5 * 60 * 1000,        // 5分钟
-  SUGGESTIONS: 5 * 60 * 1000    // 5分钟
+  MARKET_INDICES: 3 * 60 * 1000,    // 3分钟（原1分钟，延长以减少重复请求）
+  HOT_OPTIONS: 10 * 60 * 1000,      // 10分钟（原5分钟，期权数据更新较慢）
+  HOLDINGS: 2 * 60 * 1000,          // 2分钟（原1分钟，持仓数据适当延长）
+  SEARCH: 10 * 60 * 1000,           // 10分钟（原5分钟，搜索结果可缓存更久）
+  SUGGESTIONS: 10 * 60 * 1000       // 10分钟（原5分钟，建议数据更新频率低）
 };
+
+// 请求去重：存储正在进行的请求 Promise
+const pendingFetchPromises = new Map();
 
 /**
  * 数据缓存管理器
@@ -65,13 +68,15 @@ const DataCacheManager = {
   },
 
   /**
-   * 带缓存的数据获取
+   * 带缓存的数据获取（优化版：真正的请求去重）
+   * 核心优化：使用 Promise 共享机制，让重复请求等待同一个 Promise
    * @param {string} key 缓存键
    * @param {Function} fetcher 数据获取函数
    * @param {object} options 配置选项
    */
   async fetchWithCache(key, fetcher, options = {}) {
-    const { ttl, forceRefresh = false } = options;
+    const { ttl, forceRefresh = false, params } = options;
+    const fullKey = CACHE_PREFIX[key] || key;
 
     // 非强制刷新时，先尝试缓存
     if (!forceRefresh) {
@@ -81,24 +86,77 @@ const DataCacheManager = {
       }
     }
 
-    // 检查重复请求
-    const { isDuplicate, key: requestKey } = checkDuplicate(key);
-    if (isDuplicate) {
-      console.log(`[请求去重] ${key}`);
-      // 等待一段时间后重试获取缓存
-      await new Promise(resolve => setTimeout(resolve, 100));
-      const cached = this.get(key);
-      if (cached) {
-        return { data: cached, fromCache: true };
+    // 生成请求唯一标识
+    const paramsHash = params ? this._hashParams(params) : '';
+    const requestKey = `${fullKey}:${paramsHash}`;
+
+    // 核心优化：检查是否有正在进行的相同请求
+    if (pendingFetchPromises.has(requestKey)) {
+      console.log(`[请求去重] 等待已有请求: ${requestKey}`);
+      try {
+        // 等待第一个请求完成并获取结果
+        const result = await pendingFetchPromises.get(requestKey);
+        // 第一个请求完成后，尝试从缓存获取
+        const cached = this.get(key);
+        if (cached) {
+          return { data: cached, fromCache: true };
+        }
+        return result;
+      } catch (error) {
+        // 如果第一个请求失败，重新发起请求
+        console.warn(`[请求去重] 等待的请求失败，重新发起: ${requestKey}`);
       }
     }
 
+    // 标记请求开始
+    checkDuplicate(fullKey, params);
+
+    // 创建请求 Promise 并存储
+    const fetchPromise = this._executeFetch(requestKey, fullKey, fetcher, ttl);
+    pendingFetchPromises.set(requestKey, fetchPromise);
+
+    try {
+      const result = await fetchPromise;
+      return result;
+    } finally {
+      // 请求完成后清理
+      pendingFetchPromises.delete(requestKey);
+      markComplete(requestKey);
+    }
+  },
+
+  /**
+   * 执行实际的 fetch 操作
+   * @private
+   */
+  async _executeFetch(requestKey, fullKey, fetcher, ttl) {
     try {
       const data = await fetcher();
-      this.set(key, data, ttl);
+      this.set(fullKey, data, ttl);
       return { data, fromCache: false };
-    } finally {
-      markComplete(requestKey);
+    } catch (error) {
+      console.error(`[缓存获取失败] ${fullKey}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * 简单参数哈希
+   * @private
+   */
+  _hashParams(params) {
+    if (!params) return '';
+    try {
+      const str = JSON.stringify(params);
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+      return Math.abs(hash).toString(16).slice(0, 8);
+    } catch (e) {
+      return '';
     }
   },
 

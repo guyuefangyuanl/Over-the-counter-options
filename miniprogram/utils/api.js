@@ -136,6 +136,9 @@ function showErrorToast(error, options = {}) {
 const apiCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5分钟缓存
 
+// 请求去重映射（原子操作）
+const pendingRequests = new Map();
+
 // 请求队列和并发控制
 const requestQueue = [];
 const maxConcurrentRequests = 6; // 最大并发请求数
@@ -259,29 +262,44 @@ function request(url, method = 'GET', data = {}, header = {}, options = {}) {
   }
 
   // 这是新的增强版请求方式
-  const { 
-    enableCache = false, 
-    cacheKey, 
+  const {
+    enableCache = false,
+    cacheKey,
     // 🔧 修复：增加默认超时时间到 15秒，避免云托管冷启动时超时
     timeout = 15000,
     retries = retryConfig.maxRetries,
     priority = 'normal', // normal, high, low
-    dedupe = false, // 是否去重
+    dedupe = true, // 🔧 优化：默认启用请求去重，减少重复请求
     interceptors = {}, // 请求拦截器
     silent = false, // 是否显示加载提示
     suppressErrorLog = false, // 关闭错误日志
     suppressRetryLog = false // 关闭重试日志
   } = options;
   
-  // 请求去重
+  // 请求去重（原子操作，避免竞态条件）
   if (dedupe) {
     const dedupeKey = `${method}_${url}_${JSON.stringify(data)}`;
-    const existingRequest = requestQueue.find(req => req.key === dedupeKey && !req.completed);
     
-    if (existingRequest) {
+    // 使用 Map.has 和 Map.set 实现原子检查和添加
+    if (pendingRequests.has(dedupeKey)) {
       console.log(`请求去重: ${dedupeKey}`);
-      return existingRequest.promise;
+      return pendingRequests.get(dedupeKey);
     }
+    
+    // 创建一个 Promise 并立即存入 Map
+    const pendingPromise = new Promise((resolve, reject) => {
+      processRequestWithQueue(url, method, data, header, {
+        enableCache, cacheKey, timeout, retries, priority, interceptors, silent, suppressErrorLog, suppressRetryLog
+      }).then(resolve).catch(reject).finally(() => {
+        // 请求完成后从 Map 中移除
+        pendingRequests.delete(dedupeKey);
+      });
+    });
+    
+    // 原子添加到 Map
+    pendingRequests.set(dedupeKey, pendingPromise);
+    
+    return pendingPromise;
   }
   
   // 检查缓存 (仅GET请求)
@@ -303,24 +321,7 @@ function request(url, method = 'GET', data = {}, header = {}, options = {}) {
   const requestPromise = processRequestWithQueue(url, method, data, header, {
     enableCache, cacheKey, timeout, retries, priority, interceptors, silent, suppressErrorLog, suppressRetryLog
   });
-  
-  // 添加到请求队列用于去重
-  if (dedupe) {
-    const dedupeKey = `${method}_${url}_${JSON.stringify(data)}`;
-    const queueItem = {
-      key: dedupeKey,
-      promise: requestPromise,
-      completed: false
-    };
-    
-    requestQueue.push(queueItem);
-    
-    // 请求完成后标记为完成
-    requestPromise.finally(() => {
-      queueItem.completed = true;
-    });
-  }
-  
+
   return requestPromise;
 }
 

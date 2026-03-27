@@ -1,4 +1,4 @@
-<view class="container">
+<view class="container" style="position: relative; left: 0rpx; top: -188rpx">
   <!-- 加载状态 -->
   <view class="loading-container" wx:if="{{loading}}">
     <van-loading type="spinner" color="#409EFF" size="48rpx" vertical>加载中...</van-loading>

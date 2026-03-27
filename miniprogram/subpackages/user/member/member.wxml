@@ -1,0 +1,84 @@
+<!--pages/member/member.wxml-->
+<view class="member-container">
+  <!-- 当前会员卡片 -->
+  <view class="current-member-card">
+    <view class="member-header">
+      <view class="member-badge" style="background-color: {{memberLevels[0].color}};">
+        {{memberInfo.currentLevel}}
+      </view>
+      <view class="member-info">
+        <text class="member-name">{{memberInfo.currentName}}</text>
+        <text class="member-expiry" wx:if="{{memberInfo.expiryDate}}">有效期至: {{memberInfo.expiryDate}}</text>
+      </view>
+    </view>
+
+    <view class="member-privileges">
+      <text class="privileges-title">当前权益</text>
+      <view class="privileges-list">
+        <view class="privilege-item" wx:for="{{memberInfo.privileges}}" wx:key="index">
+          <text class="privilege-icon">✓</text>
+          <text class="privilege-text">{{item}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="upgrade-btn" bindtap="applyMember" wx:if="{{memberInfo.currentLevel !== 'V4'}}">
+      升级会员
+    </view>
+  </view>
+
+  <!-- 会员等级介绍 -->
+  <view class="levels-section">
+    <view class="section-title">会员等级</view>
+    <view class="levels-list">
+      <view
+        class="level-card {{memberInfo.currentLevel === item.level ? 'current' : ''}}"
+        wx:for="{{memberLevels}}"
+        wx:key="level"
+        data-level="{{item.level}}"
+        bindtap="selectLevel"
+      >
+        <view class="level-badge" style="background-color: {{item.color}};">
+          {{item.level}}
+        </view>
+        <view class="level-info">
+          <text class="level-name">{{item.name}}</text>
+          <text class="level-condition">交易满{{item.minAmount}}元</text>
+        </view>
+        <view class="level-arrow">></view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 合作方案 -->
+  <view class="cooperation-section">
+    <view class="section-title">机构合作</view>
+    <view class="cooperation-list">
+      <view class="cooperation-card" wx:for="{{cooperationSchemes}}" wx:key="id">
+        <view class="cooperation-header">
+          <text class="cooperation-title">{{item.title}}</text>
+        </view>
+        <view class="cooperation-desc">{{item.description}}</view>
+        <view class="cooperation-benefits">
+          <view class="benefit-item" wx:for="{{item.benefits}}" wx:for-item="benefit" wx:key="index">
+            <text class="benefit-icon">•</text>
+            <text class="benefit-text">{{benefit}}</text>
+          </view>
+        </view>
+        <view class="cooperation-btn" data-phone="{{item.contact}}" bindtap="contactCooperation">
+          联系咨询
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 底部联系 -->
+  <view class="contact-section">
+    <view class="contact-btn" bindtap="contactService">
+      <text>在线客服</text>
+    </view>
+    <view class="contact-btn" bindtap="applyMember">
+      <text>电话咨询</text>
+    </view>
+  </view>
+</view>

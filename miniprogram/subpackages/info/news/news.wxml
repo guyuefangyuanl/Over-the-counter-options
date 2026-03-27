@@ -1,0 +1,76 @@
+<!--pages/news/news.wxml-->
+<view class="news-container">
+  <!-- 搜索栏 -->
+  <view class="search-bar" wx:if="{{showSearch}}">
+    <input
+      class="search-input"
+      placeholder="搜索资讯"
+      value="{{searchKeyword}}"
+      bindinput="onSearchInput"
+      bindconfirm="onSearch"
+    />
+    <view class="search-cancel" bindtap="hideSearchInput">取消</view>
+  </view>
+
+  <!-- 分类标签 -->
+  <view class="category-tabs">
+    <scroll-view scroll-x class="tabs-scroll">
+      <view class="tabs-wrapper">
+        <view
+          wx:for="{{categories}}"
+          wx:key="index"
+          class="tab-item {{activeCategory === item ? 'active' : ''}}"
+          data-category="{{item}}"
+          bindtap="switchCategory"
+        >
+          {{item}}
+        </view>
+      </view>
+    </scroll-view>
+    <view class="search-btn" bindtap="showSearchInput" wx:if="{{!showSearch}}">
+      <text>搜索</text>
+    </view>
+  </view>
+
+  <!-- 资讯列表 -->
+  <view class="articles-list" wx:if="{{articles.length > 0}}">
+    <view
+      class="article-card"
+      wx:for="{{articles}}"
+      wx:key="id"
+      data-id="{{item.id}}"
+      bindtap="goToArticleDetail"
+    >
+      <view class="article-main">
+        <view class="article-image" wx:if="{{item.cover}}">
+          <image src="{{item.cover}}" mode="aspectFill"></image>
+        </view>
+        <view class="article-content">
+          <view class="article-title">{{item.title}}</view>
+          <view class="article-summary">{{item.summary}}</view>
+          <view class="article-meta">
+            <view class="article-category">{{item.category}}</view>
+            <text class="article-time">{{item.publishTime}}</text>
+            <text class="article-reads">{{item.readCount}}阅读</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading-wrapper" wx:if="{{loading}}">
+    <text>加载中...</text>
+  </view>
+
+  <!-- 没有更多 -->
+  <view class="no-more" wx:if="{{!hasMore && articles.length > 0 && !loading}}">
+    <text>没有更多了</text>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{articles.length === 0 && !loading}}">
+    <text class="empty-text">暂无资讯</text>
+    <view class="refresh-btn" bindtap="refreshArticles">刷新试试</view>
+  </view>
+</view>

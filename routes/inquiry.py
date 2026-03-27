@@ -7,6 +7,7 @@ from functools import wraps
 import threading
 
 from backend_utils.response import flask_success_response, flask_error_response, flask_paginated_response
+from backend_utils.security import rate_limit
 from routes.auth import require_auth
 from services.trade_service import TradeService
 from models.inquiry_status import InquiryStatus, InquiryStatusMachine, INQUIRY_STATUS_VALUES
@@ -815,6 +816,7 @@ def admin_batch_update_inquiries():
 
 @inquiry_bp.route('/admin/inquiries/export', methods=['GET'])
 @require_auth
+@rate_limit(limit=10, window=60)  # 每分钟最多10次导出请求
 def admin_export_inquiries():
     """导出询价列表（云托管简化版，返回JSON）"""
     try:

@@ -1,8 +1,0 @@
-<!-- pages/test/test.wxml -->
-<view class="container">
-  <text>网络连接测试</text>
-  <button bindtap="testConnection">测试连接</button>
-  <view class="result">
-    <text>{{result}}</text>
-  </view>
-</view>

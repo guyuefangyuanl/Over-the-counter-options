@@ -1,4 +1,0 @@
-.primary-tabs { display: flex; align-items: center; padding: 0 20rpx; height: 60rpx; background: #ffffff; }
-.primary-tab-item { position: relative; flex: 1; text-align: center; font-size: 26rpx; color: #909399; padding: 10rpx 0; }
-.primary-tab-item.is-active { color: #2D8CF0; font-weight: 600; }
-.primary-tab-item.is-active::after { content: ''; position: absolute; left: 50%; bottom: 8rpx; transform: translateX(-50%); width: 40rpx; height: 4rpx; background-color: #2D8CF0; border-radius: 2rpx; }

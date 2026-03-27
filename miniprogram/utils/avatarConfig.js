@@ -1,33 +1,25 @@
-// 头像配置文件
+/**
+ * 头像配置文件
+ */
+
 module.exports = {
-  // 头像上传配置
+  // 上传配置
   upload: {
-    maxSize: 2 * 1024 * 1024, // 2MB
-    allowedTypes: ['jpg', 'jpeg', 'png', 'gif'],
+    // 默认压缩质量 (0-100)
     defaultQuality: 80,
+    // 最大宽度
     maxWidth: 800,
-    maxHeight: 800
+    // 最大高度
+    maxHeight: 800,
+    // 允许的文件类型
+    allowedTypes: ['jpg', 'jpeg', 'png', 'gif', 'webp']
   },
-  
-  // 重试配置
-  retry: {
-    maxAttempts: 3,
-    delay: 1000, // 毫秒
-    exponentialBackoff: true
-  },
-  
+
   // 验证配置
   validation: {
-    minFileSize: 1024, // 1KB
-    maxFileSize: 5 * 1024 * 1024, // 5MB
-    allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif']
-  },
-  
-  // 默认头像配置
-  defaultAvatar: {
-    width: 100,
-    height: 100,
-    backgroundColor: '#cccccc',
-    textColor: '#666666'
+    // 最大文件大小 (5MB)
+    maxFileSize: 5 * 1024 * 1024,
+    // 最小文件大小 (1KB)
+    minFileSize: 1024
   }
 };

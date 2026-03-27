@@ -237,18 +237,22 @@ def calculate_file_hash(content: bytes) -> str:
 @contextmanager
 def parsing_timeout(seconds: int = 30):
     """
-    解析超时上下文管理器（仅Unix系统有效）
+    解析超时上下文管理器（跨平台支持）
     
     Args:
         seconds: 超时秒数
+        
+    Note:
+        - Unix: 使用 signal.SIGALRM 实现精确超时（可中断阻塞操作）
+        - Windows: 使用 watchdog 线程检测超时（在块结束时触发）
     """
     import signal
     
-    def timeout_handler(signum, frame):
-        raise TimeoutError(f"文件解析超时 ({seconds}秒)")
-    
-    # 仅在支持signal.SIGALRM的系统上使用
+    # Unix 系统优先使用 signal（更高效，可中断阻塞操作）
     if hasattr(signal, 'SIGALRM'):
+        def timeout_handler(signum, frame):
+            raise TimeoutError(f"文件解析超时 ({seconds}秒)")
+        
         old_handler = signal.signal(signal.SIGALRM, timeout_handler)
         signal.alarm(seconds)
         try:
@@ -257,8 +261,32 @@ def parsing_timeout(seconds: int = 30):
             signal.alarm(0)
             signal.signal(signal.SIGALRM, old_handler)
     else:
-        # Windows系统不支持SIGALRM，直接执行
-        yield
+        # Windows系统：使用超时检测机制
+        import threading
+        import time
+        
+        timeout_event = threading.Event()
+        start_time = time.time()
+        
+        def timeout_watcher():
+            """超时监控线程"""
+            while not timeout_event.is_set():
+                if time.time() - start_time > seconds:
+                    timeout_event.set()
+                    return
+                time.sleep(0.1)
+        
+        # 启动监控线程
+        watcher_thread = threading.Thread(target=timeout_watcher, daemon=True)
+        watcher_thread.start()
+        
+        try:
+            yield
+        finally:
+            # 检查是否已超时
+            if timeout_event.is_set():
+                raise TimeoutError(f"文件解析超时 ({seconds}秒)")
+            timeout_event.set()  # 停止监控线程
 
 
 def validate_dataframe_size(df: Any) -> None:
@@ -743,3 +771,55 @@ def delete_upload_session(*, upload_id: str) -> None:
             os.remove(path)
     except Exception:
         return
+
+
+def cleanup_expired_upload_sessions(max_age_hours: int = 24) -> int:
+    """
+    清理过期的上传会话临时文件
+    
+    Args:
+        max_age_hours: 文件最大保留时间（小时）
+        
+    Returns:
+        清理的文件数量
+    """
+    cache_dir = _upload_cache_dir()
+    if not os.path.exists(cache_dir):
+        return 0
+    
+    max_age_seconds = max_age_hours * 3600
+    current_time = time.time()
+    cleaned_count = 0
+    
+    try:
+        for filename in os.listdir(cache_dir):
+            if not filename.endswith('.json'):
+                continue
+            
+            filepath = os.path.join(cache_dir, filename)
+            try:
+                file_age = current_time - os.path.getmtime(filepath)
+                if file_age > max_age_seconds:
+                    os.remove(filepath)
+                    cleaned_count += 1
+                    logger.debug(f"清理过期上传会话: {filename}")
+            except Exception as e:
+                logger.warning(f"清理文件失败 {filename}: {e}")
+                
+        if cleaned_count > 0:
+            logger.info(f"清理了 {cleaned_count} 个过期上传会话文件")
+    except Exception as e:
+        logger.error(f"清理上传缓存目录失败: {e}")
+    
+    return cleaned_count
+
+
+# 启动时自动清理过期文件（静默执行）
+def _init_cleanup():
+    """初始化时执行一次清理"""
+    try:
+        cleanup_expired_upload_sessions(max_age_hours=1)
+    except Exception:
+        pass
+
+_init_cleanup()

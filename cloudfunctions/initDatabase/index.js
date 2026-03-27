@@ -1,13 +1,90 @@
 /**
  * 云数据库初始化云函数
  * 用于导入初始数据到微信云数据库
+ *
+ * 功能：
+ * 1. 创建所需集合（如不存在）
+ * 2. 导入初始数据
  */
 
 const cloud = require('wx-server-sdk')
 
-cloud.init({ 
+cloud.init({
   env: cloud.DYNAMIC_CURRENT_ENV
 })
+
+// 需要初始化的集合列表
+const REQUIRED_COLLECTIONS = [
+  'users',
+  'admin_users',
+  'inquiries',
+  'quotes',
+  'options',
+  'positions',
+  'orders',
+  'groups',
+  'settings',
+  'messages',
+  '_schema_versions'
+]
+
+/**
+ * 确保集合存在，不存在则创建
+ */
+async function ensureCollections(db) {
+  const results = {
+    created: [],
+    existing: [],
+    failed: []
+  }
+
+  // 获取现有集合列表
+  let existingCollections = []
+  try {
+    const collectionsResult = await db.listCollections()
+    existingCollections = collectionsResult.data.map(c => c.name)
+    console.log('现有集合:', existingCollections)
+  } catch (err) {
+    console.error('获取集合列表失败:', err.message)
+    // 如果获取失败，尝试逐个创建
+  }
+
+  for (const collectionName of REQUIRED_COLLECTIONS) {
+    if (existingCollections.includes(collectionName)) {
+      results.existing.push(collectionName)
+      console.log(`[EXIST] 集合已存在: ${collectionName}`)
+      continue
+    }
+
+    try {
+      // 尝试通过插入一条空数据来创建集合
+      await db.collection(collectionName).add({
+        data: {
+          _init: true,
+          createdAt: new Date().toISOString()
+        }
+      })
+      // 然后删除这条测试数据
+      const docs = await db.collection(collectionName).where({ _init: true }).get()
+      if (docs.data.length > 0) {
+        await db.collection(collectionName).doc(docs.data[0]._id).remove()
+      }
+      results.created.push(collectionName)
+      console.log(`[CREATE] 集合创建成功: ${collectionName}`)
+    } catch (err) {
+      // 如果是集合已存在的错误，忽略
+      if (err.message && err.message.includes('already exists')) {
+        results.existing.push(collectionName)
+        console.log(`[EXIST] 集合已存在: ${collectionName}`)
+      } else {
+        results.failed.push({ name: collectionName, error: err.message })
+        console.error(`[FAIL] 集合创建失败: ${collectionName}`, err.message)
+      }
+    }
+  }
+
+  return results
+}
 
 // 初始行情数据（quotes 集合）
 const initialQuotes = [
@@ -273,24 +350,29 @@ exports.main = async (event, context) => {
 
   const results = {
     timestamp: new Date().toISOString(),
-    collections: {}
+    collections: {},
+    collectionStatus: null
   }
 
   console.log('=== 开始初始化云数据库 ===')
 
-  // 初始化 quotes 集合
+  // Step 1: 确保所有集合存在
+  console.log('--- 检查并创建集合 ---')
+  results.collectionStatus = await ensureCollections(db)
+
+  // Step 2: 初始化 quotes 集合
   console.log('--- 初始化 quotes 集合 ---')
   results.collections.quotes = await batchInsert(db, 'quotes', initialQuotes)
 
-  // 初始化 options 集合
+  // Step 3: 初始化 options 集合
   console.log('--- 初始化 options 集合 ---')
   results.collections.options = await batchInsert(db, 'options', initialOptions)
 
-  // 初始化 groups 集合
+  // Step 4: 初始化 groups 集合
   console.log('--- 初始化 groups 集合 ---')
   results.collections.groups = await batchInsert(db, 'groups', initialGroups)
 
-  // 初始化 settings 集合
+  // Step 5: 初始化 settings 集合
   console.log('--- 初始化 settings 集合 ---')
   results.collections.settings = await batchInsert(db, 'settings', initialSettings)
 

@@ -1,0 +1,98 @@
+<!--pages/analysis/analysis.wxml-->
+<view class="analysis-container">
+  <!-- 市场指数区域 -->
+  <view class="section">
+    <view class="section-title">市场指数</view>
+    <view class="index-grid" wx:if="{{marketIndexes.length > 0}}">
+      <view
+        class="index-item"
+        wx:for="{{marketIndexes}}"
+        wx:key="code"
+        data-code="{{item.code}}"
+        bindtap="goToStockDetail"
+      >
+        <view class="index-name">{{item.name}}</view>
+        <view class="index-price">{{item.price}}</view>
+        <view class="index-change {{item.changePercent >= 0 ? 'up' : 'down'}}">
+          {{item.changePercent >= 0 ? '+' : ''}}{{item.changePercent}}%
+        </view>
+      </view>
+    </view>
+    <view class="loading-placeholder" wx:if="{{indexesLoading}}">
+      <text>加载中...</text>
+    </view>
+  </view>
+
+  <!-- 市场情绪 -->
+  <view class="section">
+    <view class="section-title">市场情绪</view>
+    <view class="sentiment-card">
+      <view class="sentiment-gauge">
+        <view class="gauge-bar">
+          <view class="gauge-pointer" style="left: {{marketSentiment.fearGreedIndex}}%;"></view>
+        </view>
+        <view class="gauge-labels">
+          <text>恐惧</text>
+          <text>贪婪</text>
+        </view>
+      </view>
+      <view class="sentiment-info">
+        <text class="sentiment-value">{{marketSentiment.fearGreedIndex}}</text>
+        <text class="sentiment-text">{{marketSentiment.sentiment}}</text>
+        <text class="sentiment-trend">趋势: {{marketSentiment.trend}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 热门标的 -->
+  <view class="section">
+    <view class="section-title">热门交易标的</view>
+    <scroll-view scroll-x class="hot-stocks-scroll">
+      <view class="hot-stocks-list">
+        <view
+          class="hot-stock-card"
+          wx:for="{{hotStocks}}"
+          wx:key="code"
+          data-code="{{item.code}}"
+          bindtap="goToStockDetail"
+        >
+          <view class="stock-name">{{item.name}}</view>
+          <view class="stock-code">{{item.code}}</view>
+          <view class="stock-price">{{item.price}}</view>
+          <view class="stock-change {{item.changePercent >= 0 ? 'up' : 'down'}}">
+            {{item.changePercent >= 0 ? '+' : ''}}{{item.changePercent}}%
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- 分析文章 -->
+  <view class="section">
+    <view class="section-title">市场分析</view>
+    <view class="articles-list" wx:if="{{articles.length > 0}}">
+      <view
+        class="article-card"
+        wx:for="{{articles}}"
+        wx:key="id"
+        data-id="{{item.id}}"
+        bindtap="goToArticleDetail"
+      >
+        <view class="article-content">
+          <view class="article-title">{{item.title}}</view>
+          <view class="article-summary">{{item.summary}}</view>
+          <view class="article-meta">
+            <text class="article-time">{{item.publishTime}}</text>
+            <text class="article-reads">{{item.readCount}}阅读</text>
+          </view>
+        </view>
+      </view>
+    </view>
+    <view class="loading-more" wx:if="{{articlesLoading}}">
+      <text>加载中...</text>
+    </view>
+    <view class="no-more" wx:if="{{!hasMore && articles.length > 0 && !articlesLoading}}">
+      <text>没有更多了</text>
+    </view>
+  </view>
+</view>

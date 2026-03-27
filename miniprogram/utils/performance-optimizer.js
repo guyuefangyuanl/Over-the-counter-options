@@ -339,42 +339,131 @@ class PerformanceOptimizer {
   /**
    * 分包预下载
    * 自动检测项目中配置的分包并进行预下载
+   * @param {Object} options - 配置选项
+   * @param {string[]} options.packages - 指定要预下载的包名列表，为空则预下载所有
+   * @param {boolean} options.silent - 是否静默模式（不输出日志）
    */
-  predownloadSubpackages() {
+  predownloadSubpackages(options = {}) {
+    const { packages = [], silent = false } = options;
+
     // 仅在小程序环境中执行
     if (typeof wx !== 'undefined' && wx.preloadSubpackage) {
       // 动态获取分包配置
       let subpackages = [];
-      
+
       try {
         // 从 __wxConfig 中读取分包配置
         if (typeof __wxConfig !== 'undefined' && __wxConfig.subPackages) {
-          subpackages = __wxConfig.subPackages.map(pkg => pkg.root || pkg.name);
+          subpackages = __wxConfig.subPackages.map(pkg => pkg.name || pkg.root);
         } else if (typeof __wxConfig !== 'undefined' && __wxConfig.subpackages) {
-          subpackages = __wxConfig.subpackages.map(pkg => pkg.root || pkg.name);
+          subpackages = __wxConfig.subpackages.map(pkg => pkg.name || pkg.root);
         }
       } catch (e) {
-        console.warn('无法读取分包配置:', e.message);
+        if (!silent) console.warn('无法读取分包配置:', e.message);
       }
-      
+
       // 如果没有配置分包，跳过预下载
       if (subpackages.length === 0) {
-        console.log('当前项目未配置分包，跳过分包预下载');
-        return;
+        if (!silent) console.log('当前项目未配置分包，跳过分包预下载');
+        return Promise.resolve([]);
       }
-      
-      subpackages.forEach(subpackage => {
-        wx.preloadSubpackage({
-          name: subpackage,
-          success: () => {
-            console.log(`分包预下载成功: ${subpackage}`);
-          },
-          fail: (error) => {
-            console.warn(`分包预下载失败: ${subpackage}`, error.errMsg || error);
-          }
+
+      // 过滤指定的包
+      const targetPackages = packages.length > 0
+        ? subpackages.filter(pkg => packages.includes(pkg))
+        : subpackages;
+
+      if (!silent) {
+        console.log(`准备预下载分包: ${targetPackages.join(', ')}`);
+      }
+
+      // 预下载状态跟踪
+      const preloadStatus = {
+        success: [],
+        failed: [],
+        total: targetPackages.length
+      };
+
+      // 执行预下载
+      const preloadPromises = targetPackages.map(subpackage => {
+        return new Promise((resolve) => {
+          wx.preloadSubpackage({
+            name: subpackage,
+            success: () => {
+              preloadStatus.success.push(subpackage);
+              if (!silent) console.log(`✅ 分包预下载成功: ${subpackage}`);
+              resolve({ name: subpackage, success: true });
+            },
+            fail: (error) => {
+              preloadStatus.failed.push({ name: subpackage, error });
+              if (!silent) console.warn(`❌ 分包预下载失败: ${subpackage}`, error.errMsg || error);
+              resolve({ name: subpackage, success: false, error });
+            }
+          });
         });
       });
+
+      return Promise.all(preloadPromises).then(results => {
+        // 记录预下载统计
+        if (!this.performanceMetrics.subpackagePreload) {
+          this.performanceMetrics.subpackagePreload = [];
+        }
+        this.performanceMetrics.subpackagePreload.push({
+          timestamp: Date.now(),
+          ...preloadStatus
+        });
+
+        return results;
+      });
     }
+
+    return Promise.resolve([]);
+  }
+
+  /**
+   * 智能分包预下载
+   * 根据当前页面路径自动预下载相关分包
+   * @param {string} currentPage - 当前页面路径
+   */
+  smartPreloadSubpackages(currentPage) {
+    // 定义页面与分包的映射关系
+    const pagePackageMap = {
+      'pages/index/index': ['inquiry', 'quotes-ext'],
+      'pages/quotes/quotes': ['quotes-ext', 'inquiry'],
+      'pages/account/account': ['user'],
+      'pages/profile/profile': ['user', 'info'],
+      'pages/inquiry/inquiry': ['quotes-ext'],
+      'pages/quotes/detail/detail': ['inquiry'],
+      'pages/login/login': ['user']
+    };
+
+    const packagesToPreload = pagePackageMap[currentPage] || [];
+
+    if (packagesToPreload.length > 0) {
+      return this.predownloadSubpackages({ packages: packagesToPreload, silent: true });
+    }
+
+    return Promise.resolve([]);
+  }
+
+  /**
+   * 获取分包预下载统计
+   */
+  getSubpackagePreloadStats() {
+    if (!this.performanceMetrics.subpackagePreload) {
+      return { totalPreloads: 0, successRate: 0 };
+    }
+
+    const records = this.performanceMetrics.subpackagePreload;
+    const totalPreloads = records.length;
+    const totalSuccess = records.reduce((sum, r) => sum + r.success.length, 0);
+    const totalAttempts = records.reduce((sum, r) => sum + r.total, 0);
+
+    return {
+      totalPreloads,
+      successRate: totalAttempts > 0 ? (totalSuccess / totalAttempts * 100).toFixed(2) : 0,
+      recentRecords: records.slice(-5)
+    };
   }
 
   /**
@@ -999,10 +1088,10 @@ class PerformanceOptimizer {
       key = `${requestId}:${paramsHash}`;
     }
 
-    // 清理过期的pending请求（超过2秒）
+    // 清理过期的pending请求（超过5秒）- 优化：延长去重窗口以提高去重效果
     const now = Date.now();
     for (const [k, ts] of this.requestTimestamps.entries()) {
-      if (now - ts > 2000) {
+      if (now - ts > 5000) {
         this.pendingRequests.delete(k);
         this.requestTimestamps.delete(k);
       }
@@ -1411,6 +1500,11 @@ module.exports = {
 
   // 后端同步
   syncToBackend: (apiUrl) => performanceOptimizer.syncToBackend(apiUrl),
+
+  // 分包预下载
+  predownloadSubpackages: (options) => performanceOptimizer.predownloadSubpackages(options),
+  smartPreload: (currentPage) => performanceOptimizer.smartPreloadSubpackages(currentPage),
+  subpackageStats: () => performanceOptimizer.getSubpackagePreloadStats(),
 
   // 获取全局实例
   getInstance: () => performanceOptimizer

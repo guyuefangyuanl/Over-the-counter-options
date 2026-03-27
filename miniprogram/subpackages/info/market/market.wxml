@@ -1,0 +1,103 @@
+<!--pages/market/market.wxml-->
+<view class="market-container">
+  <!-- 实时行情卡片 -->
+  <view class="quote-card">
+    <view class="quote-header">
+      <view class="quote-title">
+        <text class="stock-name">{{stockInfo.name}}</text>
+        <text class="stock-code">{{stockInfo.code}}</text>
+      </view>
+      <view class="favorite-btn {{isFavorite ? 'active' : ''}}" bindtap="toggleFavorite">
+        <text>{{isFavorite ? '已收藏' : '收藏'}}</text>
+      </view>
+    </view>
+
+    <view class="quote-main">
+      <view class="quote-price {{stockInfo.changePercent >= 0 ? 'up' : 'down'}}">
+        {{stockInfo.price}}
+      </view>
+      <view class="quote-change {{stockInfo.changePercent >= 0 ? 'up' : 'down'}}">
+        {{stockInfo.changePercent >= 0 ? '+' : ''}}{{stockInfo.changePercent}}%
+      </view>
+    </view>
+
+    <view class="quote-detail">
+      <view class="detail-item">
+        <text class="detail-label">开盘</text>
+        <text class="detail-value">{{stockInfo.open}}</text>
+      </view>
+      <view class="detail-item">
+        <text class="detail-label">最高</text>
+        <text class="detail-value up">{{stockInfo.high}}</text>
+      </view>
+      <view class="detail-item">
+        <text class="detail-label">最低</text>
+        <text class="detail-value down">{{stockInfo.low}}</text>
+      </view>
+      <view class="detail-item">
+        <text class="detail-label">昨收</text>
+        <text class="detail-value">{{stockInfo.preClose}}</text>
+      </view>
+      <view class="detail-item">
+        <text class="detail-label">成交量</text>
+        <text class="detail-value">{{stockInfo.volume}}</text>
+      </view>
+      <view class="detail-item">
+        <text class="detail-label">成交额</text>
+        <text class="detail-value">{{stockInfo.amount}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- K线图区域 -->
+  <view class="chart-section">
+    <view class="chart-header">
+      <view class="chart-tabs">
+        <view
+          class="chart-tab {{chartType === 'day' ? 'active' : ''}}"
+          data-type="day"
+          bindtap="switchChartType"
+        >日K</view>
+        <view
+          class="chart-tab {{chartType === 'week' ? 'active' : ''}}"
+          data-type="week"
+          bindtap="switchChartType"
+        >周K</view>
+        <view
+          class="chart-tab {{chartType === 'month' ? 'active' : ''}}"
+          data-type="month"
+          bindtap="switchChartType"
+        >月K</view>
+      </view>
+    </view>
+    <view class="chart-placeholder">
+      <text>图表区域</text>
+    </view>
+  </view>
+
+  <!-- 相关期权报价 -->
+  <view class="options-section">
+    <view class="section-title">期权报价</view>
+    <view class="options-list" wx:if="{{optionQuotes.length > 0}}">
+      <view class="option-item" wx:for="{{optionQuotes}}" wx:key="index">
+        <view class="option-type">{{item.type}}</view>
+        <view class="option-detail">
+          <text>期限: {{item.term}}</text>
+          <text>行权价: {{item.strike}}</text>
+        </view>
+        <view class="option-premium">{{item.premium}}</view>
+        <view class="option-broker">{{item.broker}}</view>
+      </view>
+    </view>
+    <view class="loading-placeholder" wx:if="{{quotesLoading}}">
+      <text>加载中...</text>
+    </view>
+  </view>
+
+  <!-- 底部操作栏 -->
+  <view class="action-bar">
+    <view class="action-btn primary" bindtap="goToInquiry">
+      立即询价
+    </view>
+  </view>
+</view>

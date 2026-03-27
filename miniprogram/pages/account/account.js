@@ -659,12 +659,12 @@ Page({
   },
 
   /**
-   * 持仓表单字段失焦时收集值（非受控模式，避免输入期间重渲染导致光标跳位）
+   * 持仓表单字段输入处理（bind:change 实时更新，与项目其他表单保持一致）
    */
   onPositionFormInput(e) {
     const field = e.currentTarget.dataset.field;
-    const value = (e.detail && e.detail.value !== undefined) ? e.detail.value : '';
-    // 仅更新内部存储的表单值，不触发 setData 对输入框的重渲染
+    // bind:change 事件：e.detail 可能是字符串或包含 value 的对象
+    const value = typeof e.detail === 'string' ? e.detail : (e.detail && e.detail.value !== undefined ? e.detail.value : '');
     const newForm = Object.assign({}, this.data.positionForm);
     newForm[field] = value;
     // 只有该字段有错误时才更新 errors，减少无效渲染

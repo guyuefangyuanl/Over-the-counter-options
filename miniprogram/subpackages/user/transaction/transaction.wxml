@@ -1,0 +1,113 @@
+<!--pages/transaction/transaction.wxml-->
+<view class="transaction-container">
+  <!-- 统计摘要 -->
+  <view class="summary-card">
+    <view class="summary-row">
+      <view class="summary-item">
+        <text class="summary-value income">+{{summary.totalDeposit}}</text>
+        <text class="summary-label">充值总额</text>
+      </view>
+      <view class="summary-item">
+        <text class="summary-value expense">-{{summary.totalWithdraw}}</text>
+        <text class="summary-label">提现总额</text>
+      </view>
+    </view>
+    <view class="summary-row">
+      <view class="summary-item">
+        <text class="summary-value">{{summary.totalTrade}}</text>
+        <text class="summary-label">交易总额</text>
+      </view>
+      <view class="summary-item">
+        <text class="summary-value {{summary.netAmount >= 0 ? 'income' : 'expense'}}">
+          {{summary.netAmount >= 0 ? '+' : ''}}{{summary.netAmount}}
+        </text>
+        <text class="summary-label">净流入</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 筛选区域 -->
+  <view class="filter-section">
+    <!-- 类型筛选 -->
+    <scroll-view scroll-x class="type-scroll">
+      <view class="type-tabs">
+        <view
+          wx:for="{{typeOptions}}"
+          wx:key="value"
+          class="type-tab {{transactionType === item.value || (transactionType === 'all' && item.value === '') ? 'active' : ''}}"
+          data-type="{{item.value || 'all'}}"
+          bindtap="onTypeChange"
+        >
+          {{item.label}}
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- 交易记录列表 -->
+  <view class="transaction-list" wx:if="{{transactions.length > 0}}">
+    <block wx:for="{{groupedData}}" wx:key="date">
+      <!-- 日期分组标题 -->
+      <view class="date-header">{{item.date}}</view>
+
+      <!-- 交易记录卡片 -->
+      <view
+        class="transaction-card"
+        wx:for="{{item.items}}"
+        wx:for-item="transaction"
+        wx:key="_id"
+      >
+        <view class="transaction-main">
+          <view class="transaction-icon {{transaction.type}}">
+            <text wx:if="{{transaction.type === 'deposit'}}">充</text>
+            <text wx:elif="{{transaction.type === 'withdraw'}}">提</text>
+            <text wx:elif="{{transaction.type === 'trade'}}">交</text>
+            <text wx:elif="{{transaction.type === 'fee'}}">费</text>
+            <text wx:else>退</text>
+          </view>
+
+          <view class="transaction-info">
+            <view class="transaction-title">
+              {{transaction.typeLabel || (transaction.type === 'deposit' ? '充值' : transaction.type === 'withdraw' ? '提现' : transaction.type === 'trade' ? '交易' : transaction.type === 'fee' ? '手续费' : '退款')}}
+            </view>
+            <view class="transaction-desc" wx:if="{{transaction.description}}">
+              {{transaction.description}}
+            </view>
+            <view class="transaction-time">{{transaction.createdAt || transaction.time}}</view>
+          </view>
+
+          <view class="transaction-amount {{transaction.type === 'withdraw' || transaction.type === 'fee' ? 'expense' : 'income'}}">
+            {{transaction.type === 'withdraw' || transaction.type === 'fee' ? '-' : '+'}}{{transaction.amount}}
+          </view>
+        </view>
+
+        <view class="transaction-balance" wx:if="{{transaction.balanceAfter}}">
+          余额: {{transaction.balanceAfter}}
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading-wrapper" wx:if="{{loading}}">
+    <view class="loading-text">加载中...</view>
+  </view>
+
+  <!-- 没有更多 -->
+  <view class="no-more" wx:if="{{!hasMore && transactions.length > 0 && !loading}}">
+    <text>没有更多了</text>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{isEmpty && !loading}}">
+    <image class="empty-icon" src="/images/empty-order.png" mode="aspectFit"></image>
+    <text class="empty-text">暂无交易记录</text>
+    <view class="empty-btn" bindtap="refreshData">刷新试试</view>
+  </view>
+
+  <!-- 错误状态 -->
+  <view class="error-state" wx:if="{{error && !loading && transactions.length === 0}}">
+    <text class="error-text">加载失败，请稍后重试</text>
+    <view class="retry-btn" bindtap="refreshData">重新加载</view>
+  </view>
+</view>
