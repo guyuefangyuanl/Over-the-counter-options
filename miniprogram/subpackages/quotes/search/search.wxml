@@ -86,7 +86,7 @@
 
       <!-- 空状态 -->
       <view wx:if="{{isNoResult}}" class="results-section__empty">
-        <image class="results-section__empty-img" src="/images/icons/empty-box.png" mode="aspectFit"></image>
+        <view class="results-section__empty-icon">🔍</view>
         <text>没有找到相关内容</text>
       </view>
 

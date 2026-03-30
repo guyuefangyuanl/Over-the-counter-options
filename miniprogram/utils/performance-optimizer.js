@@ -433,7 +433,6 @@ class PerformanceOptimizer {
       'pages/account/account': ['user'],
       'pages/profile/profile': ['user', 'info'],
       'pages/inquiry/inquiry': ['quotes-ext'],
-      'pages/quotes/detail/detail': ['inquiry'],
       'pages/login/login': ['user']
     };
 

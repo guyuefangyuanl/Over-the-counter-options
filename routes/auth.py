@@ -17,6 +17,106 @@ from services.token_blacklist import is_token_blacklisted, blacklist_token
 auth_bp = Blueprint("auth", __name__)
 logger = logging.getLogger(__name__)
 
+# ========== 登录历史记录辅助函数 ==========
+
+def _record_login_history(user_id: str, login_type: str, status: str = 'success'):
+    """记录登录历史的辅助函数"""
+    try:
+        model = auth_service._get_model()
+        
+        # 获取请求信息
+        ip_address = request.headers.get('X-Forwarded-For', request.remote_addr) or ''
+        if ',' in ip_address:
+            ip_address = ip_address.split(',')[0].strip()
+        
+        user_agent = request.headers.get('User-Agent', '')
+        
+        # 解析设备信息（从User-Agent）
+        device_info = {
+            "user_agent": user_agent,
+            "browser": _parse_browser(user_agent),
+            "os": _parse_os(user_agent),
+            "device": _parse_device(user_agent)
+        }
+        
+        # 创建登录历史记录
+        history_id = model.create_login_history(
+            user_id=user_id,
+            login_type=login_type,
+            ip_address=ip_address,
+            device_info=device_info,
+            location={},  # 位置信息需要额外的IP定位服务
+            status=status,
+            user_agent=user_agent
+        )
+        
+        if history_id:
+            logger.info(f"[登录历史] 已记录: user={user_id}, type={login_type}, status={status}")
+        
+        return history_id
+        
+    except Exception as e:
+        logger.warning(f"[登录历史] 记录失败: {e}")
+        return None
+
+def _parse_browser(user_agent: str) -> str:
+    """解析浏览器类型"""
+    if not user_agent:
+        return "Unknown"
+    
+    ua_lower = user_agent.lower()
+    
+    if 'micromessenger' in ua_lower:
+        return "WeChat"
+    elif 'chrome' in ua_lower and 'edg' not in ua_lower:
+        return "Chrome"
+    elif 'edg' in ua_lower:
+        return "Edge"
+    elif 'firefox' in ua_lower:
+        return "Firefox"
+    elif 'safari' in ua_lower and 'chrome' not in ua_lower:
+        return "Safari"
+    elif 'opera' in ua_lower or 'opr' in ua_lower:
+        return "Opera"
+    elif 'msie' in ua_lower or 'trident' in ua_lower:
+        return "IE"
+    else:
+        return "Unknown"
+
+def _parse_os(user_agent: str) -> str:
+    """解析操作系统"""
+    if not user_agent:
+        return "Unknown"
+    
+    ua_lower = user_agent.lower()
+    
+    if 'windows' in ua_lower:
+        return "Windows"
+    elif 'mac os' in ua_lower or 'macos' in ua_lower:
+        return "MacOS"
+    elif 'linux' in ua_lower:
+        return "Linux"
+    elif 'android' in ua_lower:
+        return "Android"
+    elif 'iphone' in ua_lower or 'ipad' in ua_lower:
+        return "iOS"
+    else:
+        return "Unknown"
+
+def _parse_device(user_agent: str) -> str:
+    """解析设备类型"""
+    if not user_agent:
+        return "Unknown"
+    
+    ua_lower = user_agent.lower()
+    
+    if 'mobile' in ua_lower or 'android' in ua_lower or 'iphone' in ua_lower:
+        return "Mobile"
+    elif 'tablet' in ua_lower or 'ipad' in ua_lower:
+        return "Tablet"
+    else:
+        return "Desktop"
+
 # 延迟初始化 auth_service，确保环境变量已加载
 _auth_service = None
 
@@ -115,6 +215,11 @@ def admin_login():
         return flask_error_response("用户名和密码不能为空", 400)
 
     ok, role, err, require_password_change = auth_service.authenticate_admin(username, password)
+    
+    # 记录登录历史（无论成功或失败）
+    login_status = 'success' if ok else 'failed'
+    _record_login_history(username, 'admin', login_status)
+    
     if not ok:
         return flask_error_response(err or "登录失败", 401)
 
@@ -143,20 +248,42 @@ def admin_login():
 @auth_bp.route("/logout", methods=["POST"])
 @require_auth
 def logout():
-    """用户登出，将Token加入黑名单"""
+    """用户登出，将Token加入黑名单并更新登录历史"""
     token = getattr(g, '_token', None)
+    payload = getattr(g, "admin", None)
+    user_id = payload.get("sub") if isinstance(payload, dict) else None
+    
     if token:
         # 将Token加入黑名单，过期时间设置为Token的剩余有效期
         try:
-            payload = jwt.decode(token, auth_service.jwt_secret, algorithms=[auth_service.jwt_algorithm])
-            exp = payload.get('exp', 0)
+            jwt_payload = jwt.decode(token, auth_service.jwt_secret, algorithms=[auth_service.jwt_algorithm])
+            exp = jwt_payload.get('exp', 0)
+            iat = jwt_payload.get('iat', 0)
             now = int(time.time())
             expires_in = max(exp - now, 0) if exp > now else 86400  # 至少24小时
+            
+            # 尝试更新最近一条登录历史记录的登出时间
+            if user_id:
+                try:
+                    model = auth_service._get_model()
+                    # 获取最近一条成功的登录记录（未登出的）
+                    history = model.get_login_history(user_id, limit=1)
+                    if history and history[0].get('logout_time') is None:
+                        logout_time = datetime.utcnow()
+                        session_duration = int(now - iat) if iat else 0
+                        model.update_login_history_logout(
+                            history[0].get('_id'),
+                            logout_time,
+                            session_duration
+                        )
+                except Exception as e:
+                    logger.warning(f"更新登录历史记录失败: {e}")
+                    
         except Exception:
             expires_in = 86400  # 默认24小时
 
         blacklist_token(token, expires_in)
-        logger.info(f"用户登出成功: {getattr(g.admin, 'get', lambda k: None)('sub') if hasattr(g, 'admin') else 'unknown'}")
+        logger.info(f"用户登出成功: {user_id}")
 
     return flask_success_response(message="登出成功")
 
@@ -412,6 +539,104 @@ def revoke_all_sessions():
         logger.error(f"撤销所有会话失败: {e}")
         return flask_error_response("操作失败", 500)
 
+
+# ========== 登录历史记录 ==========
+
+@auth_bp.route("/login-history", methods=["GET"])
+@require_auth
+def get_login_history():
+    """获取当前用户的登录历史记录"""
+    payload = getattr(g, "admin", None)
+    if not isinstance(payload, dict):
+        return flask_error_response("未登录", 401)
+    
+    user_id = payload.get("sub")
+    
+    try:
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('pageSize', 10))
+        offset = (page - 1) * page_size
+        
+        model = auth_service._get_model()
+        
+        # 获取登录历史记录
+        history = model.get_login_history(user_id, limit=page_size, offset=offset)
+        total = model.get_login_history_count(user_id)
+        
+        # 处理历史记录数据，脱敏IP地址
+        processed_history = []
+        for record in history:
+            # IP地址脱敏：隐藏最后一段
+            ip = record.get('ip_address', '')
+            if ip and len(ip.split('.')) == 4:
+                ip_parts = ip.split('.')
+                ip = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.***"
+            
+            processed_record = {
+                "id": record.get("_id"),
+                "login_time": record.get("login_time"),
+                "login_type": record.get("login_type", "unknown"),
+                "ip_address": ip,
+                "location": record.get("location", {}),
+                "device": record.get("device_info", {}),
+                "status": record.get("status", "success"),
+                "session_duration": record.get("session_duration"),
+                "logout_time": record.get("logout_time")
+            }
+            processed_history.append(processed_record)
+        
+        # 计算统计信息
+        stats = model.get_recent_login_stats(user_id, days=30)
+        
+        return flask_success_response(
+            data={
+                "history": processed_history,
+                "pagination": {
+                    "page": page,
+                    "pageSize": page_size,
+                    "total": total,
+                    "totalPages": (total + page_size - 1) // page_size
+                },
+                "statistics": {
+                    "total_logins_30d": stats.get("total_logins", 0),
+                    "successful_logins_30d": stats.get("successful_logins", 0),
+                    "failed_logins_30d": stats.get("failed_logins", 0),
+                    "unique_ips_30d": stats.get("unique_ips", 0),
+                    "unique_devices_30d": stats.get("unique_devices", 0),
+                    "most_common_login_type": stats.get("most_common_login_type"),
+                    "last_login": stats.get("last_login")
+                }
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"获取登录历史失败: {e}")
+        return flask_error_response("获取登录历史失败", 500)
+
+
+@auth_bp.route("/login-history/stats", methods=["GET"])
+@require_auth
+def get_login_stats():
+    """获取当前用户的登录统计信息"""
+    payload = getattr(g, "admin", None)
+    if not isinstance(payload, dict):
+        return flask_error_response("未登录", 401)
+    
+    user_id = payload.get("sub")
+    days = int(request.args.get('days', 30))
+    
+    try:
+        model = auth_service._get_model()
+        stats = model.get_recent_login_stats(user_id, days=days)
+        
+        return flask_success_response(data=stats)
+        
+    except Exception as e:
+        logger.error(f"获取登录统计失败: {e}")
+        return flask_error_response("获取登录统计失败", 500)
+
+
+# ========== 用户管理 ==========
 
 @auth_bp.route("/users", methods=["GET"])
 @require_auth
@@ -886,6 +1111,9 @@ def guest_login():
     import uuid
     guest_id = f"guest_{uuid.uuid4().hex[:12]}"
     
+    # 记录游客登录历史
+    _record_login_history(guest_id, 'guest', 'success')
+    
     # 为游客创建受限的token
     token_data = auth_service.issue_token(guest_id, 'guest')
     
@@ -920,6 +1148,11 @@ def wechat_login():
         ok, user, err = auth_service.wechat_login(code)
         
         logger.info(f"[微信登录] wechat_login 返回: ok={ok}, user={user}, err={err}")
+        
+        # 记录登录历史（无论成功或失败）
+        login_status = 'success' if ok else 'failed'
+        user_id = user.get('openid') if ok else 'unknown'
+        _record_login_history(user_id, 'wechat', login_status)
         
         if not ok:
             logger.error(f"[微信登录] 登录失败: {err}")

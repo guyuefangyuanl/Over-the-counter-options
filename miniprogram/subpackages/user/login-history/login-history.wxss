@@ -1,0 +1,339 @@
+/* 登录历史记录页面样式 */
+
+.login-history-page {
+  min-height: 100vh;
+  background: #f7f8fa;
+}
+
+/* 标签切换 */
+.tabs {
+  display: flex;
+  background: #fff;
+  padding: 0 16rpx;
+  border-bottom: 1rpx solid #ebedf0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 28rpx 0;
+  font-size: 28rpx;
+  color: #646566;
+  position: relative;
+  transition: color 0.3s;
+}
+
+.tab-item.active {
+  color: #1989fa;
+  font-weight: 500;
+}
+
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40rpx;
+  height: 6rpx;
+  background: #1989fa;
+  border-radius: 3rpx;
+}
+
+/* 加载状态 */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 100rpx 0;
+}
+
+/* 统计卡片 */
+.stats-cards {
+  display: flex;
+  padding: 24rpx;
+  background: #fff;
+  margin-bottom: 16rpx;
+}
+
+.stat-card {
+  flex: 1;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 40rpx;
+  font-weight: 600;
+  color: #323233;
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 24rpx;
+  color: #969799;
+  margin-top: 8rpx;
+}
+
+/* 安全提示 */
+.security-alert {
+  display: flex;
+  align-items: center;
+  padding: 24rpx;
+  background: #fffbe8;
+  margin: 0 24rpx 16rpx;
+  border-radius: 12rpx;
+  font-size: 26rpx;
+  color: #ed6a0c;
+}
+
+.security-alert van-icon {
+  margin-right: 12rpx;
+}
+
+/* 历史记录列表 */
+.history-list {
+  background: #fff;
+  border-radius: 16rpx;
+  margin: 0 24rpx;
+  overflow: hidden;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 28rpx 24rpx;
+  border-bottom: 1rpx solid #ebedf0;
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-left {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.login-type-icon {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 20rpx;
+}
+
+.login-type-icon.wechat {
+  background: #07c160;
+  color: #fff;
+}
+
+.login-type-icon.admin {
+  background: #1989fa;
+  color: #fff;
+}
+
+.login-type-icon.phone,
+.login-type-icon.email {
+  background: #ff976a;
+  color: #fff;
+}
+
+.login-type-icon.guest {
+  background: #969799;
+  color: #fff;
+}
+
+.history-info {
+  flex: 1;
+}
+
+.history-title {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
+.login-type {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #323233;
+  margin-right: 12rpx;
+}
+
+.login-status {
+  font-size: 22rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 6rpx;
+}
+
+.login-status.success {
+  background: #e8f7e8;
+  color: #07c160;
+}
+
+.login-status.failed {
+  background: #fef0f0;
+  color: #ee0a24;
+}
+
+.history-detail {
+  font-size: 24rpx;
+  color: #969799;
+  margin-bottom: 6rpx;
+}
+
+.history-time {
+  font-size: 22rpx;
+  color: #c8c9cc;
+}
+
+.session-duration {
+  font-size: 24rpx;
+  color: #969799;
+  padding: 8rpx 16rpx;
+  background: #f7f8fa;
+  border-radius: 8rpx;
+}
+
+/* 加载更多 */
+.load-more {
+  padding: 24rpx;
+  text-align: center;
+}
+
+.loading-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #969799;
+  font-size: 26rpx;
+}
+
+.loading-more van-loading {
+  margin-right: 12rpx;
+}
+
+.no-more {
+  color: #c8c9cc;
+  font-size: 26rpx;
+}
+
+.load-more-btn {
+  color: #1989fa;
+  font-size: 26rpx;
+}
+
+/* 设备列表 */
+.devices-tab {
+  padding: 0 24rpx;
+}
+
+.action-bar {
+  padding: 24rpx 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.device-list {
+  background: #fff;
+  border-radius: 16rpx;
+  overflow: hidden;
+  margin-bottom: 24rpx;
+}
+
+.device-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 28rpx 24rpx;
+  border-bottom: 1rpx solid #ebedf0;
+}
+
+.device-item:last-child {
+  border-bottom: none;
+}
+
+.device-item.current {
+  background: #f7f8fa;
+}
+
+.device-left {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.device-icon {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 16rpx;
+  background: #f2f3f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 20rpx;
+  color: #969799;
+}
+
+.device-info {
+  flex: 1;
+}
+
+.device-name {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #323233;
+  margin-bottom: 8rpx;
+}
+
+.current-badge {
+  font-size: 20rpx;
+  font-weight: normal;
+  color: #1989fa;
+  background: #e8f4ff;
+  padding: 4rpx 12rpx;
+  border-radius: 6rpx;
+  margin-left: 12rpx;
+}
+
+.device-detail {
+  font-size: 24rpx;
+  color: #969799;
+}
+
+/* 安全提示 */
+.security-tips {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+}
+
+.tips-title {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #323233;
+  margin-bottom: 16rpx;
+}
+
+.tips-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.tips-content text {
+  font-size: 24rpx;
+  color: #969799;
+  line-height: 1.8;
+}
+
+/* 空状态 */
+.empty-state {
+  padding: 100rpx 0;
+}

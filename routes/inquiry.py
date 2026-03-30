@@ -244,7 +244,7 @@ def _validate_inquiry_data(data: Dict[str, Any]) -> Optional[str]:
 
     # 期限验证
     term = data.get('term')
-    if term and term not in ['1M', '2M', '3M', '6M', '1Y', 'custom']:
+    if term and term not in ['2W', '1M', '2M', '3M', '6M', '12M', '1Y', 'custom']:
         return "期限格式不正确"
 
     return None

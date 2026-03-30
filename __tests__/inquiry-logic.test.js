@@ -1,4 +1,4 @@
-const logic = require('../utils/inquiry-logic.js');
+const logic = require('../miniprogram/utils/inquiry-logic.js');
 
 describe('validateNewGroupName', () => {
   const allGroups = [

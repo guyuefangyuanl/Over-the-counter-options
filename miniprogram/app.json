@@ -3,6 +3,7 @@
   "pages": [
     "pages/index/index",
     "pages/quotes/quotes",
+    "pages/quotes/inquiry-complete",
     "pages/account/account",
     "pages/profile/profile",
     "pages/login/login"
@@ -12,8 +13,6 @@
       "root": "subpackages/quotes",
       "name": "quotes",
       "pages": [
-        "detail/detail",
-        "inquiry-complete/inquiry-complete",
         "search/search",
         "search-stock/search-stock",
         "stock-detail/stock-detail"
@@ -42,7 +41,8 @@
         "member/member",
         "position/position",
         "inquiry-history/inquiry-history",
-        "feedback/feedback"
+        "feedback/feedback",
+        "login-history/login-history"
       ]
     },
     {
@@ -51,9 +51,7 @@
       "pages": [
         "knowledge/knowledge",
         "knowledge-detail/knowledge-detail",
-        "news/news",
-        "market/market",
-        "analysis/analysis"
+        "news/news"
       ]
     },
     {

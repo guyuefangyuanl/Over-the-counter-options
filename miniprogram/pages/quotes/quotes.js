@@ -3,8 +3,148 @@ const OptionPricingSystem = require('../../utils/option-pricing.js');
 const logic = require('../../utils/inquiry-logic.js');
 const api = require('../../utils/api-group.js');
 const { submitInquiry } = require('../../utils/inquiryService.js');
+const { FAVORITES_STORAGE_KEY, CUSTOM_GROUPS_STORAGE_KEY } = require('../../utils/storage-keys.js');
+const favoritesService = require('../../utils/favoritesService.js');
+const { quotesDataManager, QUOTES_TTL, REALTIME_CONFIG, PAGE_CONFIG } = require('../../utils/quotes-data-manager.js');
 
-const FAVORITES_STORAGE_KEY = 'INQUIRY_FAVORITES_V1';
+// ==================== 交易商名称缩写映射 ====================
+const TRADER_ABBREVIATION_MAP = {
+  '中信证券': 'ZXZZ',
+  '中信中证': 'ZXZZ',
+  '中信': 'ZXZZ',
+  '华泰财富': 'HTCC',
+  '华泰长城': 'HTCC',
+  '华泰': 'HTCC',
+  '银河瑞德': 'YHRD',
+  '银河德睿': 'YHRD',
+  '银河': 'YHRD',
+  '海通证券': 'HTZQ',
+  '海通': 'HTZQ',
+  '国金证券': 'GJZQ',
+  '国金': 'GJZQ',
+  '国泰君安': 'GTJA',
+  '国君': 'GTJA',
+  '招商证券': 'ZSZQ',
+  '招商': 'ZSZQ',
+  '中金': 'ZJZQ',
+  '中金公司': 'ZJZQ',
+  '申万宏源': 'SWHY',
+  '申万': 'SWHY',
+  '广发证券': 'GFZQ',
+  '广发': 'GFZQ',
+  '兴业证券': 'XYZQ',
+  '兴业': 'XYZQ',
+  '中信建投': 'ZXJS',
+  '建投': 'ZXJS'
+};
+
+/**
+ * 获取交易商名称缩写
+ * @param {string} trader 交易商全名或代码
+ * @returns {string} 交易商缩写
+ */
+function getTraderAbbreviation(trader) {
+  if (!trader) return '-';
+  // 已经是缩写格式（2-6个大写字母）
+  if (/^[A-Z]{2,6}$/.test(trader)) return trader;
+  // 查找映射表
+  const abbr = TRADER_ABBREVIATION_MAP[trader];
+  if (abbr) return abbr;
+  // 未知交易商，取前4个字符
+  return trader.length > 4 ? trader.slice(0, 4) : trader;
+}
+
+// ==================== 日期格式化工具函数 ====================
+
+/**
+ * 格式化最近日期显示（今天/昨天/MM-DD）
+ * @param {Date|string} date 日期对象或日期字符串
+ * @returns {string} 格式化后的日期字符串
+ */
+function formatDateShort(date) {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return '--';
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+  const dateDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const timeStr = `${hours}:${minutes}`;
+
+  if (dateDay.getTime() === today.getTime()) {
+    return `今天 ${timeStr}`;
+  } else if (dateDay.getTime() === yesterday.getTime()) {
+    return `昨天 ${timeStr}`;
+  } else {
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${month}-${day} ${timeStr}`;
+  }
+}
+
+/**
+ * 格式化完整日期时间（用于更新时间显示）
+ * @param {Date|number} date 日期对象或时间戳
+ * @returns {string} 格式化后的日期时间字符串
+ */
+function formatDateTime(date) {
+  const d = typeof date === 'number' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return '--';
+
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+
+  return `${year}/${month}/${day} ${hours}:${minutes}更新`;
+}
+
+/**
+ * 获取最近交易日日期对象
+ * @returns {{latest: string, yesterday: string, latestLabel: string, yesterdayLabel: string}}
+ */
+function getRecentTradingDates() {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  // 简单处理：使用当前日期作为最新交易日
+  // 实际应用中可能需要考虑周末和节假日
+  const latest = today;
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+
+  const formatDate = (d) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatLabel = (d) => {
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${month}/${day}`;
+  };
+
+  return {
+    latest: formatDate(latest),
+    yesterday: formatDate(yesterday),
+    latestLabel: `最新${formatLabel(latest)}`,
+    yesterdayLabel: `昨日${formatLabel(yesterday)}`
+  };
+}
+
+// 节流控制：防止loadGroups频繁调用
+let _lastLoadGroupsTime = 0;
+const LOAD_GROUPS_THROTTLE_MS = 5000; // 5秒内不重复静默加载
+
+// 页面刷新状态
+let _isRefreshing = false;
+let _lastRefreshTime = 0;
+const REFRESH_THROTTLE_MS = 3000; // 3秒内不重复刷新
 
 Page({
   data: {
@@ -14,15 +154,10 @@ Page({
     currentTab: '自选',
     subFilter: '全部',
     selectedTerm: '1M',
-    watchlist: [
-      { name: '宁德时代', code: '300750.SZ', changePercent: 2.47, atm: 11.83, otm105: 9.77, otm110: 8.01 },
-      { name: '东方财富', code: '300059.SZ', changePercent: 0.50, atm: 16.20, otm105: 14.21, otm110: 12.44 },
-      { name: '平安银行', code: '000001.SZ', changePercent: -0.35, atm: 6.53, otm105: 4.46, otm110: 2.94 },
-      { name: '药明康德', code: '603259.SH', changePercent: -1.26, atm: 7.92, otm105: 5.83, otm110: 4.21 },
-      { name: '上海贝岭', code: '603259.SH', changePercent: -2.26, atm: 12.16, otm105: 10.16, otm110: 8.16 }
-    ],
+    // ==================== 修复：初始 watchlist 为空，由 loadWatchlist() 加载 ====================
+    watchlist: [],
     hotStocks: [], // 热门10支个股
-    updateTime: '2024/12/23 15:00更新',
+    updateTime: formatDateTime(new Date()), // 动态更新时间
     terms: ['1M', '2M', '3M', '6M'],
     traders: [
       { code: 'BEST', name: '最优报价' },
@@ -33,9 +168,9 @@ Page({
     ],
     selectedTrader: '最优报价',
     selectedTraderCode: 'BEST',
-    
+
     // 指数页面数据
-    indexUpdate: '2024/12/23 15:00更新',
+    indexUpdate: formatDateTime(new Date()), // 动态更新时间
     topIndices: [
       { name: '中证500', price: '5818.55', changePercent: -1.67 },
       { name: '中证1000', price: '6096.38', changePercent: -2.80 },
@@ -50,7 +185,7 @@ Page({
     ],
 
     // ETF 页面数据
-    etfUpdate: '2024/12/23 15:00更新',
+    etfUpdate: formatDateTime(new Date()), // 动态更新时间
     etfQuotes: [
       { name: '芯片ETF', code: '159995.SZ', changePercent: 2.47, atm: 11.83, otm105: 9.77, otm110: 8.01 },
       { name: '5GETF', code: '515050.SH', changePercent: 0.50, atm: 16.20, otm105: 14.21, otm110: 12.44 },
@@ -69,28 +204,34 @@ Page({
       changePercent: 5.68,
       displayText: '11.36  +0.61%'
     },
-    
+
     // 收藏状态
     isFavorited: false,
-    
+
     // 当前询价项目
     currentQuote: null,
-    
-    // 报价日期选择
-    quoteDates: [
-      { id: 'latest', label: '最新2024/12/19', value: '2024-12-19', isActive: true },
-      { id: 'yesterday', label: '昨日2024/12/18', value: '2024-12-18', isActive: false }
-    ],
-    selectedQuoteDate: '最新2024/12/19',
-    
-    // 交易商选择
+
+    // 报价日期选择（动态生成）
+    quoteDates: (() => {
+      const dates = getRecentTradingDates();
+      return [
+        { id: 'latest', label: dates.latestLabel, value: dates.latest, isActive: true },
+        { id: 'yesterday', label: dates.yesterdayLabel, value: dates.yesterday, isActive: false }
+      ];
+    })(),
+    selectedQuoteDate: (() => {
+      const dates = getRecentTradingDates();
+      return dates.latestLabel;
+    })(),
+
+    // 交易商选择（使用缩写）
     traders: [
       { code: 'ALL', name: '全部交易商', isActive: true },
-      { code: 'ZXZQ', name: '中信证券', isActive: false },
-      { code: 'HTCF', name: '华泰财富', isActive: false },
-      { code: 'YHRD', name: '银河瑞德', isActive: false },
-      { code: 'HTZQ', name: '海通证券', isActive: false },
-      { code: 'GJZQ', name: '国金证券', isActive: false }
+      { code: 'ZXZZ', name: 'ZXZZ', isActive: false },
+      { code: 'HTCC', name: 'HTCC', isActive: false },
+      { code: 'YHRD', name: 'YHRD', isActive: false },
+      { code: 'HTZQ', name: 'HTZQ', isActive: false },
+      { code: 'GJZQ', name: 'GJZQ', isActive: false }
     ],
     selectedTrader: '全部交易商',
     selectedTraderCode: 'ALL',
@@ -111,6 +252,13 @@ Page({
     showStockDetail: false,
     sortField: 'changePercent',
     sortOrder: 'desc',
+    
+    // === 新增：搜索和空状态 ===
+    watchlistSearchKeyword: '',       // 自选搜索关键词
+    originalWatchlist: [],            // 原始自选列表（用于搜索筛选）
+    filteredWatchlist: [],            // 筛选后的自选列表
+    // ==================== 修复：初始值改为 true，确保空状态能显示 ====================
+    showEmptyState: true,            // 是否显示空状态引导（初始为 true，由 loadWatchlist 根据数据更新）
 
     // === 新增：矩阵视图数据 ===
     bizType: 'vanilla',
@@ -163,37 +311,179 @@ Page({
     showDeleteGroupDialog: false,
     deleteGroupId: '',
     deleteGroupName: '',
-    deleteRemoveFavorites: false
+    deleteRemoveFavorites: false,
+    
+    // === 新增：下拉刷新和分页状态 ===
+    isPullRefreshing: false,          // 下拉刷新状态
+    hasMoreHotStocks: true,           // 热门个股是否有更多
+    hasMoreIndexQuotes: true,         // 指数是否有更多
+    hasMoreEtfQuotes: true,           // ETF是否有更多
+    currentPage: {
+      hotStocks: 1,
+      indexQuotes: 1,
+      etfQuotes: 1
+    },
+    pageSize: 20,
+    
+    // === 新增：实时更新状态 ===
+    isRealtimeUpdating: false,        // 是否正在实时更新
+    lastUpdateTime: 0,                // 上次更新时间戳
+    
+    // === 新增：网络状态 ===
+    isNetworkAvailable: true          // 网络是否可用
   },
 
   onLoad: function (options) {
-    // 获取系统信息以适配自定义导航栏
-    const windowInfo = wx.getWindowInfo();
-    this.setData({
-      statusBarHeight: windowInfo.statusBarHeight,
-      navBarHeight: 44 // iOS标准，Android可能是48，这里简化
-    });
+    // ==================== 安全包装：防止任何错误导致黑屏 ====================
+    try {
+      console.log('个股期权报价页面加载', options);
 
-    console.log('个股期权报价页面加载', options);
-    this.handleNavigationParams(options);
-    
-    // 检查收藏状态
-    this.checkFavoriteStatus();
-    
-    // 初始化数据 - 注意：loadHotStocks 会在 handleNavigationParams 中调用
-    // 这里只加载其他数据
-    this.loadWatchlist();
-    this.loadIndexData();
-    this.loadEtfData();
-    this.loadGroups({ silent: true });
-    
-    // 如果没有跳转参数，才加载默认热门股票
-    if (!options.code && !options.stock) {
-      this.loadHotStocks();
+      // ==================== 设置状态栏样式为白色主题 ====================
+      // 由于使用自定义导航栏，需要动态设置状态栏文字为深色
+      wx.setNavigationBarColor({
+        frontColor: '#000000',  // 状态栏文字颜色：黑色
+        backgroundColor: '#ffffff',  // 导航栏背景色：白色
+        animation: {
+          duration: 0,
+          timingFunc: 'easeIn'
+        }
+      });
+
+      // 获取系统信息以适配自定义导航栏
+      const windowInfo = wx.getWindowInfo();
+      this.setData({
+        statusBarHeight: windowInfo.statusBarHeight,
+        navBarHeight: 44 // iOS标准，Android可能是48，这里简化
+      });
+
+      // 解析跳转参数，确定目标Tab
+      const targetTab = options.tab || '自选';
+      this.setData({ currentTab: targetTab });
+
+      // 检查收藏状态
+      this.checkFavoriteStatus();
+
+      // 注册数据管理器回调（用于实时更新）
+      this._registerDataManagerCallbacks();
+
+      // 检查网络状态
+      this._checkNetworkStatus();
+
+      // 根据目标Tab按需加载数据（优化首次加载）
+      this._loadDataForTab(targetTab, options);
+
+      // 加载分组数据（静默）
+      this.loadGroups({ silent: true });
+
+      // 初始化期权报价系统
+      this.initPricingSystem();
+
+    } catch (error) {
+      // 关键：捕获任何初始化错误，确保页面至少能渲染
+      console.error('[quotes onLoad] 初始化错误:', error);
+
+      // 设置安全的默认状态，确保页面能正常显示
+      this.setData({
+        loading: false,
+        showEmptyState: true,
+        watchlist: [],
+        hotStocks: [],
+        indexQuotes: [],
+        etfQuotes: []
+      });
+
+      // 显示友好提示
+      wx.showToast({
+        title: '页面加载异常，请重试',
+        icon: 'none',
+        duration: 2000
+      });
     }
+  },
+  
+  // 注册数据管理器回调
+  _registerDataManagerCallbacks: function() {
+    // 自选列表更新回调
+    quotesDataManager.registerCallback('watchlist', (result) => {
+      if (result && result.data) {
+        this.setData({
+          watchlist: result.data,
+          updateTime: quotesDataManager.formatUpdateTime(Date.now()),
+          lastUpdateTime: Date.now()
+        });
+      }
+    });
     
-    // 初始化期权报价系统
-    this.initPricingSystem();
+    // 热门个股更新回调
+    quotesDataManager.registerCallback('hotStocks', (result) => {
+      if (result && result.data) {
+        this.setData({
+          hotStocks: result.data,
+          updateTime: quotesDataManager.formatUpdateTime(Date.now()),
+          lastUpdateTime: Date.now()
+        });
+      }
+    });
+  },
+  
+  // 检查网络状态
+  _checkNetworkStatus: function() {
+    wx.getNetworkType({
+      success: (res) => {
+        const isOnline = res.networkType !== 'none';
+        this.setData({ isNetworkAvailable: isOnline });
+        
+        if (!isOnline) {
+          wx.showToast({
+            title: '网络不可用，显示缓存数据',
+            icon: 'none',
+            duration: 2000
+          });
+        }
+      }
+    });
+  },
+  
+  // 按Tab加载数据（优化首次加载性能）
+  _loadDataForTab: function(tab, options) {
+    console.log(`[加载] 按需加载Tab数据: ${tab}`);
+
+    // ==================== 修复：所有异步调用添加 .catch() 错误处理 ====================
+    switch (tab) {
+      case '自选':
+        this.loadWatchlist().catch(err => {
+          console.error('[loadWatchlist] 加载失败:', err);
+          this.setData({ loading: false, showEmptyState: true, watchlist: [] });
+        });
+        break;
+      case '个股':
+        this.loadIndexData();
+        this.loadEtfData();
+        // 如果有跳转参数中的股票信息，使用该股票
+        if (options && (options.code || options.stock)) {
+          this.handleNavigationParams(options);
+        } else {
+          this.loadHotStocks();
+        }
+        break;
+      case '指数':
+        this.loadIndexData();
+        break;
+      case 'ETF':
+        this.loadEtfData();
+        break;
+      default:
+        // 默认加载所有
+        this.loadWatchlist().catch(err => {
+          console.error('[loadWatchlist] 加载失败:', err);
+          this.setData({ loading: false, showEmptyState: true, watchlist: [] });
+        });
+        this.loadIndexData();
+        this.loadEtfData();
+        if (!options || (!options.code && !options.stock)) {
+          this.loadHotStocks();
+        }
+    }
   },
 
   onShow: function() {
@@ -216,14 +506,168 @@ Page({
     if (this.pricingSystem) {
       this.refreshPricing();
     }
-    
-    // 加载自选列表
-    this.loadWatchlist();
+
+    // 加载自选列表（添加错误处理）
+    this.loadWatchlist().catch(err => {
+      console.error('[onShow loadWatchlist] 加载失败:', err);
+      this.setData({ loading: false, showEmptyState: true, watchlist: [] });
+    });
     this.loadGroups({ silent: true });
-    
+
     // 重新检查收藏状态
     this.checkFavoriteStatus();
+
+    // 根据当前Tab启动实时更新
+    this._startRealtimeUpdateForCurrentTab();
   },
+  
+  // 根据当前Tab启动实时更新
+  _startRealtimeUpdateForCurrentTab: function() {
+    const { currentTab } = this.data;
+    
+    // 自选列表启用实时更新
+    if (currentTab === '自选') {
+      quotesDataManager.startWatchlistRealtimeUpdate();
+    }
+  },
+  
+  // 页面隐藏时停止实时更新
+  onHide: function() {
+    quotesDataManager.stopWatchlistRealtimeUpdate();
+  },
+  
+  // 页面卸载时清理资源
+  onUnload: function() {
+    // 取消所有数据管理器回调
+    quotesDataManager.unregisterCallback('watchlist');
+    quotesDataManager.unregisterCallback('hotStocks');
+    quotesDataManager.stopWatchlistRealtimeUpdate();
+  },
+
+  // ==================== 性能优化函数 ====================
+  
+  /**
+   * 批量setData优化
+   * 合并多次数据更新，减少渲染次数
+   */
+  _batchSetData: function(updates, callback) {
+    if (Object.keys(updates).length === 0) return;
+    
+    // 使用 nextTick 确保在下一个时间片更新
+    wx.nextTick(() => {
+      this.setData(updates, callback);
+    });
+  },
+
+  /**
+   * 虚拟列表计算
+   * 计算可视区域内的数据项，优化大数据渲染
+   */
+  _calculateVisibleData: function(list, startIndex, visibleCount) {
+    const endIndex = Math.min(startIndex + visibleCount, list.length);
+    return {
+      visibleList: list.slice(startIndex, endIndex),
+      startIndex,
+      endIndex,
+      total: list.length
+    };
+  },
+
+  /**
+   * 分页加载更多数据
+   * @param {string} type - 数据类型：hotStocks/indexQuotes/etfQuotes
+   */
+  loadMoreData: function(type) {
+    const { currentPage, pageSize, hasMoreHotStocks, hasMoreIndexQuotes, hasMoreEtfQuotes } = this.data;
+    
+    // 检查是否还有更多数据
+    if (type === 'hotStocks' && !hasMoreHotStocks) return;
+    if (type === 'indexQuotes' && !hasMoreIndexQuotes) return;
+    if (type === 'etfQuotes' && !hasMoreEtfQuotes) return;
+    
+    // 增加页码
+    const newPage = { ...currentPage, [type]: currentPage[type] + 1 };
+    this.setData({ currentPage: newPage });
+    
+    // 加载下一页数据
+    console.log(`[分页加载] ${type} 第 ${newPage[type]} 页`);
+    
+    // 实际项目中应调用API获取数据，这里模拟加载
+    // 示例：this._loadPagedDataFromAPI(type, newPage[type], pageSize);
+  },
+
+  /**
+   * 下拉刷新处理
+   */
+  onPullDownRefresh: function() {
+    const { currentTab } = this.data;
+    this.setData({ isPullRefreshing: true });
+    
+    // 刷新当前Tab数据
+    const refreshPromise = new Promise((resolve) => {
+      switch (currentTab) {
+        case '自选':
+          this.loadWatchlist();
+          break;
+        case '个股':
+          this.loadHotStocks();
+          break;
+        case '指数':
+          this.loadIndexData();
+          break;
+        case 'ETF':
+          this.loadEtfData();
+          break;
+        default:
+          resolve();
+      }
+      // 模拟刷新完成
+      setTimeout(resolve, 800);
+    });
+    
+    refreshPromise.then(() => {
+      this.setData({ isPullRefreshing: false });
+      wx.stopPullDownRefresh();
+      wx.showToast({
+        title: '刷新成功',
+        icon: 'success',
+        duration: 1500
+      });
+    });
+  },
+
+  /**
+   * 触底加载更多
+   */
+  onReachBottom: function() {
+    const { currentTab } = this.data;
+    this.loadMoreData(
+      currentTab === '个股' ? 'hotStocks' :
+      currentTab === '指数' ? 'indexQuotes' :
+      currentTab === 'ETF' ? 'etfQuotes' : 'hotStocks'
+    );
+  },
+
+  /**
+   * 价格闪烁动画触发
+   * 在数据更新时调用，为变化的项添加闪烁效果
+   */
+  _triggerPriceFlash: function(code, isUp) {
+    const flashClass = isUp ? 'flash-up' : 'flash-down';
+    // 通过自定义属性标记需要闪烁的元素
+    this.setData({
+      [`flashItem_${code}`]: flashClass
+    });
+    
+    // 400ms后移除闪烁效果
+    setTimeout(() => {
+      this.setData({
+        [`flashItem_${code}`]: ''
+      });
+    }, 400);
+  },
+
+  // ==================== 性能优化函数结束 ====================
 
   handleNavigationParams: function(options) {
     console.log('handleNavigationParams收到参数:', options);
@@ -410,33 +854,91 @@ Page({
   // 排序切换
   onSortChange: function(e) {
     const field = e.currentTarget.dataset.sort;
-    let { sortField, sortOrder } = this.data;
+    let { sortField, sortOrder, currentTab } = this.data;
     
+    // 切换排序字段或方向
     if (sortField === field) {
       sortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
     } else {
       sortField = field;
-      sortOrder = 'desc';
+      sortOrder = 'desc'; // 新字段默认降序
     }
     
     this.setData({ sortField, sortOrder });
-    this.loadHotStocks();
+    
+    // 根据当前Tab对数据进行排序（不重新加载）
+    this._sortCurrentTabData();
+  },
+  
+  // 对当前Tab数据进行排序（本地排序，无需重新请求）
+  _sortCurrentTabData: function() {
+    const { currentTab, sortField, sortOrder } = this.data;
+    let dataKey = '';
+    let data = [];
+    
+    switch (currentTab) {
+      case '自选':
+        dataKey = 'watchlist';
+        data = [...this.data.watchlist];
+        break;
+      case '个股':
+        dataKey = 'hotStocks';
+        data = [...this.data.hotStocks];
+        break;
+      case '指数':
+        dataKey = 'indexQuotes';
+        data = [...this.data.indexQuotes];
+        break;
+      case 'ETF':
+        dataKey = 'etfQuotes';
+        data = [...this.data.etfQuotes];
+        break;
+      default:
+        return;
+    }
+    
+    if (data.length === 0) return;
+    
+    // 通用排序函数
+    const sortedData = data.sort((a, b) => {
+      let valA = a[sortField];
+      let valB = b[sortField];
+      
+      // 处理不同类型的值
+      if (typeof valA === 'string') {
+        valA = parseFloat(valA.replace('%', '')) || 0;
+      }
+      if (typeof valB === 'string') {
+        valB = parseFloat(valB.replace('%', '')) || 0;
+      }
+      
+      // 处理NaN
+      if (isNaN(valA)) valA = 0;
+      if (isNaN(valB)) valB = 0;
+      
+      return sortOrder === 'asc' ? valA - valB : valB - valA;
+    });
+    
+    this.setData({ [dataKey]: sortedData });
   },
 
-  // 点击查看详情
-  onViewDetail: function(e) {
-    const item = e.currentTarget.dataset.item;
-    console.log('查看股票详情:', item);
+  // 切换顶部 Tab（自选/个股/指数/ETF）
+  onTabChange: function(e) {
+    const tab = e.currentTarget.dataset.tab;
+    if (!tab || tab === this.data.currentTab) return;
     
-    const stockCode = item.code;
-    const name = encodeURIComponent(item.name);
-    const price = item.price;
-    const change = item.change || 0;
-    const changePercent = item.changePercent;
-
-    wx.navigateTo({
-      url: `/pages/stock-detail/stock-detail?code=${stockCode}&name=${name}&price=${price}&change=${change}&changePercent=${changePercent}`
-    });
+    this.setData({ currentTab: tab });
+    
+    // 根据切换的 Tab 加载对应数据
+    if (tab === '自选') {
+      this.loadWatchlist();
+    } else if (tab === '个股') {
+      this.loadHotStocks();
+    } else if (tab === '指数') {
+      this.loadIndexData();
+    } else if (tab === 'ETF') {
+      this.loadEtfData();
+    }
   },
 
   // 切换期限
@@ -470,11 +972,29 @@ Page({
 
   // 将列表数据转换为矩阵格式
   transformToMatrix: function(quotes) {
-    const { matrixColumns, selectedTraderCode } = this.data;
-    // 固定的执行价/结构行，匹配图片中的样式
-    // 尝试从数据中提取所有不重复的类型，或者保留预设
-    const rawStrikes = [...new Set(quotes.map(q => q.type))].filter(Boolean);
-    const strikes = rawStrikes.length > 0 ? rawStrikes : ['100C', '103C', '105C', '110C', '80C', '90C', '95C'];
+    const { matrixColumns, selectedTraderCode, bizType } = this.data;
+    
+    // 根据业务类型决定行标识策略
+    let strikes = [];
+    
+    if (bizType === 'vanilla' && quotes.length > 0) {
+      // 香草数据：按交易商作为行标识（展示不同交易商的报价）
+      const traders = [...new Set(quotes.map(q => q.trader).filter(Boolean))];
+      if (traders.length > 0) {
+        strikes = traders;
+      } else {
+        // 如果没有 trader 字段，使用默认结构类型
+        strikes = ['香草看涨', '香草看跌'];
+      }
+    } else {
+      // 非香草数据：尝试从数据中提取类型，或使用预设结构类型
+      const rawStrikes = [...new Set(quotes.map(q => q.type))].filter(Boolean);
+      // 过滤掉"香草"这个通用类型，保留结构类型（如100C、105C等）
+      const structureStrikes = rawStrikes.filter(s => s !== '香草' && !s.includes('香草'));
+      strikes = structureStrikes.length > 0 ? structureStrikes : ['100C', '103C', '105C', '110C', '80C', '90C', '95C'];
+    }
+    
+    console.log('[transformToMatrix] bizType:', bizType, 'strikes:', strikes, 'quotes数量:', quotes.length);
     
     const matrix = strikes.map(strike => {
       const row = { strike: strike, values: [] };
@@ -485,9 +1005,15 @@ Page({
         // 在传入的报价中查找匹配项
         // 匹配规则：类型(strike)匹配，期限(term)匹配
         const match = quotes.find(q => {
+          // 香草模式：按交易商匹配
+          if (bizType === 'vanilla') {
+            const traderMatch = q.trader === strike || (q.trader && q.trader.includes(strike));
+            const termMatch = q.term === term || (q.term && q.term.includes(term));
+            return traderMatch && termMatch;
+          }
+          // 非香草模式：按类型匹配
           const typeMatch = q.type === strike || (q.type && q.type.includes(strike));
           const termMatch = q.term === term || (q.term && q.term.includes(term));
-          // 如果选择了特定交易商，还要匹配交易商
           const traderMatch = selectedTraderCode === 'ALL' || selectedTraderCode === 'BEST' || q.trader === selectedTraderCode;
           return typeMatch && termMatch && traderMatch;
         });
@@ -503,10 +1029,12 @@ Page({
           if (selectedTraderCode === 'BEST') {
             badge = '1'; 
           }
-        } else if (strike === '100C' && term === '1M' && quotes.length < 5) {
-          // 兜底逻辑：如果数据太少且匹配不到，保留一个示例
-          value = '3.65%';
-          badge = '1';
+        } else if (quotes.length > 0 && bizType !== 'vanilla') {
+          // 非香草模式的兜底：显示示例数据
+          if (strike === '100C' && term === '1M') {
+            value = '3.65%';
+            badge = '1';
+          }
         }
 
         row.values.push({ term: term, value: value, badge: badge });
@@ -639,49 +1167,221 @@ Page({
   },
   */
 
-  // 加载自选列表数据
-  loadWatchlist: function() {
-    let favorites = wx.getStorageSync('favorites');
-    
-    // 如果没有本地存储，使用默认数据并存储
-    if (!favorites || favorites.length === 0) {
-      const defaultWatchlist = [
-        { name: '宁德时代', code: '300750', market: 'SZ', changePercent: 2.47, price: 180.50 },
-        { name: '东方财富', code: '300059', market: 'SZ', changePercent: 0.50, price: 13.45 },
-        { name: '平安银行', code: '000001', market: 'SZ', changePercent: -0.35, price: 10.20 },
-        { name: '药明康德', code: '603259', market: 'SH', changePercent: -1.26, price: 45.30 }
-      ];
-      wx.setStorageSync('favorites', defaultWatchlist);
-      favorites = defaultWatchlist;
-    }
+  // 加载自选列表数据（对接后端期权报价API）
+  loadWatchlist: async function() {
+    // ==================== 修复：最外层 try-catch 确保任何错误都能被捕获 ====================
+    try {
+      // 1. 获取本地自选列表
+      let favorites = favoritesService.getFavorites();
 
-    // 转换数据格式以匹配 UI 展示
+      // 空列表显示引导
+      if (!favorites || favorites.length === 0) {
+        this.setData({
+          watchlist: [],
+          showEmptyState: true,
+          loading: false
+        });
+        return;
+      }
+
+      // 2. 提取股票代码（确保格式统一）
+      const stockCodes = favorites.map(item => {
+        let code = item.code;
+        if (!code.includes('.')) {
+          const market = item.market || (code.startsWith('6') ? 'SH' : 'SZ');
+          code = `${code}.${market}`;
+        }
+        return code.toUpperCase();
+      });
+
+      // 3. 调用批量期权报价API
+      this.setData({ loading: true });
+
+      try {
+        const quotesApi = require('../../utils/api-quotes.js');
+        const result = await quotesApi.getBatchOptionQuotes(
+          stockCodes,
+          this.data.selectedTerm || '1M',
+          'call'
+        );
+
+        if (result && result.success && result.data && result.data.quotes) {
+          // 4. 合并自选列表与期权报价数据
+          this._mergeWatchlistWithQuotes(favorites, result.data.quotes);
+          console.log('[自选加载] 成功获取期权报价数据');
+        } else {
+          // API返回失败，降级到模拟数据
+          console.warn('[自选加载] API返回失败，使用降级数据');
+          this._loadFallbackWatchlist(favorites);
+        }
+      } catch (error) {
+        console.error('[自选加载] 获取期权报价失败:', error);
+        // 降级处理：使用前端模拟数据
+        this._loadFallbackWatchlist(favorites);
+      } finally {
+        this.setData({ loading: false });
+      }
+    } catch (outerError) {
+      // 捕获任何未预料的错误（如 favoritesService 未定义等）
+      console.error('[loadWatchlist] 严重错误:', outerError);
+      this.setData({
+        loading: false,
+        showEmptyState: true,
+        watchlist: []
+      });
+    }
+  },
+
+  // 合并自选列表与期权报价数据
+  _mergeWatchlistWithQuotes: function(favorites, quotes) {
+    // 构建报价映射表（按股票代码查找）
+    const quoteMap = {};
+    quotes.forEach(q => {
+      if (q && q.stockCode) {
+        const pureCode = q.stockCode.split('.')[0];
+        quoteMap[pureCode] = q;
+      }
+    });
+
+    // 合并数据
     const watchlist = favorites.map(item => {
-      // 格式化代码，确保有 .SZ/.SH 后缀
+      const pureCode = item.code.split('.')[0];
+      const quote = quoteMap[pureCode] || {};
+
+      // 格式化代码（确保有市场后缀）
       let displayCode = item.code;
       if (!displayCode.includes('.')) {
         const market = item.market || (item.code.startsWith('6') ? 'SH' : 'SZ');
         displayCode = `${item.code}.${market}`;
       }
 
-      // 模拟或获取期权数据 (atm, otm105, otm110)
-      // 在实际应用中，这里应该调用 API 获取实时期权数据
-      // 这里为了保持 UI 效果，如果已有数据则使用，否则生成模拟数据
-      const atm = item.atm || (Math.random() * 10 + 5).toFixed(2);
-      const otm105 = item.otm105 || (atm * 0.8).toFixed(2);
-      const otm110 = item.otm110 || (atm * 0.6).toFixed(2);
-
       return {
         ...item,
-        code: displayCode, // 更新为带后缀的格式
-        atm: Number(atm).toFixed(2),
-        otm105: Number(otm105).toFixed(2),
-        otm110: Number(otm110).toFixed(2),
-        changePercent: Number(item.changePercent).toFixed(2)
+        code: displayCode,
+        price: quote.price || item.price || '--',
+        changePercent: Number(quote.changePercent || item.changePercent || 0).toFixed(2),
+        // 期权费率（百分比）
+        atm: quote.atm?.premiumPercent?.toFixed(2) || '--',
+        otm105: quote.otm105?.premiumPercent?.toFixed(2) || '--',
+        otm110: quote.otm110?.premiumPercent?.toFixed(2) || '--'
       };
     });
 
-    this.setData({ watchlist });
+    // 更新时间
+    const now = new Date();
+    const updateTime = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}更新`;
+
+    this.setData({
+      watchlist,
+      originalWatchlist: watchlist,   // 保存原始列表用于搜索
+      filteredWatchlist: watchlist,   // 筛选后的列表
+      updateTime,
+      showEmptyState: false
+    });
+  },
+
+  // 降级处理：使用前端模拟数据
+  _loadFallbackWatchlist: function(favorites) {
+    const watchlist = favorites.map(item => {
+      let displayCode = item.code;
+      if (!displayCode.includes('.')) {
+        const market = item.market || (item.code.startsWith('6') ? 'SH' : 'SZ');
+        displayCode = `${item.code}.${market}`;
+      }
+
+      // 使用前端简化计算生成模拟期权数据
+      const price = item.price || 50;
+      const volatility = 0.30;  // 默认波动率30%
+      const T = 30 / 365;  // 默认1个月期限
+
+      // 简化BS模型计算（ATM）
+      const atmPremium = this._calculateSimpleOptionPremium(price, price, T, volatility);
+      const otm105Premium = this._calculateSimpleOptionPremium(price, price * 1.05, T, volatility);
+      const otm110Premium = this._calculateSimpleOptionPremium(price, price * 1.10, T, volatility);
+
+      // 转换为费率百分比
+      const atm = ((atmPremium / price) * 100).toFixed(2);
+      const otm105 = ((otm105Premium / price) * 100).toFixed(2);
+      const otm110 = ((otm110Premium / price) * 100).toFixed(2);
+
+      return {
+        ...item,
+        code: displayCode,
+        atm,
+        otm105,
+        otm110,
+        changePercent: Number(item.changePercent || 0).toFixed(2)
+      };
+    });
+
+    this.setData({
+      watchlist,
+      originalWatchlist: watchlist,
+      filteredWatchlist: watchlist,
+      showEmptyState: false
+    });
+  },
+
+  // 简化期权费计算（用于降级场景）
+  _calculateSimpleOptionPremium: function(S, K, T, sigma) {
+    // 极简BS模型近似（仅用于降级）
+    if (T <= 0) return 0;
+
+    const r = 0.03;  // 无风险利率
+    const d1 = (Math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
+    const d2 = d1 - sigma * Math.sqrt(T);
+
+    // 标准正态分布CDF近似
+    const N = (x) => {
+      const a1 = 0.254829592;
+      const a2 = -0.284496736;
+      const a3 = 1.421413741;
+      const a4 = -1.453152027;
+      const a5 = 1.061405429;
+      const p = 0.3275911;
+      const sign = x < 0 ? -1 : 1;
+      x = Math.abs(x) / Math.sqrt(2);
+      const t = 1.0 / (1.0 + p * x);
+      const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+      return 0.5 * (1.0 + sign * y);
+    };
+
+    const price = S * N(d1) - K * Math.exp(-r * T) * N(d2);
+    return Math.max(price, 0);
+  },
+
+  // ==================== 自选搜索筛选 ====================
+
+  // 自选搜索输入
+  onWatchlistSearch: function(e) {
+    const keyword = e.detail.value.trim().toLowerCase();
+    this.setData({ watchlistSearchKeyword: keyword });
+
+    if (!keyword) {
+      // 清空搜索，显示全部
+      this.setData({ filteredWatchlist: this.data.originalWatchlist });
+      return;
+    }
+
+    // 实时筛选（按代码或名称匹配）
+    const filtered = this.data.originalWatchlist.filter(item => {
+      const codeMatch = item.code.toLowerCase().includes(keyword);
+      const nameMatch = item.name.toLowerCase().includes(keyword);
+      const pureCode = item.code.split('.')[0].toLowerCase();
+      const pureCodeMatch = pureCode.includes(keyword);
+
+      return codeMatch || nameMatch || pureCodeMatch;
+    });
+
+    this.setData({ filteredWatchlist: filtered });
+  },
+
+  // 清空自选搜索
+  clearWatchlistSearch: function() {
+    this.setData({
+      watchlistSearchKeyword: '',
+      filteredWatchlist: this.data.originalWatchlist
+    });
   },
 
   // ==================== 自选编辑逻辑 ====================
@@ -733,42 +1433,79 @@ Page({
       return;
     }
 
+    // 检查存储空间
+    const storageCheck = favoritesService.checkStorageSpace();
+    if (!storageCheck.available) {
+      wx.showModal({
+        title: '存储空间不足',
+        content: storageCheck.message,
+        showCancel: false
+      });
+      return;
+    }
+
     wx.showModal({
-      title: '提示',
-      content: `确定要删除这 ${selectedForEdit.length} 个自选吗？`,
+      title: '确认删除',
+      content: `确定要删除这 ${selectedForEdit.length} 个自选吗？\n删除后可在回收站恢复（7天内）`,
+      confirmText: '删除',
+      confirmColor: '#ff4d4f',
       success: (res) => {
         if (res.confirm) {
-          // 过滤掉被删除的项
-          const newWatchlist = watchlist.filter(item => !selectedForEdit.includes(item.code));
+          // 使用 favoritesService 批量删除（支持回收站）
+          const result = favoritesService.removeFavorites(selectedForEdit, { useRecycleBin: true });
           
-          // 更新本地存储
-          // 注意：这里假设 storage 中存的是原始对象列表，我们需要确保存储格式一致
-          // 如果 loadWatchlist 中做了格式化，这里保存时最好保存原始数据
-          // 简单起见，我们直接保存当前的 watchlist，但在 loadWatchlist 中可能需要调整读取逻辑
-          // 或者更稳妥的做法：读取 Storage -> 过滤 -> 保存
-          
-          let storedFavorites = wx.getStorageSync('favorites') || [];
-          // 处理存储中的代码格式可能不一致的问题 (比如有无后缀)
-          const newStoredFavorites = storedFavorites.filter(item => {
-             const codeWithSuffix = item.code.includes('.') ? item.code : 
-                                   (item.code.startsWith('6') ? `${item.code}.SH` : `${item.code}.SZ`);
-             // 如果在选中列表中找到了这个 code (假设 selectedForEdit 里的 code 都是带后缀的)
-             // 实际上 watchlist 中的 code 是带后缀的，所以 selectedForEdit 也是带后缀的
-             return !selectedForEdit.includes(codeWithSuffix) && !selectedForEdit.includes(item.code);
+          if (result.success) {
+            // 更新页面数据
+            const newWatchlist = watchlist.filter(item => !selectedForEdit.includes(item.code));
+            this.setData({
+              watchlist: newWatchlist,
+              isEditing: false,
+              selectedForEdit: []
+            });
+            
+            wx.showToast({ 
+              title: result.message, 
+              icon: 'success',
+              duration: 2000
+            });
+          } else {
+            wx.showToast({ title: result.message || '删除失败', icon: 'none' });
+          }
+        }
+      }
+    });
+  },
+  
+  // 显示回收站
+  showRecycleBin: function() {
+    const recycleBin = favoritesService.getRecycleBin();
+    
+    if (recycleBin.length === 0) {
+      wx.showToast({ title: '回收站为空', icon: 'none' });
+      return;
+    }
+    
+    wx.showActionSheet({
+      itemList: recycleBin.map(item => `${item.name} (${item.code})`).concat(['清空回收站']),
+      success: (res) => {
+        if (res.tapIndex === recycleBin.length) {
+          // 清空回收站
+          wx.showModal({
+            title: '确认清空',
+            content: '确定要清空回收站吗？清空后无法恢复。',
+            success: (modalRes) => {
+              if (modalRes.confirm) {
+                favoritesService.clearRecycleBin();
+                wx.showToast({ title: '已清空回收站', icon: 'success' });
+              }
+            }
           });
-
-          wx.setStorageSync('favorites', newStoredFavorites);
-          
-          // 更新页面数据
-          this.setData({
-            watchlist: newWatchlist,
-            isEditing: false,
-            selectedForEdit: []
-          });
-          
-          wx.showToast({ title: '删除成功', icon: 'success' });
-          
-          // 如果删光了，自动退出编辑模式（上面已经退出了）
+        } else if (res.tapIndex < recycleBin.length) {
+          // 恢复选中项
+          const item = recycleBin[res.tapIndex];
+          favoritesService.recoverFromRecycleBin(item.code);
+          this.loadWatchlist();
+          wx.showToast({ title: '已恢复', icon: 'success' });
         }
       }
     });
@@ -822,6 +1559,14 @@ Page({
   // 加载分组列表
   loadGroups: function(options) {
     const silent = options && options.silent;
+    const now = Date.now();
+
+    // 静默模式下检查节流，避免频繁请求
+    if (silent && now - _lastLoadGroupsTime < LOAD_GROUPS_THROTTLE_MS) {
+      return;
+    }
+    _lastLoadGroupsTime = now;
+
     this.setData({ loadingGroups: true });
     if (!silent) {
       wx.showLoading({ title: '加载中...' });
@@ -853,13 +1598,13 @@ Page({
           }
         }
         if (!silent && res && typeof res.message === 'string' && res.message.indexOf('数据库未连接') > -1) {
-          wx.showToast({ title: '数据库未连接', icon: 'none' });
+          wx.showToast({ title: '数据服务暂不可用，请稍后重试', icon: 'none' });
         }
       })
       .catch(err => {
         if (!silent) {
           wx.hideLoading();
-          const msg = (err && err.message) ? err.message : '加载分组失败';
+          const msg = (err && err.message) ? err.message : '加载分组失败，请检查网络后重试';
           wx.showToast({ title: msg, icon: 'none' });
         }
         this.setData({ customGroups: [], topGroups: [], loadingGroups: false, pendingGroupSwitchId: '' });
@@ -874,8 +1619,8 @@ Page({
     
     // 系统分组计数
     counts['all'] = watchlist.length;
-    // 假设持仓逻辑
-    counts['holding'] = watchlist.filter(item => item.isHolding).length || 0;
+    // 持仓分组计数：检查 groupId === 'holding' 或 isHolding === true
+    counts['holding'] = watchlist.filter(item => item && (item.groupId === 'holding' || item.isHolding === true)).length || 0;
 
     // 自定义分组计数
     (customGroups || []).forEach(group => {
@@ -906,29 +1651,15 @@ Page({
 
   // 根据分组筛选自选列表
   filterWatchlistByGroup: function(groupId) {
-    // 重新加载原始列表
-    let allItems = wx.getStorageSync('favorites') || [];
+    // 使用 favoritesService 进行筛选
+    const { customGroups } = this.data;
+    const filtered = favoritesService.filterByGroup(groupId, customGroups);
     
-    let filtered;
-    if (groupId === 'all') {
-      filtered = allItems;
-    } else if (groupId === 'holding') {
-      filtered = allItems.filter(item => item.isHolding);
-    } else {
-      // 从后端分组数据中查找该分组
-      const group = this.data.customGroups.find(g => g.id === groupId);
-      if (group && group.members) {
-        // 获取该分组下的股票代码列表
-        const memberCodes = group.members.map(m => m.stock_code);
-        // 筛选出在分组中的自选股
-        filtered = allItems.filter(item => {
-          // 兼容带后缀和不带后缀的比较
-          const code = item.code;
-          const codeNoSuffix = code.split('.')[0];
-          return memberCodes.includes(code) || memberCodes.includes(codeNoSuffix);
-        });
-      } else {
-        filtered = [];
+    // 如果分组不存在且不是系统分组，显示提示
+    if (filtered.length === 0 && groupId !== 'all' && groupId !== 'holding') {
+      const group = customGroups.find(g => g.id === groupId);
+      if (!group) {
+        wx.showToast({ title: '分组数据加载中...', icon: 'none', duration: 1500 });
       }
     }
     
@@ -1119,9 +1850,9 @@ Page({
         wx.hideLoading();
 
         if (removeFavorites) {
-          const storedFavorites = wx.getStorageSync('favorites') || [];
+          const storedFavorites = favoritesService.getFavorites();
           const nextFavorites = logic.removeFavoritesByCodes(storedFavorites, memberCodes);
-          wx.setStorageSync('favorites', nextFavorites);
+          favoritesService.saveFavorites(nextFavorites);
         }
 
         this.setData({
@@ -1212,15 +1943,32 @@ Page({
     if (this.data.currentTab === '个股') {
       const db = wx.cloud.database();
       // 查询该股票的所有期权报价
-      db.collection('quotes').where({
-        stock_code: stockCode
-      }).limit(100).get().then(res => {
-        console.log('从云数据库获取到报价:', res.data);
+      // 构建查询条件，支持香草数据筛选
+      const queryCondition = { stock_code: stockCode };
+      // bizType: 'vanilla' 对应 type: '香草'
+      if (this.data.bizType === 'vanilla') {
+        queryCondition.type = '香草';
+      }
+      console.log('[loadOptionQuotes] 查询条件:', queryCondition, 'bizType:', this.data.bizType);
+      
+      db.collection('quotes').where(queryCondition).limit(100).get().then(res => {
+        console.log('[loadOptionQuotes] 从云数据库获取到报价:', res.data, '共', res.data?.length, '条');
         if (res.data && res.data.length > 0) {
            // 使用真实数据
            this.transformToMatrix(res.data);
+           // 更新时间（从数据中取最新更新时间）
+           const latestUpdate = res.data.reduce((max, item) => {
+             const itemTime = new Date(item.updated_at || 0).getTime();
+             return itemTime > max ? itemTime : max;
+           }, 0);
+           if (latestUpdate > 0) {
+             const updateTime = new Date(latestUpdate);
+             const formattedTime = `${updateTime.getFullYear()}/${String(updateTime.getMonth() + 1).padStart(2, '0')}/${String(updateTime.getDate()).padStart(2, '0')} ${String(updateTime.getHours()).padStart(2, '0')}:${String(updateTime.getMinutes()).padStart(2, '0')}更新`;
+             this.setData({ updateTime: formattedTime });
+           }
         } else {
-           // 降级使用模拟数据
+           // 无香草数据时的提示
+           console.log('[loadOptionQuotes] 未找到香草数据，使用降级数据');
            const quotes = this.generateRealisticQuotes(currentStock);
            this.transformToMatrix(quotes);
         }
@@ -1689,8 +2437,8 @@ Page({
       
       // 延迟跳转到询价中心（仅成功时跳转）
       setTimeout(() => {
-        wx.switchTab({
-          url: '/pages/inquiry/inquiry'
+        wx.navigateTo({
+          url: '/subpackages/inquiry/inquiry/inquiry'
         });
       }, 1500);
     }).catch(err => {
@@ -1706,10 +2454,10 @@ Page({
     });
   },
   
-  // 查看详情
+  // 查看详情 - 跳转到股票详情页面
   onViewDetail: function(e) {
     const item = e.currentTarget.dataset.item;
-    
+
     // 如果处于编辑模式，点击行切换选中状态
     if (this.data.isEditing) {
       // 构造一个模拟事件对象传给 toggleSelection，或者直接调用逻辑
@@ -1720,43 +2468,201 @@ Page({
       return;
     }
 
-    if (item) {
-       wx.showToast({
-         title: '查看 ' + item.name,
-         icon: 'none'
-       });
-       return;
+    // 防重复点击机制
+    if (this._lastViewDetailTime && Date.now() - this._lastViewDetailTime < 500) {
+      return;
     }
-    const quote = e.currentTarget.dataset.quote;
-    if (quote) {
-       wx.showToast({
-         title: '期权详情: ' + quote.id,
-         icon: 'none'
-       });
+    this._lastViewDetailTime = Date.now();
+
+    // 验证股票数据
+    if (!item || !item.code) {
+      console.warn('[onViewDetail] 股票数据不完整:', item);
+      wx.showToast({ title: '股票信息不完整', icon: 'none' });
+      return;
     }
+
+    // 提取股票信息
+    const stockCode = item.code;
+    const stockName = item.name || '未知股票';
+    const price = item.price || '--';
+    const change = item.change || 0;
+    const changePercent = item.changePercent || 0;
+
+    // URL 编码处理中文字符
+    const encodedCode = encodeURIComponent(stockCode);
+    const encodedName = encodeURIComponent(stockName);
+
+    // 构造跳转 URL
+    const targetUrl = `/subpackages/quotes/stock-detail/stock-detail?code=${encodedCode}&name=${encodedName}&price=${price}&change=${change}&changePercent=${changePercent}`;
+
+    console.log('[onViewDetail] 跳转到股票详情:', { stockCode, stockName, price, changePercent });
+
+    // 检查页面栈深度，防止超过10层限制
+    const pages = getCurrentPages();
+    const pageCount = pages.length;
+
+    // 如果页面栈接近上限，尝试使用 redirectTo 替代 navigateTo
+    if (pageCount >= 9) {
+      console.warn('[onViewDetail] 页面栈接近上限，使用 redirectTo');
+      wx.redirectTo({
+        url: targetUrl,
+        success: () => {
+          console.log('[onViewDetail] redirectTo 成功');
+        },
+        fail: (err) => {
+          console.error('[onViewDetail] redirectTo 失败:', err);
+          // 如果 redirectTo 也失败，尝试 reLaunch
+          wx.reLaunch({
+            url: '/pages/quotes/quotes',
+            fail: () => {
+              wx.showToast({ title: '页面跳转失败', icon: 'none' });
+            }
+          });
+        }
+      });
+      return;
+    }
+
+    // 执行页面跳转（带超时处理）
+    let navigateCompleted = false;
+    const navigateTimeout = setTimeout(() => {
+      if (!navigateCompleted) {
+        console.warn('[onViewDetail] 跳转超时，可能网络较慢');
+        // 不立即显示错误，可能是分包加载中
+      }
+    }, 3000);
+
+    wx.navigateTo({
+      url: targetUrl,
+      success: () => {
+        navigateCompleted = true;
+        clearTimeout(navigateTimeout);
+        console.log('[onViewDetail] 成功跳转到股票详情页');
+      },
+      fail: (err) => {
+        navigateCompleted = true;
+        clearTimeout(navigateTimeout);
+        console.error('[onViewDetail] 跳转失败:', err);
+
+        // 根据错误类型处理
+        if (err.errMsg && err.errMsg.includes('timeout')) {
+          // 超时错误，可能是分包加载慢，提示用户
+          wx.showToast({
+            title: '页面加载中，请稍后重试',
+            icon: 'none',
+            duration: 2000
+          });
+        } else {
+          // 其他错误，尝试使用 redirectTo
+          wx.redirectTo({
+            url: targetUrl,
+            fail: () => {
+              wx.showToast({
+                title: '跳转失败，请重试',
+                icon: 'none',
+                duration: 2000
+              });
+            }
+          });
+        }
+      }
+    });
   },
 
+  // 跳转到龙虎榜页面
+  onGoToRankList: function() {
+    wx.navigateTo({
+      url: '/pages/rank-list/rank-list',
+      fail: (err) => {
+        console.error('[onGoToRankList] 跳转失败:', err);
+        wx.showToast({
+          title: '龙虎榜页面开发中',
+          icon: 'none',
+          duration: 2000
+        });
+      }
+    });
+  },
 
-  
   // 刷新报价
-  refreshQuotes: function() {
-    this.setData({ loading: true });
+  refreshQuotes: async function() {
+    // 节流控制
+    const now = Date.now();
+    if (_isRefreshing || now - _lastRefreshTime < REFRESH_THROTTLE_MS) {
+      console.log('[刷新] 节流跳过');
+      return;
+    }
     
-    setTimeout(() => {
-      this.loadOptionQuotes();
+    _isRefreshing = true;
+    _lastRefreshTime = now;
+    this.setData({ loading: true, isPullRefreshing: true });
+    
+    try {
+      const { currentTab } = this.data;
+      
+      switch (currentTab) {
+        case '自选':
+          await this.loadWatchlist();
+          break;
+        case '个股':
+          // 重置分页
+          this.setData({ 'currentPage.hotStocks': 1, hasMoreHotStocks: true });
+          await this.loadHotStocks();
+          break;
+        case '指数':
+          await this.loadIndexData();
+          break;
+        case 'ETF':
+          await this.loadEtfData();
+          break;
+      }
+      
+      this.setData({ lastUpdateTime: Date.now() });
+      
       wx.showToast({
-        title: '报价已更新',
-        icon: 'success'
+        title: '数据已更新',
+        icon: 'success',
+        duration: 1500
       });
-    }, 1000);
+    } catch (error) {
+      console.error('[刷新] 失败:', error);
+      wx.showToast({
+        title: '刷新失败，请重试',
+        icon: 'none',
+        duration: 2000
+      });
+    } finally {
+      _isRefreshing = false;
+      this.setData({ loading: false, isPullRefreshing: false });
+      wx.stopPullDownRefresh();
+    }
   },
   
   // 下拉刷新
   onPullDownRefresh: function() {
     this.refreshQuotes();
-    setTimeout(() => {
-      wx.stopPullDownRefresh();
-    }, 1500);
+  },
+  
+  // 加载更多数据（用于滚动加载）
+  onLoadMore: async function() {
+    const { currentTab, hasMoreHotStocks, hasMoreIndexQuotes, hasMoreEtfQuotes } = this.data;
+    
+    if (currentTab === '个股' && hasMoreHotStocks) {
+      const result = await quotesDataManager.loadMoreHotStocks();
+      if (result && result.data && result.data.length > 0) {
+        const newHotStocks = [...this.data.hotStocks, ...result.data];
+        this.setData({
+          hotStocks: newHotStocks,
+          hasMoreHotStocks: result.hasMore
+        });
+      }
+    }
+    // 指数和ETF数据量较小，暂不需要分页
+  },
+  
+  // 触底加载更多
+  onReachBottom: function() {
+    this.onLoadMore();
   },
   
   // 联系客服
@@ -1826,148 +2732,51 @@ Page({
     }
   },
 
-  // 询价
+  // 询价 - 跳转到询价表单页面
   onInquiry: function(e) {
-    if (!this.data.userInfo.isLoggedIn) {
-      wx.showModal({
-        title: '提示',
-        content: '请先登录后再进行询价操作',
-        confirmText: '去登录',
-        success: (res) => {
-          if (res.confirm) {
-            wx.switchTab({
-              url: '/pages/profile/profile'
-            });
-          }
-        }
-      });
-      return;
-    }
-
-    const index = e.currentTarget.dataset.index;
-    const item = this.data.pricingData[index];
-    
-    if (!item) return;
-
-    wx.showModal({
-      title: '询价确认',
-      content: `确定要对 ${item.optionType} 进行询价吗？`,
-      success: (res) => {
-        if (res.confirm) {
-          this.submitInquiry(item);
-        }
-      }
-    });
-  },
-
-  // 提交询价（从定价系统）
-  submitInquiry: function(item) {
-    if (!item) {
-      wx.showToast({ title: '询价信息不完整', icon: 'none' });
-      return;
-    }
-
-    wx.showLoading({ title: '提交询价中...' });
-    
-    // 获取用户信息
-    const storedUserInfo = wx.getStorageSync('userInfo') || {};
     const loginService = require('../../utils/loginService.js');
-    const currentUser = loginService.getCurrentUser() || {};
-    
-    // 组合用户信息
-    const userInfo = {
-      ...storedUserInfo,
-      ...currentUser,
-      userId: currentUser.userId || storedUserInfo.userId || 'anonymous_' + Date.now(),
-      openid: currentUser.openid || storedUserInfo.openid || 'anonymous',
-      nickname: currentUser.nickName || storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || '匿名用户'
-    };
-    
-    // 解析期权类型
-    let optionType = 'call';
-    if (item.optionType) {
-      if (item.optionType.includes('看跌') || item.optionType.toLowerCase().includes('put')) {
-        optionType = 'put';
-      }
+    const isLoggedIn = loginService.isLoggedIn();
+
+    // 获取当前标的资产信息
+    const index = e.currentTarget.dataset.index;
+    const item = this.data.pricingData[index] || this.data.currentStock;
+
+    if (!item || !item.code) {
+      // 如果没有选中标的，提示用户选择
+      wx.showToast({
+        title: '请先选择标的资产',
+        icon: 'none'
+      });
+      return;
     }
-    
-    // 构造提交数据（与inquiry页面格式保持一致）
-    const submitData = {
-      // 产品信息
-      selectedProduct: {
-        name: item.underlyingAsset || item.name || '未知标的',
-        code: item.code || item.underlyingCode || '',
-        type: 'stock'
-      },
-      productName: item.underlyingAsset || item.name || '未知标的',
-      productCode: item.code || item.underlyingCode || '',
-      
-      // 询价参数
-      optionType: optionType,
-      structure: item.structure || 'vanilla',
-      term: item.term || item.maturity || '1M',
-      notionalAmount: item.notionalAmount || 100,
-      strikePrice: item.strikePrice || item.strike || '100',
-      selectedDealers: item.trader ? [item.trader.name || item.trader] : [],
-      
-      // 报价信息
-      bidPrice: item.bidPrice || '',
-      askPrice: item.askPrice || '',
-      
-      // 联系信息
-      contactName: storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || '定价用户',
-      phone: storedUserInfo.phone || '',
-      contactPhone: storedUserInfo.phone || '',
-      contactEmail: storedUserInfo.email || '',
-      notes: `通过定价系统提交询价 - ${item.optionType || '期权'}`,
-      
-      // 状态与时间
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      
-      // 用户信息
-      userId: userInfo.userId || userInfo.openid || 'anonymous_' + Date.now(),
-      userName: userInfo.nickname || '定价用户',
-      openid: userInfo.openid || 'anonymous',
-      
-      // 额外字段
-      source: 'miniprogram_pricing',  // 标识来源为定价系统
-      history: [],
-      
-      contactInfo: {
-        name: storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || '定价用户',
-        phone: storedUserInfo.phone || '',
-        email: storedUserInfo.email || ''
-      }
+
+    // 构造标的信息
+    const productInfo = {
+      name: item.name || item.underlyingAsset || '',
+      code: item.code || '',
+      type: 'stock',
+      price: item.price || item.currentPrice || ''
     };
-    
-    console.log('定价系统提交询价数据:', submitData);
-    
-    // 通过云函数提交询价
-    submitInquiry(submitData).then(result => {
-      console.log('询价提交成功，ID:', result.data.inquiryId);
-      wx.hideLoading();
-      wx.showToast({
-        title: '询价已提交',
-        icon: 'success',
-        duration: 2000
-      });
-      
-      // 成功后跳转到询价详情页面
-      wx.navigateTo({
-        url: '/pages/inquiry/inquiry?type=detail&id=' + result.data.inquiryId
-      });
-    }).catch(err => {
-      console.error('询价提交失败:', err);
-      wx.hideLoading();
-      // 失败时不跳转，保持在当前页面显示错误提示，让用户可以重新尝试
-      wx.showToast({
-        title: '提交失败：' + (err.message || '请检查网络后重试'),
-        icon: 'none',
-        duration: 3000
-      });
-      // 不跳转，用户可以修改信息后重新提交
+
+    // 可选：解析已有的期权参数
+    const inquiryParams = {
+      product: productInfo,
+      optionType: item.optionType?.includes('Put') || item.optionType?.includes('P') ? 'put' : 'call',
+      strikePrice: item.strikePrice || item.strike || '100',
+      term: item.term || item.maturity || '1M'
+    };
+
+    // 跳转到询价表单页面
+    const encodedParams = encodeURIComponent(JSON.stringify(inquiryParams));
+    wx.navigateTo({
+      url: `/subpackages/inquiry/inquiry/inquiry?params=${encodedParams}`,
+      fail: (err) => {
+        console.error('跳转询价表单失败:', err);
+        wx.showToast({
+          title: '页面跳转失败，请重试',
+          icon: 'none'
+        });
+      }
     });
   },
 
@@ -2345,7 +3154,16 @@ Page({
 
   // 返回上一页
   goBack: function() {
-    wx.navigateBack();
+    // 检查页面栈深度，防止返回到不存在的页面
+    const pages = getCurrentPages();
+    if (pages.length > 1) {
+      wx.navigateBack();
+    } else {
+      // 如果当前是第一个页面，则跳转到首页
+      wx.switchTab({
+        url: '/pages/index/index'
+      });
+    }
   },
 
   // 打开计算器
@@ -2364,7 +3182,8 @@ Page({
 
   // 跳转到搜索股票页面（添加自选）
   goToSearchStock: function() {
-    const url = '/pages/search/search?source=quotes';
+    // 修正：使用分包正确路径
+    const url = '/subpackages/quotes/search/search?source=quotes';
     wx.navigateTo({
       url,
       fail: () => {

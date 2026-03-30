@@ -1,5 +1,7 @@
 // 纯逻辑函数，供页面调用与单元测试使用
 
+const { CUSTOM_GROUPS_STORAGE_KEY } = require('./storage-keys.js');
+
 function validateNewGroupName(name, allGroups) {
   const trimmed = (name || '').trim();
   let error = '';
@@ -129,11 +131,10 @@ function isProtectedGroup(group) {
 }
 
 // --- Storage Helper Functions ---
-const STORAGE_KEY_CUSTOM_GROUPS = 'customGroups';
 
 function loadCustomGroups() {
   try {
-    return wx.getStorageSync(STORAGE_KEY_CUSTOM_GROUPS) || [];
+    return wx.getStorageSync(CUSTOM_GROUPS_STORAGE_KEY) || [];
   } catch (e) {
     console.error('loadCustomGroups failed', e);
     return [];
@@ -142,7 +143,7 @@ function loadCustomGroups() {
 
 function saveCustomGroups(groups) {
   try {
-    wx.setStorageSync(STORAGE_KEY_CUSTOM_GROUPS, groups);
+    wx.setStorageSync(CUSTOM_GROUPS_STORAGE_KEY, groups);
     return true;
   } catch (e) {
     console.error('saveCustomGroups failed', e);

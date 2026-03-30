@@ -83,7 +83,6 @@
   <view class="market-overview">
     <view class="section-header">
       <view class="section-title">市场行情</view>
-      <view class="view-all" bindtap="viewMarketDetail">更多 ></view>
     </view>
     
     <!-- 主要指数 -->

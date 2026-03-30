@@ -7,6 +7,7 @@ const optionsService = require('../../services/options.js');
 const holdingsService = require('../../services/holdings.js');
 const { uiEnhancer, dataFormatter, performanceMonitor } = require('../../utils/enhancedUtils');
 const { DataCacheManager, CACHE_PREFIX, DEFAULT_TTL } = require('../../utils/data-cache.js');
+const { getKnowledgeArticles, getArticleById } = require('../../utils/knowledgeConfig.js');
 
 // 引入 behaviors
 const searchBehavior = require('../../behaviors/search-behavior.js');
@@ -85,7 +86,7 @@ Page({
       { id: 1, icon: '/images/star.png', name: '自选', path: '/pages/quotes/quotes', params: { tab: '自选' } },
       { id: 2, icon: '/images/个股.svg', name: '个股', path: '/pages/quotes/quotes', params: { tab: '个股' } },
       { id: 3, icon: '/images/指数.svg', name: '指数', path: '/pages/quotes/quotes', params: { tab: '指数' } },
-      { id: 4, icon: '/images/询价.svg', name: '询价', path: '/pages/inquiry/inquiry' },
+      { id: 4, icon: '/images/询价.svg', name: '询价', path: '/pages/quotes/quotes', params: { tab: '个股', action: 'inquiry' } },
       { id: 5, icon: '/images/计算器.svg', name: '计算器', path: '/pages/calculator/calculator' }
     ],
 
@@ -93,6 +94,10 @@ Page({
     loading: true,
     refreshing: false,
     isNavigating: false,
+
+    // 知识文章
+    knowledgeArticles: [],
+    knowledgeLoading: true,
 
     // 上次刷新时间（用于节流）
     _lastRefreshTime: 0
@@ -137,7 +142,8 @@ Page({
       await Promise.all([
         this.loadMarketIndices(),
         this.loadHotOptions(),
-        this.loadHoldingsData()
+        this.loadHoldingsData(),
+        this.loadKnowledgeArticles()
       ]);
       performanceMonitor.markEnd('pageLoad');
     } catch (error) {
@@ -228,6 +234,59 @@ Page({
       console.error('加载热门期权失败:', error);
       throw error;
     }
+  },
+
+  /**
+   * 加载知识文章（首页展示前3篇）
+   */
+  loadKnowledgeArticles() {
+    return new Promise((resolve) => {
+      this.setData({ knowledgeLoading: true });
+
+      // 模拟网络延迟
+      setTimeout(() => {
+        try {
+          const allArticles = getKnowledgeArticles();
+          // 首页只显示前3篇
+          const articles = allArticles.slice(0, 3).map(article => ({
+            ...article,
+            coverLoaded: false
+          }));
+
+          this.setData({
+            knowledgeArticles: articles,
+            knowledgeLoading: false
+          });
+          console.log('[知识文章] 加载完成，共', articles.length, '篇');
+          resolve(articles);
+        } catch (error) {
+          console.error('加载知识文章失败:', error);
+          this.setData({ knowledgeLoading: false });
+          resolve([]);
+        }
+      }, 300);
+    });
+  },
+
+  /**
+   * 知识文章点击
+   */
+  onKnowledgeItemTap(e) {
+    const { id } = e.currentTarget.dataset;
+    uiEnhancer.hapticFeedback('light');
+
+    // 跳转到知识详情页
+    wx.navigateTo({
+      url: `/subpackages/info/knowledge-detail/knowledge-detail?id=${id}`,
+      fail: () => {
+        // 降级处理：复制链接
+        const article = getArticleById(id);
+        if (article) {
+          const { openArticleInBrowser } = require('../../utils/knowledgeConfig.js');
+          openArticleInBrowser(article);
+        }
+      }
+    });
   },
 
   // ==================== 用户相关 ====================
@@ -354,7 +413,8 @@ Page({
 
     const encodedCode = encodeURIComponent(code || '');
     const encodedName = encodeURIComponent(name || '');
-    const url = `/pages/stock-detail/stock-detail?code=${encodedCode}&name=${encodedName}`;
+    // 修正：使用分包正确路径
+    const url = `/subpackages/quotes/stock-detail/stock-detail?code=${encodedCode}&name=${encodedName}`;
 
     wx.navigateTo({
       url,

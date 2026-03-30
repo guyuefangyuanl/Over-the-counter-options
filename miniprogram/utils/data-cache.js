@@ -4,6 +4,8 @@
  * 基于 miniprogram/utils/performance-optimizer.js 封装
  */
 
+// ==================== 修复：正确的模块路径 ====================
+// 该文件位于 miniprogram/utils/ 目录下，应使用 ./ 而不是 ../utils/
 const {
   cacheGet,
   cacheSet,
@@ -13,7 +15,7 @@ const {
   dedupStats,
   throttle,
   debounce
-} = require('../utils/performance-optimizer.js');
+} = require('./performance-optimizer.js');
 
 // 缓存键前缀
 const CACHE_PREFIX = {

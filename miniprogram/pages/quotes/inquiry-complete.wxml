@@ -1,15 +1,17 @@
-<!-- 基于HTML设计稿的小程序询价页面 -->
+<!-- miniprogram/pages/quotes/inquiry-complete.wxml -->
+<!-- 询价列表页面 - 现代化设计 -->
+
 <wxs src="./quotes.wxs" module="utils" />
 
 <view class="inquiry-container">
-  <!-- 页面状态指示器 -->
+  <!-- 页面加载状态 -->
   <view wx:if="{{showLoading}}" class="page-loading">
-    <van-loading size="24px">加载中...</van-loading>
+    <van-loading size="24px" color="var(--color-primary)">加载中...</van-loading>
   </view>
   
   <!-- 网络状态提示 -->
   <view wx:if="{{!networkStatus}}" class="network-status-bar">
-    <text class="network-status-text">网络连接不可用</text>
+    <text>网络连接不可用</text>
   </view>
   
   <!-- 错误提示 -->
@@ -20,7 +22,7 @@
 
   <!-- 顶部固定区域 -->
   <view class="top-fixed-section">
-    <!-- 1. 市场指数和时间 -->
+    <!-- 市场指数和时间 -->
     <view class="market-header">
       <scroll-view class="market-indexes" scroll-x show-scrollbar="{{false}}">
         <view class="market-index-item" wx:for="{{marketIndexes}}" wx:key="code">
@@ -36,7 +38,7 @@
       <view class="current-time">{{currentTime}}</view>
     </view>
 
-    <!-- 2. Tab导航 -->
+    <!-- Tab导航 -->
     <view class="tabs-container">
       <!-- 主Tab导航 -->
       <view class="primary-tabs">
@@ -92,7 +94,7 @@
       </view>
     </view>
 
-    <!-- 3. 搜索和筛选区域 -->
+    <!-- 搜索和筛选区域 -->
     <view class="filter-section">
       <!-- 搜索框 -->
       <view class="search-bar">
@@ -200,11 +202,11 @@
           
           <!-- 操作按钮 -->
           <view class="product-actions">
-            <van-button type="primary" size="mini" bindtap="showInquiryForm" data-id="{{item.id}}">
+            <van-button type="primary" size="mini" round bindtap="showInquiryForm" data-id="{{item.id}}">
               询价
             </van-button>
             <view class="favorite-btn" bindtap="toggleFavorite" data-id="{{item.id}}">
-              <van-icon name="{{favorites[item.id] ? 'star' : 'star-o'}}" size="20px" color="{{favorites[item.id] ? '#ffd700' : '#969799'}}" />
+              <van-icon name="{{favorites[item.id] ? 'star' : 'star-o'}}" size="20px" color="{{favorites[item.id] ? '#faad14' : '#8c8c8c'}}" />
             </view>
           </view>
         </view>
@@ -212,7 +214,7 @@
       
       <!-- 加载更多 -->
       <view class="load-more" wx:if="{{pagination.hasMore}}">
-        <van-loading wx:if="{{pagination.isLoadingMore}}" size="16px">加载中...</van-loading>
+        <van-loading wx:if="{{pagination.isLoadingMore}}" size="16px" color="var(--color-primary)">加载中...</van-loading>
         <text wx:else>上拉加载更多</text>
       </view>
     </view>
@@ -222,7 +224,7 @@
       <image src="/images/empty.svg" class="empty-icon" mode="aspectFit" lazy-load="true" />
       <text class="empty-title">暂无数据</text>
       <text class="empty-desc">{{getEmptyStateText()}}</text>
-      <van-button type="primary" size="small" bindtap="clearAllFilters" wx:if="{{hasActiveFilters()}}">
+      <van-button type="primary" size="small" round bindtap="clearAllFilters" wx:if="{{hasActiveFilters()}}">
         清除筛选条件
       </van-button>
     </view>
@@ -231,21 +233,13 @@
   <!-- 底部操作栏 -->
   <view class="bottom-actions" wx:if="{{filters.primaryTab === 'self'}}">
     <view class="action-buttons" wx:if="{{!isEditingFavorites}}">
-      <van-button type="primary" round bindtap="batchInquiry">
-        批量询价
-      </van-button>
-      <van-button type="info" round bindtap="quickInquiry">
-        快速询价
-      </van-button>
-      <van-button plain type="primary" round bindtap="startEditFavorites">
-        编辑自选
-      </van-button>
+      <van-button type="primary" round bindtap="batchInquiry">批量询价</van-button>
+      <van-button type="info" round bindtap="quickInquiry">快速询价</van-button>
+      <van-button plain type="primary" round bindtap="startEditFavorites">编辑自选</van-button>
     </view>
     
     <view class="edit-actions" wx:if="{{isEditingFavorites}}">
-      <van-button plain round bindtap="cancelEditFavorites">
-        取消
-      </van-button>
+      <van-button plain round bindtap="cancelEditFavorites">取消</van-button>
       <van-button type="primary" round bindtap="removeSelectedFavorites" disabled="{{selectedFavorites.length === 0}}">
         删除选中 ({{selectedFavorites.length}})
       </van-button>
@@ -262,18 +256,14 @@
       <image src="/images/records.png" class="quick-action-icon" mode="aspectFit" lazy-load="true" />
       <text class="quick-action-text">询价记录</text>
     </view>
-    <view class="quick-action-item" bindtap="goToProfile" hover-class="quick-action-hover">
-      <image src="/images/profile.png" class="quick-action-icon" mode="aspectFit" lazy-load="true" />
-      <text class="quick-action-text">个人中心</text>
-    </view>
   </view>
 
   <!-- 分组管理弹窗 -->
-  <van-popup show="{{showGroupManage}}" round position="bottom" custom-style="height: 60%;">
+  <van-popup show="{{showGroupManage}}" round position="bottom" custom-style="height: 60%; border-radius: 24rpx 24rpx 0 0;">
     <view class="group-manage-popup">
       <view class="popup-header">
         <text class="popup-title">分组管理</text>
-        <van-icon name="cross" bindtap="hideGroupManage" />
+        <van-icon name="cross" size="20px" color="#8c8c8c" bindtap="hideGroupManage" />
       </view>
       
       <scroll-view scroll-y class="popup-content">
@@ -282,8 +272,8 @@
           <block wx:for="{{groups.system}}" wx:key="id">
             <view class="group-item" bindtap="selectGroup" data-id="{{item.id}}">
               <text class="group-name">{{item.name}}</text>
-              <text class="group-count">({{item.count}})</text>
-              <van-icon name="success" size="20px" wx:if="{{filters.subTab === item.id}}" />
+              <text class="group-count">{{item.count}}</text>
+              <van-icon name="success" size="20px" color="var(--color-primary)" wx:if="{{filters.subTab === item.id}}" />
             </view>
           </block>
         </view>
@@ -293,30 +283,32 @@
           <block wx:for="{{groups.custom}}" wx:key="id">
             <view class="group-item" bindtap="selectGroup" data-id="{{item.id}}">
               <text class="group-name">{{item.name}}</text>
-              <text class="group-count">({{item.count}})</text>
+              <text class="group-count">{{item.count}}</text>
               <view class="group-actions">
-                <van-icon name="edit" bindtap="editGroupName" data-id="{{item.id}}" />
-                <van-icon name="delete" bindtap="deleteGroup" data-id="{{item.id}}" />
+                <van-icon name="edit" size="18px" color="#8c8c8c" catchtap="editGroupName" data-id="{{item.id}}" />
+                <van-icon name="delete" size="18px" color="#ff4d4f" catchtap="deleteGroup" data-id="{{item.id}}" />
               </view>
             </view>
           </block>
+          
+          <view wx:if="{{groups.custom.length === 0}}" style="text-align: center; color: var(--color-text-tertiary); padding: 40rpx 0;">
+            暂无自定义分组
+          </view>
         </view>
       </scroll-view>
       
       <view class="popup-footer">
-        <van-button type="primary" block round bindtap="createNewGroup">
-          新建分组
-        </van-button>
+        <van-button type="primary" block round bindtap="createNewGroup">新建分组</van-button>
       </view>
     </view>
   </van-popup>
 
   <!-- 询价表单弹窗 -->
-  <van-popup show="{{showInquiryForm}}" round position="bottom" custom-style="height: 80%;">
+  <van-popup show="{{showInquiryForm}}" round position="bottom" custom-style="height: 80%; border-radius: 24rpx 24rpx 0 0;">
     <view class="inquiry-form-popup">
       <view class="popup-header">
         <text class="popup-title">产品询价</text>
-        <van-icon name="cross" bindtap="hideInquiryForm" />
+        <van-icon name="cross" size="20px" color="#8c8c8c" bindtap="hideInquiryForm" />
       </view>
       
       <scroll-view scroll-y class="popup-content">
@@ -411,33 +403,37 @@
   </van-popup>
 
   <!-- 数据说明弹窗 -->
-  <van-popup show="{{showDataInfo}}" round position="center" custom-style="width: 80%; max-height: 60%;">
+  <van-popup show="{{showDataInfo}}" round position="center" custom-style="width: 85%; border-radius: 24rpx;">
     <view class="data-info-popup">
       <view class="popup-header">
         <text class="popup-title">数据说明</text>
-        <van-icon name="cross" bindtap="hideDataInfo" />
+        <van-icon name="cross" size="20px" color="#8c8c8c" bindtap="hideDataInfo" />
       </view>
       <scroll-view scroll-y class="popup-content">
         <view class="info-content">
           <text class="info-text">
-            1. 香草看涨期权费率百分比费率，即期权费除以名义本金的比值。例如：期权费率为5%，则买入香草看涨期权100万的名义本金，付出期权费为5万元。
+            香草看涨期权费率百分比费率，即期权费除以名义本金的比值。例如：期权费率为5%，则买入香草看涨期权100万的名义本金，付出期权费为5万元。
           </text>
           <text class="info-text">
-            2. 期权费率为参考费率，与交易台报价或成交价可能有区别。
+            期权费率为参考费率，与交易台报价或成交价可能有区别。
           </text>
           <text class="info-text">
-            3. 虚值期权费率会根据执行价格的不同而有所差异。
+            虚值期权费率会根据执行价格的不同而有所差异。
           </text>
           <text class="info-text">
-            4. 询价结果以交易商最终确认为准。
+            询价结果以交易商最终确认为准。
           </text>
         </view>
       </scroll-view>
       <view class="popup-footer">
-        <van-button type="primary" block round bindtap="hideDataInfo">
-          我知道了
-        </van-button>
+        <van-button type="primary" block round bindtap="hideDataInfo">我知道了</van-button>
       </view>
     </view>
   </van-popup>
 </view>
+
+<!-- Toast 提示 -->
+<van-toast id="van-toast" />
+
+<!-- Dialog 对话框 -->
+<van-dialog id="van-dialog" />

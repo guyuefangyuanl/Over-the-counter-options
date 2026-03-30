@@ -1,15 +1,40 @@
 <!-- pages/account/account.wxml -->
+<!--
+  页面名称：账户
+  文件路径：miniprogram/pages/account/account.wxml
+  原型文件：账户.html
+  最后更新：2026-03-30
+
+  功能说明：
+  1. 账户选择切换
+  2. 资产概览展示
+  3. 持仓列表管理（存续/近期到期/已到期/已完结）
+  4. 持仓录入与操作
+-->
 <view class="page">
-  <!-- 顶部导航栏 (自定义) -->
+  <!-- ========== 模块开始：顶部导航栏 ========== -->
   <view class="nav-bar">
     <view class="nav-bar__content">
-      <view class="account-trigger" bindtap="toggleAccountSelector">
-        <text class="account-trigger__name">{{selectedAccount.name}}</text>
-        <view class="account-trigger__icon {{showAccountSelector ? 'is-active' : ''}}"></view>
+      <view class="nav-bar__left">
+        <view class="nav-bar__back"></view>
       </view>
+      <view class="nav-bar__center">
+        <text class="nav-bar__title">账户</text>
+      </view>
+      <view class="nav-bar__right"></view>
+    </view>
+  </view>
+  <!-- ========== 模块结束：顶部导航栏 ========== -->
+
+  <!-- ========== 模块开始：账户选择器 ========== -->
+  <view class="account-selector">
+    <view class="account-selector__trigger" bindtap="toggleAccountSelector">
+      <text class="account-selector__name">{{selectedAccount.name}}</text>
+      <text class="account-selector__id">({{selectedAccount.id}})</text>
+      <view class="account-selector__arrow {{showAccountSelector ? 'is-active' : ''}}"></view>
     </view>
 
-    <!-- 账户选择下拉菜单 -->
+    <!-- 账户下拉菜单 -->
     <view class="account-dropdown {{showAccountSelector ? 'is-visible' : ''}}">
       <view class="account-dropdown__mask" bindtap="toggleAccountSelector"></view>
       <view class="account-dropdown__list">
@@ -20,194 +45,216 @@
           data-id="{{item.id}}"
           bindtap="switchAccount"
         >
-          <text class="account-dropdown__text">{{item.name}}</text>
-          <text class="account-dropdown__sub">{{item.id}}</text>
+          <text class="account-dropdown__text">{{item.name}}（{{item.id}}）</text>
           <view class="account-dropdown__check" wx:if="{{item.id === selectedAccount.id}}"></view>
         </view>
       </view>
     </view>
   </view>
+  <!-- ========== 模块结束：账户选择器 ========== -->
 
   <!-- 页面主体内容 -->
   <scroll-view class="main-content" scroll-y enable-back-to-top refresher-enabled refresher-triggered="{{refresherTriggered}}" bindrefresherrefresh="onPullDownRefresh">
 
-    <!-- 用户资料区域 -->
-    <view class="user-profile-card">
-      <button class="user-avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
-        <image
-          class="user-avatar"
-          src="{{userInfo.avatar || '/images/default-avatar.png'}}"
-          mode="aspectFill"
-          binderror="onAvatarError"
-          bindtap="onAvatarTap"
-        ></image>
-        <!-- 上传加载指示器 -->
-        <view class="avatar-loading" wx:if="{{isAvatarUploading}}">
-          <van-loading size="20px" type="spinner" color="#fff" />
-        </view>
-      </button>
-      <view class="user-info-box">
-        <input
-          type="nickname"
-          class="user-nickname"
-          placeholder="点击输入昵称"
-          value="{{userInfo.nickname || ''}}"
-          bindblur="onNicknameChange"
-        />
-        <text class="user-id" wx:if="{{userInfo.openid}}">ID: {{userInfo.openid}}</text>
-        <text class="user-id user-id--placeholder" wx:else>登录后显示用户信息</text>
+    <!-- ========== 模块开始：资产概览表格 ========== -->
+    <view class="asset-table">
+      <!-- 表格数据行 -->
+      <view class="asset-table__row">
+        <text class="asset-table__label">存续规模（万）</text>
+        <text class="asset-table__value asset-table__value--large">{{overview.totalScale}}</text>
       </view>
-    </view>
-
-    <!-- 资产概览卡片 -->
-    <view class="asset-card">
-      <view class="asset-card__header">
-        <text class="asset-card__label">存续名义本金(元)</text>
-        <view class="asset-card__action" bindtap="handleAddPosition">
-          <text>+ 录入</text>
-        </view>
+      <view class="asset-table__row">
+        <text class="asset-table__label">存续净收益（元）</text>
+        <text class="asset-table__value {{overview.totalProfit >= 0 ? 'color-profit' : 'color-loss'}}">{{overview.totalProfit > 0 ? '+' : ''}}{{overview.totalProfit}}</text>
+      </view>
+      <view class="asset-table__row">
+        <text class="asset-table__label">完结净收益（元）</text>
+        <text class="asset-table__value">{{overview.completedProfit > 0 ? '+' : ''}}{{overview.completedProfit}}</text>
       </view>
 
-      <!-- 资产概览错误降级提示 -->
+      <!-- 错误降级提示 -->
       <view class="error-tip" wx:if="{{overviewError}}">
         <text class="error-tip__text">资产数据暂时无法加载</text>
       </view>
-      <block wx:else>
-        <view class="asset-card__amount">{{overview.totalScale}}</view>
-        <view class="asset-card__row">
-          <view class="asset-metric">
-            <text class="asset-metric__label">存续净收益</text>
-            <text class="asset-metric__value {{overview.totalProfit >= 0 ? 'color-profit' : 'color-loss'}}">
-              {{overview.totalProfit > 0 ? '+' : ''}}{{overview.totalProfit}}
-            </text>
-          </view>
-          <view class="asset-metric">
-            <text class="asset-metric__label">完结净收益</text>
-            <text class="asset-metric__value {{overview.completedProfit >= 0 ? 'color-profit' : 'color-loss'}}">
-              {{overview.completedProfit > 0 ? '+' : ''}}{{overview.completedProfit}}
-            </text>
-          </view>
-        </view>
-
-        <!-- 成本折叠区域 -->
-        <view class="cost-panel">
-          <view class="cost-panel__header" bindtap="toggleCostDetails">
-            <text class="cost-panel__title">投入成本: {{costDetails.total}}</text>
-            <view class="cost-panel__arrow {{isCostExpanded ? 'is-expanded' : ''}}"></view>
-          </view>
-          <view class="cost-panel__body {{isCostExpanded ? 'is-expanded' : ''}}">
-            <view class="cost-row">
-              <text class="cost-row__label">权利金</text>
-              <text class="cost-row__value">{{costDetails.optionFee}}</text>
-            </view>
-            <view class="cost-row">
-              <text class="cost-row__label">交易手续费</text>
-              <text class="cost-row__value">{{costDetails.commission}}</text>
-            </view>
-          </view>
-        </view>
-      </block>
     </view>
+    <!-- ========== 模块结束：资产概览表格 ========== -->
 
-    <!-- 持仓列表区域 -->
+    <!-- ========== 模块开始：Tab切换区域 ========== -->
     <view class="positions-section">
       <view class="tabs">
         <view
           class="tabs__item {{activeTab === 'continuing' ? 'is-active' : ''}}"
           data-tab="continuing"
           bindtap="switchTab"
-        >存续中</view>
+        >存续持仓({{continuingCount}})</view>
         <view
           class="tabs__item {{activeTab === 'expiring' ? 'is-active' : ''}}"
           data-tab="expiring"
           bindtap="switchTab"
-        >临近到期</view>
+        >近期到期({{expiringCount}})</view>
+        <view
+          class="tabs__item {{activeTab === 'expired' ? 'is-active' : ''}}"
+          data-tab="expired"
+          bindtap="switchTab"
+        >已到期({{expiredCount}})</view>
         <view
           class="tabs__item {{activeTab === 'closed' ? 'is-active' : ''}}"
           data-tab="closed"
           bindtap="switchTab"
-        >已完结</view>
+        >已完结({{closedCount}})</view>
       </view>
 
-      <!-- 持仓错误降级提示 -->
-      <view class="error-tip" wx:if="{{positionsError}}">
-        <text class="error-tip__text">持仓数据暂时无法加载，下拉刷新重试</text>
+      <!-- 数据说明入口 -->
+      <view class="data-info-trigger" bindtap="showDataInfo">
+        <text class="data-info-trigger__text">数据说明</text>
+        <view class="data-info-trigger__icon"></view>
       </view>
+    </view>
+    <!-- ========== 模块结束：Tab切换区域 ========== -->
 
-      <!-- 持仓列表 -->
-      <block wx:elif="{{filteredPositions.length > 0}}">
-        <view class="positions-list">
-          <view
-            class="position-card {{item.id === highlightPositionId ? 'position-card--highlight' : ''}}"
-            wx:for="{{filteredPositions}}"
-            wx:key="id"
-          >
-            <view class="position-card__header">
-              <view class="position-card__name-box">
-                <text class="position-card__name">{{item.productName}}</text>
-                <text class="position-card__tag">{{item.dealer}}</text>
-              </view>
-              <text class="position-card__status {{item.status === 'CONTINUING' ? 'color-primary' : 'color-regular'}}">{{item.statusText}}</text>
+    <!-- ========== 模块开始：持仓列表 ========== -->
+    <!-- 持仓错误降级提示 -->
+    <view class="error-tip" wx:if="{{positionsError}}">
+      <text class="error-tip__text">持仓数据暂时无法加载，下拉刷新重试</text>
+    </view>
+
+    <!-- 持仓列表 -->
+    <block wx:elif="{{filteredPositions.length > 0}}">
+      <view class="positions-list">
+        <view
+          class="position-card {{item.id === highlightPositionId ? 'position-card--highlight' : ''}}"
+          wx:for="{{filteredPositions}}"
+          wx:key="id"
+        >
+          <!-- 持仓卡片头部 -->
+          <view class="position-card__header">
+            <view class="position-card__type">
+              <text class="position-card__type-tag">香草</text>
+              <text class="position-card__scale">{{item.notional}}万</text>
             </view>
-
-            <view class="position-card__body">
-              <view class="position-grid">
-                <view class="position-item">
-                  <text class="position-item__label">名义本金</text>
-                  <text class="position-item__value">{{item.notional}}</text>
-                </view>
-                <view class="position-item">
-                  <text class="position-item__label">剩余天数</text>
-                  <text class="position-item__value">{{item.daysLeft}}天</text>
-                </view>
-                <view class="position-item">
-                  <text class="position-item__label">成交价</text>
-                  <text class="position-item__value">{{item.fillPrice}}</text>
-                </view>
-                <view class="position-item">
-                  <text class="position-item__label">当前价</text>
-                  <text class="position-item__value">{{item.currentPrice}}</text>
-                </view>
-                <view class="position-item">
-                  <text class="position-item__label">收益率</text>
-                  <text class="position-item__value {{item.pnlRate >= 0 ? 'color-profit' : 'color-loss'}}">{{item.pnlRate}}%</text>
-                </view>
-                <view class="position-item">
-                  <text class="position-item__label">账面盈亏</text>
-                  <text class="position-item__value {{item.pnl >= 0 ? 'color-profit' : 'color-loss'}}">{{item.pnl}}</text>
-                </view>
-              </view>
-            </view>
-
-            <view class="position-card__footer">
-              <view class="btn-group">
-                <view class="btn-small btn-outline" data-id="{{item.id}}" data-action="modify" bindtap="handlePositionAction">修改</view>
-                <view class="btn-small btn-outline" data-id="{{item.id}}" data-action="close" bindtap="handlePositionAction" wx:if="{{item.status !== 'CLOSED'}}">平仓记账</view>
-                <view class="btn-small btn-primary" data-id="{{item.id}}" data-action="close-live" bindtap="handlePositionAction" wx:if="{{item.status !== 'CLOSED'}}">平仓下单</view>
-                <view class="btn-small btn-danger" data-id="{{item.id}}" data-action="delete" bindtap="handlePositionAction">删除</view>
+            <view class="position-card__actions">
+              <view class="action-icon action-icon--more" data-id="{{item.id}}" data-action="more" bindtap="handlePositionAction">
+                <view class="action-icon__dot"></view>
+                <view class="action-icon__dot"></view>
+                <view class="action-icon__dot"></view>
               </view>
             </view>
           </view>
-        </view>
-      </block>
 
-      <!-- 空状态 -->
-      <view class="empty-state" wx:else>
-        <view class="empty-state__icon">∅</view>
-        <text class="empty-state__text">
-          {{activeTab === 'continuing' ? '暂无存续中持仓' : (activeTab === 'expiring' ? '暂无临近到期持仓' : '暂无已完结持仓')}}
-        </text>
-        <view class="empty-state__action" bindtap="handleAddPosition" wx:if="{{activeTab === 'continuing'}}">
-          <text>点击录入持仓</text>
+          <!-- 投入成本区域 -->
+          <view class="position-card__cost">
+            <view class="cost-trigger" bindtap="toggleCostDetail" data-id="{{item.id}}">
+              <text class="cost-trigger__label">投入成本（万）</text>
+              <view class="cost-trigger__arrow {{item.showCostDetail ? 'is-expanded' : ''}}"></view>
+            </view>
+            <text class="cost-trigger__value">{{item.cost || item.notional}}</text>
+          </view>
+
+          <!-- 成本详情（可展开） -->
+          <view class="cost-detail {{item.showCostDetail ? 'is-expanded' : ''}}">
+            <view class="cost-detail__row">
+              <text class="cost-detail__label">名义本金</text>
+              <text class="cost-detail__value">{{item.notional}}万元</text>
+            </view>
+            <view class="cost-detail__row">
+              <text class="cost-detail__label">成交价</text>
+              <text class="cost-detail__value">{{item.fillPrice}}</text>
+            </view>
+            <view class="cost-detail__row">
+              <text class="cost-detail__label">收益率</text>
+              <text class="cost-detail__value {{item.pnlRate >= 0 ? 'color-profit' : 'color-loss'}}">{{item.pnlRate}}%</text>
+            </view>
+            <view class="cost-detail__row">
+              <text class="cost-detail__label">账面盈亏</text>
+              <text class="cost-detail__value {{item.pnl >= 0 ? 'color-profit' : 'color-loss'}}">{{item.pnl}}</text>
+            </view>
+            <view class="cost-detail__row">
+              <text class="cost-detail__label">剩余天数</text>
+              <text class="cost-detail__value">{{item.daysLeft}}天</text>
+            </view>
+            <view class="cost-detail__row">
+              <text class="cost-detail__label">交易商</text>
+              <text class="cost-detail__value">{{item.dealer}}</text>
+            </view>
+          </view>
+
+          <!-- 操作按钮组 -->
+          <view class="position-card__footer" wx:if="{{item.status !== 'CLOSED'}}">
+            <view class="btn-group">
+              <view class="btn-small btn-outline" data-id="{{item.id}}" data-action="modify" bindtap="handlePositionAction">修改</view>
+              <view class="btn-small btn-outline" data-id="{{item.id}}" data-action="close" bindtap="handlePositionAction">平仓记账</view>
+              <view class="btn-small btn-primary" data-id="{{item.id}}" data-action="close-live" bindtap="handlePositionAction">平仓下单</view>
+            </view>
+          </view>
         </view>
       </view>
+
+      <!-- 底部提示 -->
+      <view class="list-footer">
+        <text class="list-footer__text">没有更多了~</text>
+      </view>
+    </block>
+
+    <!-- 空状态 -->
+    <view class="empty-state" wx:else>
+      <text class="empty-state__text">
+        {{activeTab === 'continuing' ? '暂无存续中持仓' :
+          (activeTab === 'expiring' ? '暂无临近到期持仓' :
+            (activeTab === 'expired' ? '暂无已到期持仓' : '暂无已完结持仓'))}}
+      </text>
     </view>
+    <!-- ========== 模块结束：持仓列表 ========== -->
 
     <!-- 底部安全距离 -->
     <view class="safe-area-bottom"></view>
   </scroll-view>
 
-  <!-- 持仓录入弹窗 (独立于询价功能， show 变量完全分离) -->
+  <!-- ========== 模块开始：录持仓按钮 ========== -->
+  <view class="add-position-btn" bindtap="handleAddPosition">
+    <text class="add-position-btn__text">录持仓</text>
+  </view>
+  <!-- ========== 模块结束：录持仓按钮 ========== -->
+
+  <!-- ========== 模块开始：数据说明弹窗 ========== -->
+  <van-popup
+    show="{{showDataInfoPopup}}"
+    round
+    position="bottom"
+    custom-style="height: auto; padding: 40rpx;"
+    bind:close="hideDataInfo"
+  >
+    <view class="data-info-popup">
+      <view class="data-info-popup__header">
+        <text class="data-info-popup__title">数据说明</text>
+        <van-icon name="cross" bind:click="hideDataInfo" />
+      </view>
+      <view class="data-info-popup__content">
+        <view class="data-info-item">
+          <text class="data-info-item__label">存续规模</text>
+          <text class="data-info-item__desc">当前持仓的名义本金总额（万元）</text>
+        </view>
+        <view class="data-info-item">
+          <text class="data-info-item__label">存续净收益</text>
+          <text class="data-info-item__desc">存续持仓的账面盈亏总额（元）</text>
+        </view>
+        <view class="data-info-item">
+          <text class="data-info-item__label">完结净收益</text>
+          <text class="data-info-item__desc">已平仓持仓的实际盈亏总额（元）</text>
+        </view>
+        <view class="data-info-item">
+          <text class="data-info-item__label">近期到期</text>
+          <text class="data-info-item__desc">剩余天数≤7天的存续持仓</text>
+        </view>
+        <view class="data-info-item">
+          <text class="data-info-item__label">已到期</text>
+          <text class="data-info-item__desc">已到期但尚未平仓的持仓</text>
+        </view>
+      </view>
+    </view>
+  </van-popup>
+  <!-- ========== 模块结束：数据说明弹窗 ========== -->
+
+  <!-- ========== 模块开始：持仓录入弹窗 ========== -->
   <van-popup
     show="{{showAddPositionForm}}"
     round
@@ -236,7 +283,7 @@
           />
           <van-field
             label="标的名称"
-            placeholder="如 上评50ETF"
+            placeholder="如 上证50ETF"
             value="{{positionForm.productName}}"
             data-field="productName"
             bind:change="onPositionFormInput"
@@ -289,7 +336,7 @@
         </view>
       </scroll-view>
 
-      <!-- 提交按鈕 -->
+      <!-- 提交按钮 -->
       <view class="form-footer">
         <van-button
           type="primary"
@@ -304,8 +351,9 @@
       </view>
     </view>
   </van-popup>
+  <!-- ========== 模块结束：持仓录入弹窗 ========== -->
 
-  <!-- 修改持仓弹窗 -->
+  <!-- ========== 模块开始：修改持仓弹窗 ========== -->
   <van-popup
     show="{{showEditPositionForm}}"
     round
@@ -402,8 +450,9 @@
       </view>
     </view>
   </van-popup>
+  <!-- ========== 模块结束：修改持仓弹窗 ========== -->
 
-  <!-- 平仓确认弹窗 -->
+  <!-- ========== 模块开始：平仓确认弹窗 ========== -->
   <van-popup
     show="{{showClosePositionDialog}}"
     round
@@ -459,4 +508,33 @@
       </view>
     </view>
   </van-popup>
+  <!-- ========== 模块结束：平仓确认弹窗 ========== -->
+
+  <!-- ========== 模块开始：操作菜单弹窗 ========== -->
+  <van-popup
+    show="{{showActionMenu}}"
+    round
+    position="bottom"
+    custom-style="height: auto;"
+    bind:close="hideActionMenu"
+  >
+    <view class="action-menu">
+      <view class="action-menu__item" data-action="modify" bindtap="onActionMenuSelect">
+        <text class="action-menu__text">修改持仓</text>
+      </view>
+      <view class="action-menu__item" data-action="close" bindtap="onActionMenuSelect">
+        <text class="action-menu__text">平仓记账</text>
+      </view>
+      <view class="action-menu__item action-menu__item--primary" data-action="close-live" bindtap="onActionMenuSelect">
+        <text class="action-menu__text">平仓下单</text>
+      </view>
+      <view class="action-menu__item action-menu__item--danger" data-action="delete" bindtap="onActionMenuSelect">
+        <text class="action-menu__text">删除持仓</text>
+      </view>
+      <view class="action-menu__item action-menu__item--cancel" bindtap="hideActionMenu">
+        <text class="action-menu__text">取消</text>
+      </view>
+    </view>
+  </van-popup>
+  <!-- ========== 模块结束：操作菜单弹窗 ========== -->
 </view>

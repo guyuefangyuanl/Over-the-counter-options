@@ -1,19 +1,46 @@
 // pages/knowledge/knowledge.js
 const app = getApp();
-const { uiEnhancer } = require('../../utils/enhancedUtils');
+const { uiEnhancer } = require('../../../utils/enhancedUtils');
+const { getKnowledgeArticles, getArticlesByCategory, getArticleById, openArticleInBrowser } = require('../../../utils/knowledgeConfig.js');
+
+// 每页显示数量
+const PAGE_SIZE = 10;
 
 Page({
   data: {
+    // 分类列表
     categories: [
-      { id: 1, name: '期权基础', icon: 'book' },
-      { id: 2, name: '交易策略', icon: 'chart' },
-      { id: 3, name: '风险管理', icon: 'shield' },
-      { id: 4, name: '市场分析', icon: 'analysis' }
+      { category: 'option', name: '期权基础' },
+      { category: 'strategy', name: '交易策略' },
+      { category: 'risk', name: '风险管理' },
+      { category: 'analysis', name: '市场分析' }
     ],
-    articles: [],
-    currentCategory: 0,
+
+    // 分类统计
+    categoryCounts: {
+      all: 0,
+      option: 0,
+      strategy: 0,
+      risk: 0,
+      analysis: 0
+    },
+
+    // 当前分类
+    currentCategory: 'all',
+
+    // 文章列表
+    allArticles: [],
+    filteredArticles: [],
+
+    // 搜索关键词
+    searchKeyword: '',
+
+    // 加载状态
     loading: true,
-    searchKeyword: ''
+
+    // 分页
+    page: 1,
+    hasMore: true
   },
 
   onLoad() {
@@ -24,104 +51,159 @@ Page({
     // 刷新数据
   },
 
-  async loadArticles() {
+  /**
+   * 加载文章列表
+   */
+  loadArticles() {
     this.setData({ loading: true });
 
-    try {
-      const res = await wx.request({
-        url: `${app.globalData.apiBaseUrl}/api/knowledge/articles`,
-        method: 'GET',
-        data: {
-          category: this.data.currentCategory || undefined,
-          keyword: this.data.searchKeyword || undefined
-        }
-      });
+    // 模拟网络延迟
+    setTimeout(() => {
+      try {
+        const articles = getKnowledgeArticles();
 
-      if (res.data.success) {
+        // 计算分类统计
+        const counts = { all: articles.length };
+        this.data.categories.forEach(cat => {
+          counts[cat.category] = articles.filter(a => a.category === cat.category).length;
+        });
+
         this.setData({
-          articles: res.data.data || [],
+          allArticles: articles,
+          categoryCounts: counts,
           loading: false
         });
-      } else {
-        // 使用模拟数据
-        this.loadMockArticles();
+
+        // 应用筛选
+        this.applyFilter();
+      } catch (error) {
+        console.error('加载文章失败:', error);
+        this.setData({ loading: false });
+        uiEnhancer.showToast('加载失败，请重试', 'error');
       }
-    } catch (error) {
-      console.error('加载文章失败:', error);
-      this.loadMockArticles();
-    }
+    }, 400);
   },
 
-  loadMockArticles() {
-    const mockArticles = [
-      {
-        id: 1,
-        title: '什么是场外期权？',
-        summary: '场外期权是指在非交易所交易的期权合约，具有灵活性高、可定制的特点...',
-        category: '期权基础',
-        views: 1234,
-        likes: 89,
-        createTime: '2024-01-15'
-      },
-      {
-        id: 2,
-        title: '香草期权交易策略入门',
-        summary: '香草期权是最基础的期权类型，包括看涨期权和看跌期权...',
-        category: '交易策略',
-        views: 856,
-        likes: 67,
-        createTime: '2024-01-12'
-      },
-      {
-        id: 3,
-        title: '如何管理期权交易风险',
-        summary: '期权交易具有高杠杆特性，合理的风险管理是成功交易的关键...',
-        category: '风险管理',
-        views: 654,
-        likes: 45,
-        createTime: '2024-01-10'
-      },
-      {
-        id: 4,
-        title: '期权定价模型详解',
-        summary: 'Black-Scholes模型是最常用的期权定价模型，了解其原理有助于...',
-        category: '期权基础',
-        views: 523,
-        likes: 34,
-        createTime: '2024-01-08'
-      }
-    ];
+  /**
+   * 应用筛选条件
+   */
+  applyFilter() {
+    const { allArticles, currentCategory, searchKeyword } = this.data;
+    let filtered = [...allArticles];
+
+    // 分类筛选
+    if (currentCategory !== 'all') {
+      filtered = filtered.filter(a => a.category === currentCategory);
+    }
+
+    // 关键词搜索
+    if (searchKeyword.trim()) {
+      const keyword = searchKeyword.toLowerCase().trim();
+      filtered = filtered.filter(a =>
+        a.title.toLowerCase().includes(keyword) ||
+        (a.summary && a.summary.toLowerCase().includes(keyword))
+      );
+    }
 
     this.setData({
-      articles: mockArticles,
-      loading: false
+      filteredArticles: filtered,
+      hasMore: filtered.length > PAGE_SIZE
     });
   },
 
+  /**
+   * 分类切换
+   */
   onCategoryChange(e) {
     const { id } = e.currentTarget.dataset;
-    this.setData({ currentCategory: id });
-    this.loadArticles();
+    uiEnhancer.hapticFeedback('light');
+
+    if (id === this.data.currentCategory) return;
+
+    this.setData({
+      currentCategory: id,
+      page: 1
+    });
+    this.applyFilter();
   },
 
+  /**
+   * 搜索输入
+   */
   onSearchInput(e) {
     this.setData({ searchKeyword: e.detail.value });
   },
 
+  /**
+   * 执行搜索
+   */
   onSearch() {
-    this.loadArticles();
+    this.setData({ page: 1 });
+    this.applyFilter();
   },
 
+  /**
+   * 清除搜索
+   */
+  onClearSearch() {
+    this.setData({
+      searchKeyword: '',
+      page: 1
+    });
+    this.applyFilter();
+  },
+
+  /**
+   * 加载更多
+   */
+  onLoadMore() {
+    if (!this.data.hasMore) return;
+
+    this.setData({
+      page: this.data.page + 1
+    });
+  },
+
+  /**
+   * 文章点击
+   */
   onArticleTap(e) {
     const { id } = e.currentTarget.dataset;
+    uiEnhancer.hapticFeedback('light');
+
+    const article = getArticleById(id);
+    if (!article) {
+      uiEnhancer.showToast('文章不存在', 'error');
+      return;
+    }
+
+    // 跳转到详情页
     wx.navigateTo({
-      url: `/pages/knowledge-detail/knowledge-detail?id=${id}`
+      url: `/subpackages/info/knowledge-detail/knowledge-detail?id=${id}`,
+      fail: () => {
+        // 降级处理：在浏览器中打开
+        openArticleInBrowser(article);
+      }
     });
   },
 
+  /**
+   * 下拉刷新
+   */
   onPullDownRefresh() {
-    this.loadArticles().then(() => {
+    this.loadArticles();
+    setTimeout(() => {
       wx.stopPullDownRefresh();
-    });
+    }, 500);
+  },
+
+  /**
+   * 分享
+   */
+  onShareAppMessage() {
+    return {
+      title: '期权知识库 - 场外期权专业知识',
+      path: '/subpackages/info/knowledge/knowledge'
+    };
   }
 });

@@ -1,0 +1,163 @@
+<!--登录历史记录页面-->
+<view class="login-history-page">
+  <!-- 标签切换 -->
+  <view class="tabs">
+    <view 
+      class="tab-item {{activeTab === 'history' ? 'active' : ''}}" 
+      data-tab="history" 
+      bindtap="switchTab"
+    >
+      登录历史
+    </view>
+    <view 
+      class="tab-item {{activeTab === 'devices' ? 'active' : ''}}" 
+      data-tab="devices" 
+      bindtap="switchTab"
+    >
+      登录设备
+    </view>
+  </view>
+
+  <!-- 加载状态 -->
+  <view wx:if="{{loading}}" class="loading-container">
+    <van-loading size="24px" vertical>加载中...</van-loading>
+  </view>
+
+  <!-- 登录历史标签页 -->
+  <view wx:if="{{!loading && activeTab === 'history'}}" class="history-tab">
+    <!-- 统计卡片 -->
+    <view class="stats-cards">
+      <view class="stat-card">
+        <view class="stat-value">{{statistics.total_logins_30d}}</view>
+        <view class="stat-label">30天登录次数</view>
+      </view>
+      <view class="stat-card">
+        <view class="stat-value">{{statistics.unique_devices_30d}}</view>
+        <view class="stat-label">常用设备</view>
+      </view>
+      <view class="stat-card">
+        <view class="stat-value">{{statistics.unique_ips_30d}}</view>
+        <view class="stat-label">常用IP</view>
+      </view>
+    </view>
+
+    <!-- 安全提示 -->
+    <view wx:if="{{statistics.failed_logins_30d > 0}}" class="security-alert">
+      <van-icon name="warning" color="#ff976a" />
+      <text>近30天有 {{statistics.failed_logins_30d}} 次登录失败，请关注账户安全</text>
+    </view>
+
+    <!-- 历史记录列表 -->
+    <view class="history-list">
+      <view wx:if="{{loginHistory.length === 0}}" class="empty-state">
+        <van-empty description="暂无登录记录" />
+      </view>
+
+      <view 
+        wx:for="{{loginHistory}}" 
+        wx:key="id" 
+        class="history-item"
+      >
+        <view class="history-left">
+          <view class="login-type-icon {{item.login_type}}">
+            <van-icon name="{{item.login_type === 'wechat' ? 'wechat' : 'user-circle-o'}}" size="20" />
+          </view>
+          <view class="history-info">
+            <view class="history-title">
+              <text class="login-type">{{item.login_type_text}}</text>
+              <text class="login-status {{item.status}}">{{item.status_text}}</text>
+            </view>
+            <view class="history-detail">
+              <text>{{item.ip_address || '未知IP'}}</text>
+              <text wx:if="{{item.device.browser}}"> · {{item.device.browser}}</text>
+            </view>
+            <view class="history-time">{{item.login_time_formatted}}</view>
+          </view>
+        </view>
+        <view wx:if="{{item.session_duration_text}}" class="session-duration">
+          在线{{item.session_duration_text}}
+        </view>
+      </view>
+    </view>
+
+    <!-- 加载更多 -->
+    <view wx:if="{{loginHistory.length > 0}}" class="load-more">
+      <view wx:if="{{loadingMore}}" class="loading-more">
+        <van-loading size="16px" />
+        <text>加载中...</text>
+      </view>
+      <view wx:elif="{{pagination.page >= pagination.totalPages}}" class="no-more">
+        <text>没有更多了</text>
+      </view>
+      <view wx:else class="load-more-btn" bindtap="loadMore">
+        <text>加载更多</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 登录设备标签页 -->
+  <view wx:if="{{!loading && activeTab === 'devices'}}" class="devices-tab">
+    <!-- 操作栏 -->
+    <view wx:if="{{sessions.length > 1}}" class="action-bar">
+      <van-button 
+        size="small" 
+        type="danger" 
+        plain 
+        bindtap="revokeAllDevices"
+      >
+        登出其他设备
+      </van-button>
+    </view>
+
+    <!-- 设备列表 -->
+    <view class="device-list">
+      <view wx:if="{{sessions.length === 0}}" class="empty-state">
+        <van-empty description="暂无登录设备" />
+      </view>
+
+      <view 
+        wx:for="{{sessions}}" 
+        wx:key="id" 
+        class="device-item {{item.is_current ? 'current' : ''}}"
+      >
+        <view class="device-left">
+          <view class="device-icon">
+            <van-icon name="phone-o" size="24" />
+          </view>
+          <view class="device-info">
+            <view class="device-name">
+              {{item.device_info || '未知设备'}}
+              <text wx:if="{{item.is_current}}" class="current-badge">当前设备</text>
+            </view>
+            <view class="device-detail">
+              <text>{{item.ip || '未知IP'}}</text>
+              <text> · {{item.created_at_formatted}}</text>
+            </view>
+          </view>
+        </view>
+        <view wx:if="{{!item.is_current}}" class="device-action">
+          <van-button 
+            size="mini" 
+            type="danger" 
+            plain
+            data-id="{{item.id}}"
+            data-device="{{item.device_info}}"
+            bindtap="revokeDevice"
+          >
+            登出
+          </van-button>
+        </view>
+      </view>
+    </view>
+
+    <!-- 安全提示 -->
+    <view class="security-tips">
+      <view class="tips-title">安全提示</view>
+      <view class="tips-content">
+        <text>1. 如发现可疑设备登录，请立即修改密码</text>
+        <text>2. 定期检查登录设备，确保账户安全</text>
+        <text>3. 不要在公共设备上保存登录状态</text>
+      </view>
+    </view>
+  </view>
+</view>

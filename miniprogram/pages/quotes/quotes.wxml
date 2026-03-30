@@ -1,5 +1,5 @@
 <wxs module="utils">
-  module.exports.includes = function(arr, item) {
+  module.exports.includes = function (arr, item) {
     return arr.indexOf(item) > -1;
   }
 </wxs>
@@ -8,18 +8,18 @@
   <view class="custom-navbar" style="padding-top: {{statusBarHeight}}px; height: {{navBarHeight}}px;">
     <view class="nav-tabs">
       <view class="nav-tab {{currentTab === '自选' ? 'active' : ''}}" bindtap="onTabChange" data-tab="自选">自选</view>
-      <view class="nav-tab {{currentTab === '个股' ? 'active' : ''}}" bindtap="onTabChange" data-tab="个股">个股</view>
+      <  view class="nav-tab {{currentTab === '个股' ? 'active' : ''}}" bindtap="onTabChange" data-tab="个股" style="position: relative; left: 1rpx; top: 0rpx">个股</view>
       <view class="nav-tab {{currentTab === '指数' ? 'active' : ''}}" bindtap="onTabChange" data-tab="指数">指数</view>
       <view class="nav-tab {{currentTab === 'ETF' ? 'active' : ''}}" bindtap="onTabChange" data-tab="ETF">ETF</view>
     </view>
     <view class="nav-right-placeholder">
-       <!-- 胶囊区域占位 -->
+      <!-- 胶囊区域占位 -->
     </view>
   </view>
 
   <!-- 内容滚动区域 -->
   <scroll-view scroll-y class="content-scroll" style="padding-top: {{statusBarHeight + navBarHeight}}px;">
-    
+
     <!-- 1. 个股列表展示 (根据设计图重构) -->
     <view class="stock-list-view" wx:if="{{currentTab === '个股'}}">
       <!-- 次级导航 (匹配设计图) -->
@@ -41,13 +41,13 @@
       </view>
 
       <!-- 场外 龙虎榜 横幅 -->
-      <view class="hot-list-banner">
+      <view class="hot-list-banner" bindtap="onGoToRankList">
         <view class="banner-left">
           <text class="banner-title">场外</text>
           <view class="rank-btn">龙虎榜</view>
         </view>
         <view class="banner-right">
-          <text class="update-time">{{updateTime}}</text>
+          <text class="banner-update-time">{{updateTime}}</text>
           <text class="banner-arrow">></text>
         </view>
       </view>
@@ -57,9 +57,8 @@
         <view class="filter-group">
           <text class="filter-label">期限</text>
           <view class="chip-group">
-            <view wx:for="{{terms}}" wx:key="*this" 
-                  class="chip {{selectedTerm === item ? 'active' : ''}}" 
-                  bindtap="onTermChange" data-term="{{item}}">{{item}}</view>
+            <view wx:for="{{terms}}" wx:key="*this" class="chip {{selectedTerm === item ? 'active' : ''}}"
+              bindtap="onTermChange" data-term="{{item}}">{{item}}</view>
           </view>
         </view>
         <view class="filter-group">
@@ -69,23 +68,29 @@
           </view>
           <!-- 交易商选择弹窗 -->
           <view class="trader-dropdown" wx:if="{{showTraderPicker}}">
-            <view wx:for="{{traders}}" wx:key="code" 
-                  class="trader-option {{selectedTraderCode === item.code ? 'active' : ''}}" 
-                  bindtap="onTraderChange" data-code="{{item.code}}" data-name="{{item.name}}">
+            <view wx:for="{{traders}}" wx:key="code"
+              class="trader-option {{selectedTraderCode === item.code ? 'active' : ''}}" bindtap="onTraderChange"
+              data-code="{{item.code}}" data-name="{{item.name}}">
               {{item.name}}
             </view>
           </view>
         </view>
       </view>
 
-      <!-- 数据表格 (热门个股列表) -->
+      <!-- 数据表格 (热门个股列表 - 优化版卡片式布局) -->
       <view class="hot-stocks-container">
-        <view class="table-header hot-header">
-          <view class="th col-name">标的|代码</view>
-          <view class="th col-price" bindtap="onSortChange" data-sort="price">最新价 <text class="sort-icon">⇅</text></view>
-          <view class="th col-change" bindtap="onSortChange" data-sort="changePercent">涨跌幅 <text class="sort-icon">⇅</text></view>
-          <view class="th col-val" bindtap="onSortChange" data-sort="atm">平值 <text class="sort-icon">⇅</text></view>
+        <!-- 列表头部提示 -->
+        <view class="list-header-bar">
+          <view class="header-left">
+            <text class="header-title">热门个股</text>
+            <text class="stock-count">共 {{hotStocks.length}} 只</text>
+          </view>
+          <view class="header-right">
+            <text class="update-indicator {{isRealtimeUpdating ? 'updating' : ''}}">{{updateTime}}</text>
+          </view>
         </view>
+
+        <!-- 卡片列表 -->
         <view class="hot-list">
           <view class="stock-card" wx:for="{{hotStocks}}" wx:key="code" bindtap="onViewDetail" data-item="{{item}}">
             <view class="card-left">
@@ -104,14 +109,14 @@
                 <text class="change-val">{{item.changePercent >= 0 ? '+' : ''}}{{item.changePercent}}%</text>
               </view>
               <view class="atm-box">
-                <text class="atm-label">平值 </text>
+                <text class="atm-label">平值</text>
                 <text class="atm-val">{{item.atm}}%</text>
               </view>
             </view>
           </view>
         </view>
       </view>
-    
+
       <!-- 加载状态 -->
       <view class="loading-container" wx:if="{{loading}}">
         <view class="loading-spinner"></view>
@@ -145,7 +150,8 @@
         <view class="index-card" wx:for="{{topIndices}}" wx:key="name">
           <view class="index-name">{{item.name}}</view>
           <view class="index-price {{item.changePercent >= 0 ? 'up' : 'down'}}">{{item.price}}</view>
-          <view class="index-change {{item.changePercent >= 0 ? 'up' : 'down'}}">{{item.changePercent >= 0 ? '+' : ''}}{{item.changePercent}}%</view>
+          <view class="index-change {{item.changePercent >= 0 ? 'up' : 'down'}}">
+            {{item.changePercent >= 0 ? '+' : ''}}{{item.changePercent}}%</view>
         </view>
       </view>
 
@@ -154,9 +160,8 @@
         <view class="filter-group">
           <text class="filter-label">期限</text>
           <view class="chip-group">
-            <view wx:for="{{terms}}" wx:key="*this" 
-                  class="chip {{selectedTerm === item ? 'active' : ''}}" 
-                  bindtap="onTermChange" data-term="{{item}}">{{item}}</view>
+            <view wx:for="{{terms}}" wx:key="*this" class="chip {{selectedTerm === item ? 'active' : ''}}"
+              bindtap="onTermChange" data-term="{{item}}">{{item}}</view>
           </view>
         </view>
         <view class="filter-group">
@@ -166,9 +171,9 @@
           </view>
           <!-- 交易商选择弹窗 -->
           <view class="trader-dropdown" wx:if="{{showTraderPicker}}">
-            <view wx:for="{{traders}}" wx:key="code" 
-                  class="trader-option {{selectedTraderCode === item.code ? 'active' : ''}}" 
-                  bindtap="onTraderChange" data-code="{{item.code}}" data-name="{{item.name}}">
+            <view wx:for="{{traders}}" wx:key="code"
+              class="trader-option {{selectedTraderCode === item.code ? 'active' : ''}}" bindtap="onTraderChange"
+              data-code="{{item.code}}" data-name="{{item.name}}">
               {{item.name}}
             </view>
           </view>
@@ -233,9 +238,8 @@
         <view class="filter-group">
           <text class="filter-label">期限</text>
           <view class="chip-group">
-            <view wx:for="{{terms}}" wx:key="*this" 
-                  class="chip {{selectedTerm === item ? 'active' : ''}}" 
-                  bindtap="onTermChange" data-term="{{item}}">{{item}}</view>
+            <view wx:for="{{terms}}" wx:key="*this" class="chip {{selectedTerm === item ? 'active' : ''}}"
+              bindtap="onTermChange" data-term="{{item}}">{{item}}</view>
           </view>
         </view>
         <view class="filter-group">
@@ -245,9 +249,9 @@
           </view>
           <!-- 交易商选择弹窗 -->
           <view class="trader-dropdown" wx:if="{{showTraderPicker}}">
-            <view wx:for="{{traders}}" wx:key="code" 
-                  class="trader-option {{selectedTraderCode === item.code ? 'active' : ''}}" 
-                  bindtap="onTraderChange" data-code="{{item.code}}" data-name="{{item.name}}">
+            <view wx:for="{{traders}}" wx:key="code"
+              class="trader-option {{selectedTraderCode === item.code ? 'active' : ''}}" bindtap="onTraderChange"
+              data-code="{{item.code}}" data-name="{{item.name}}">
               {{item.name}}
             </view>
           </view>
@@ -292,26 +296,20 @@
       <view class="sub-filter-bar">
         <view class="filter-row top-row">
           <view class="sub-filters">
-            <view class="sub-filter-item {{subFilter === '全部' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="全部">全部</view>
-            <view class="sub-filter-item {{subFilter === '持仓' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="持仓">持仓</view>
-            <view class="sub-filter-item {{subFilter === '沪深' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="沪深">沪深</view>
-            <view class="sub-filter-item {{subFilter === '指数' ? 'active' : ''}}" bindtap="onSubFilterChange" data-filter="指数">指数</view>
-            <scroll-view
-              class="top-groups {{topGroupAnimationClass}}"
-              scroll-x
-              show-scrollbar="{{false}}"
-              wx:if="{{topGroups.length > 0}}"
-            >
+            <view class="sub-filter-item {{subFilter === '全部' ? 'active' : ''}}" bindtap="onSubFilterChange"
+              data-filter="全部">全部</view>
+            <view class="sub-filter-item {{subFilter === '持仓' ? 'active' : ''}}" bindtap="onSubFilterChange"
+              data-filter="持仓">持仓</view>
+            <view class="sub-filter-item {{subFilter === '沪深' ? 'active' : ''}}" bindtap="onSubFilterChange"
+              data-filter="沪深">沪深</view>
+            <view class="sub-filter-item {{subFilter === '指数' ? 'active' : ''}}" bindtap="onSubFilterChange"
+              data-filter="指数">指数</view>
+            <scroll-view class="top-groups {{topGroupAnimationClass}}" scroll-x show-scrollbar="{{false}}"
+              wx:if="{{topGroups.length > 0}}">
               <view class="top-groups-inner">
-                <view
-                  class="sub-filter-item top-group-item {{activeGroupId === item.id ? 'active' : ''}}"
-                  wx:for="{{topGroups}}"
-                  wx:key="id"
-                  bindtap="onSwitchGroup"
-                  data-id="{{item.id}}"
-                  hover-class="top-group-item-hover"
-                  hover-stay-time="80"
-                >
+                <view class="sub-filter-item top-group-item {{activeGroupId === item.id ? 'active' : ''}}"
+                  wx:for="{{topGroups}}" wx:key="id" bindtap="onSwitchGroup" data-id="{{item.id}}"
+                  hover-class="top-group-item-hover" hover-stay-time="80">
                   <text class="top-group-name">{{item.name}}</text>
                   <text class="top-group-count-inline">({{groupCountsById[item.id] || 0}})</text>
                 </view>
@@ -341,16 +339,36 @@
         </view>
       </view>
 
-      <!-- 搜索框 -->
+      <!-- 搜索框（自选Tab支持输入搜索） -->
       <view class="search-bar">
-        <view class="search-input-box" bindtap="onSearchStock">
+        <view class="search-input-box-active">
           <text class="search-icon">🔍</text>
-          <text class="search-placeholder">搜索标的</text>
+          <input class="search-input" placeholder="搜索自选股票" value="{{watchlistSearchKeyword}}"
+            bindinput="onWatchlistSearch" confirm-type="search" />
+          <text class="clear-icon" wx:if="{{watchlistSearchKeyword}}" bindtap="clearWatchlistSearch">×</text>
+        </view>
+      </view>
+
+      <!-- 自选空状态引导 -->
+      <view class="empty-state-container" wx:if="{{showEmptyState && !loading}}" style="background: transparent">
+        <view class="empty-icon">
+          <text class="empty-icon-text">📋</text>
+        </view>
+        <view class="empty-text">
+          <text class="empty-title">暂无自选股票</text>
+          <text class="empty-desc">添加感兴趣的股票，实时跟踪期权报价</text>
+        </view>
+
+        <view class="empty-guide" style="background: transparent">
+          <text class="guide-text" style="background: antiquewhite">💡 如何添加自选？</text>
+          <text class="guide-step" style="position: relative; left: 0rpx; top: -8rpx">1. 点击上方搜索框</text>
+          <text class="guide-step">2. 输入股票代码或名称</text>
+          <text class="guide-step">3. 点击股票卡片，选择"加入自选"</text>
         </view>
       </view>
 
       <!-- 数据表格 -->
-      <view class="data-table">
+      <view class="data-table" wx:if="{{!showEmptyState}}">
         <view class="table-header">
           <view class="th col-check" wx:if="{{isEditing}}"></view>
           <view class="th col-name">标的|代码</view>
@@ -378,7 +396,8 @@
             </view>
           </block>
           <block wx:else>
-            <view class="table-row" wx:for="{{optionQuotes}}" wx:key="id" bindtap="openOrderModal" data-quote="{{item}}">
+            <view class="table-row" wx:for="{{optionQuotes}}" wx:key="id" bindtap="openOrderModal"
+              data-quote="{{item}}">
               <view class="td col-name">
                 <text class="option-type">{{item.optionType}}</text>
                 <text class="option-term">{{item.expiryTerm}}</text>
@@ -403,7 +422,7 @@
           编辑自选
         </view>
       </view>
-      
+
       <view class="bottom-btns" wx:if="{{isEditing}}">
         <view class="btn-outline gray" bindtap="cancelEditing">
           取消
@@ -419,7 +438,8 @@
   </scroll-view>
 
   <!-- 数据说明弹窗 -->
-  <view class="modal-mask {{modalAnimationClass}}" wx:if="{{showDataModal}}" bindtap="hideDataInfo" catchtouchmove="preventTouchMove">
+  <view class="modal-mask {{modalAnimationClass}}" wx:if="{{showDataModal}}" bindtap="hideDataInfo"
+    catchtouchmove="preventTouchMove">
     <view class="modal-container" catchtap="stopBubble">
       <view class="modal-header">
         <text class="modal-title">数据说明</text>
@@ -444,36 +464,37 @@
         <text class="hs-title">分组管理</text>
         <view class="hs-close" bindtap="closeGroupManagePopup">×</view>
       </view>
-      
+
       <scroll-view scroll-y class="hs-content">
         <!-- 系统分组 -->
         <view class="group-section-title">系统分组</view>
         <view class="group-list">
-          <view class="group-item {{activeGroupId === item.id ? 'active' : ''}}" 
-                wx:for="{{systemGroups}}" wx:key="id" 
-                bindtap="onSwitchGroup" data-id="{{item.id}}">
+          <view class="group-item {{activeGroupId === item.id ? 'active' : ''}}" wx:for="{{systemGroups}}" wx:key="id"
+            bindtap="onSwitchGroup" data-id="{{item.id}}">
             <text class="group-name">{{item.name}}</text>
             <text class="group-count">{{groupCountsById[item.id] || 0}}</text>
           </view>
         </view>
-        
+
         <!-- 自定义分组 -->
         <view class="group-section-header">
           <text class="group-section-title">自定义分组</text>
           <view class="add-group-btn" bindtap="onShowNewGroupDialog">+ 新建分组</view>
         </view>
-        
+
         <view class="group-list custom">
           <view class="group-item-custom" wx:for="{{customGroups}}" wx:key="id">
-             <view class="group-info-area" bindtap="onSwitchGroup" data-id="{{item.id}}">
-                <text class="group-name {{activeGroupId === item.id ? 'active-text' : ''}}">{{item.name}}</text>
-                <text class="group-count">{{groupCountsById[item.id] || 0}}</text>
-             </view>
-             <view class="group-actions">
-                <view class="action-btn more {{item._protected ? 'disabled' : ''}}" catchtap="onOpenGroupActions" data-id="{{item.id}}" data-name="{{item.name}}" data-protected="{{item._protected}}" aria-label="分组操作" role="button">⋯</view>
-             </view>
+            <view class="group-info-area" bindtap="onSwitchGroup" data-id="{{item.id}}">
+              <text class="group-name {{activeGroupId === item.id ? 'active-text' : ''}}">{{item.name}}</text>
+              <text class="group-count">{{groupCountsById[item.id] || 0}}</text>
+            </view>
+            <view class="group-actions">
+              <view class="action-btn more {{item._protected ? 'disabled' : ''}}" catchtap="onOpenGroupActions"
+                data-id="{{item.id}}" data-name="{{item.name}}" data-protected="{{item._protected}}" aria-label="分组操作"
+                role="button">⋯</view>
+            </view>
           </view>
-          
+
           <view class="empty-tip" wx:if="{{customGroups.length === 0}}">
             暂无自定义分组
           </view>
@@ -486,7 +507,8 @@
   <view class="dialog-mask" wx:if="{{showNewGroupDialog}}">
     <view class="dialog-box">
       <view class="dialog-title">新建分组</view>
-      <input class="dialog-input" placeholder="请输入分组名称" value="{{newGroupName}}" bindinput="onNewGroupNameInput" maxlength="10" focus="{{showNewGroupDialog}}" />
+      <input class="dialog-input" placeholder="请输入分组名称（最多20字）" value="{{newGroupName}}" bindinput="onNewGroupNameInput"
+        maxlength="20" focus="{{showNewGroupDialog}}" />
       <view class="error-text">{{newGroupError}}</view>
       <view class="dialog-btns">
         <view class="d-btn cancel" bindtap="onCloseNewGroupDialog">取消</view>
@@ -499,7 +521,8 @@
   <view class="dialog-mask" wx:if="{{showRenameGroupDialog}}">
     <view class="dialog-box">
       <view class="dialog-title">重命名分组</view>
-      <input class="dialog-input" placeholder="请输入新名称" value="{{editingGroupName}}" bindinput="onRenameGroupNameInput" maxlength="10" focus="{{showRenameGroupDialog}}" />
+      <input class="dialog-input" placeholder="请输入新名称（最多20字）" value="{{editingGroupName}}"
+        bindinput="onRenameGroupNameInput" maxlength="20" focus="{{showRenameGroupDialog}}" />
       <view class="error-text">{{renameGroupError}}</view>
       <view class="dialog-btns">
         <view class="d-btn cancel" bindtap="onCloseRenameGroupDialog">取消</view>
@@ -512,7 +535,7 @@
   <view class="dialog-mask" wx:if="{{showDeleteGroupDialog}}">
     <view class="dialog-box">
       <view class="dialog-title">确认删除分组</view>
-      <view class="delete-dialog-desc">您确定要删除该分组吗？</view>
+      <view class="delete-dialog-desc">您确定要删除分组"{{deleteGroupName}}"吗？</view>
       <view class="delete-dialog-checkbox-row" bindtap="onToggleDeleteRemoveFavorites">
         <view class="delete-checkbox {{deleteRemoveFavorites ? 'checked' : ''}}"></view>
         <view class="delete-checkbox-text">同时将分组内产品移出自选列表</view>
@@ -525,66 +548,71 @@
   </view>
 
   <!-- 下单弹窗 -->
-  <view class="modal-mask {{showOrderModal ? 'fade-in' : ''}}" wx:if="{{showOrderModal}}" bindtap="closeOrderModal" catchtouchmove="preventTouchMove">
+  <view class="modal-mask {{showOrderModal ? 'fade-in' : ''}}" wx:if="{{showOrderModal}}" bindtap="closeOrderModal"
+    catchtouchmove="preventTouchMove">
     <view class="order-modal-container" catchtap="stopBubble">
       <view class="modal-header">
         <text class="modal-title">下单</text>
         <view class="modal-close" bindtap="closeOrderModal">×</view>
       </view>
-      
+
       <scroll-view scroll-y class="modal-content">
         <view class="order-form">
           <view class="form-item">
             <text class="form-label">方向<text class="required">*</text></text>
-            <picker bindchange="changeDirection" value="{{orderForm.direction === '买入' ? 0 : 1}}" range="{{['买入', '卖出']}}">
+            <picker bindchange="changeDirection" value="{{orderForm.direction === '买入' ? 0 : 1}}"
+              range="{{['买入', '卖出']}}">
               <view class="form-select">
                 <text>{{orderForm.direction}}</text>
                 <text class="arrow">▼</text>
               </view>
             </picker>
           </view>
-          
+
           <view class="form-item">
             <text class="form-label">交易商</text>
             <view class="form-value">{{orderForm.traderName || 'ZJGJ'}}</view>
           </view>
-          
+
           <view class="form-item">
             <text class="form-label">标的资产</text>
             <view class="form-value">{{orderForm.underlying}}</view>
           </view>
-          
+
           <view class="form-item">
             <text class="form-label">结构期限</text>
             <view class="form-value">{{orderForm.structure}}</view>
           </view>
-          
+
           <view class="form-item">
             <text class="form-label">期权费率</text>
             <view class="form-input-wrap">
-              <input type="digit" class="form-input" value="{{orderForm.premiumPercent}}" bindinput="updateOrderField" data-field="premiumPercent" />
+              <input type="digit" class="form-input" value="{{orderForm.premiumPercent}}" bindinput="updateOrderField"
+                data-field="premiumPercent" />
               <text class="input-unit">%</text>
             </view>
           </view>
-          
+
           <view class="form-item">
             <text class="form-label">名义本金<text class="required">*</text></text>
             <view class="form-input-wrap">
-              <input type="digit" class="form-input" value="{{orderForm.notional}}" bindinput="updateOrderField" data-field="notional" />
+              <input type="digit" class="form-input" value="{{orderForm.notional}}" bindinput="updateOrderField"
+                data-field="notional" />
               <text class="input-unit">万元</text>
             </view>
           </view>
-          
+
           <view class="form-item">
             <text class="form-label">买入价格<text class="required">*</text></text>
             <view class="form-input-wrap">
-              <input type="digit" class="form-input" value="{{orderForm.buyPrice}}" placeholder="不输入默认为市价" bindinput="updateOrderField" data-field="buyPrice" />
+              <input type="digit" class="form-input" value="{{orderForm.buyPrice}}" placeholder="不输入默认为市价"
+                bindinput="updateOrderField" data-field="buyPrice" />
               <text class="input-unit">元</text>
             </view>
           </view>
         </view>
       </scroll-view>
-      
+
       <view class="modal-footer order-footer">
         <button class="modal-btn cancel-btn" bindtap="closeOrderModal">取消</button>
         <button class="modal-btn forward-btn" bindtap="confirmForwardText">转发文本</button>
@@ -594,6 +622,8 @@
   </view>
 
   <!-- 转发文本预览（画板，隐藏） -->
-  <canvas type="2d" id="forwardCanvas2d" style="width: 600px; height: 800px; position: fixed; left: -1000px; top: -1000px;"></canvas>
-  <canvas canvas-id="forwardCanvas" style="width: 600px; height: 800px; position: fixed; left: -1000px; top: -1000px;"></canvas>
+  <canvas type="2d" id="forwardCanvas2d"
+    style="width: 600px; height: 800px; position: fixed; left: -1000px; top: -1000px;"></canvas>
+  <canvas canvas-id="forwardCanvas"
+    style="width: 600px; height: 800px; position: fixed; left: -1000px; top: -1000px;"></canvas>
 </view>

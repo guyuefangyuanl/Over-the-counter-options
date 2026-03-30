@@ -1,2 +1,219 @@
 <!--subpackages/inquiry/inquiry/inquiry.wxml-->
-<text>subpackages/inquiry/inquiry/inquiry.wxml</text>
+<!-- 询价表单页面 - 现代化设计 -->
+
+<view class="page-container">
+  <!-- 自定义导航栏 -->
+  <view class="custom-navbar" style="padding-top: {{statusBarHeight}}px;">
+    <view class="navbar-title">提交询价</view>
+  </view>
+  <view class="navbar-placeholder" style="height: {{statusBarHeight + 44}}px;"></view>
+
+  <!-- 标的资产选择区 -->
+  <view class="section product-section">
+    <view class="section-header">
+      <text class="section-title">标的资产</text>
+      <text class="required-hint">*必选</text>
+    </view>
+
+    <view class="product-selector">
+      <view class="selected-product" wx:if="{{selectedProduct}}" bindtap="onProductSelect">
+        <view class="product-info">
+          <text class="product-name">{{selectedProduct.name}}</text>
+          <text class="product-code">{{selectedProduct.code}}</text>
+        </view>
+        <view class="product-price" wx:if="{{selectedProduct.price}}">
+          <text class="price-label">现价</text>
+          <text class="price-value">{{selectedProduct.price}}</text>
+        </view>
+        <van-icon name="clear" class="clear-icon" catchtap="onClearProduct" />
+      </view>
+
+      <view class="select-btn" wx:else bindtap="onProductSelect">
+        <van-icon name="search" size="18px" />
+        <text>选择标的资产</text>
+      </view>
+    </view>
+    
+    <text class="error-text" wx:if="{{formErrors.selectedProduct}}">{{formErrors.selectedProduct}}</text>
+  </view>
+
+  <!-- 期权参数配置区 -->
+  <view class="section params-section">
+    <view class="section-header">
+      <text class="section-title">期权参数</text>
+    </view>
+
+    <!-- 期权类型 -->
+    <view class="param-row">
+      <text class="param-label">期权类型</text>
+      <view class="option-group">
+        <view
+          class="option-item {{optionType === 'call' ? 'active' : ''}}"
+          data-value="call"
+          bindtap="onOptionTypeChange">
+          <text>看涨</text>
+        </view>
+        <view
+          class="option-item {{optionType === 'put' ? 'active' : ''}}"
+          data-value="put"
+          bindtap="onOptionTypeChange">
+          <text>看跌</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 结构类型 -->
+    <view class="param-row">
+      <text class="param-label">结构类型</text>
+      <view class="option-group structure-group">
+        <view
+          wx:for="{{structures}}"
+          wx:key="value"
+          class="option-item {{structure === item.value ? 'active' : ''}}"
+          data-value="{{item.value}}"
+          bindtap="onStructureChange">
+          <text>{{item.label}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 期限 -->
+    <view class="param-row">
+      <text class="param-label">期限</text>
+      <view class="option-group term-group">
+        <view
+          wx:for="{{terms}}"
+          wx:key="value"
+          class="option-item {{term === item.value ? 'active' : ''}}"
+          data-value="{{item.value}}"
+          bindtap="onTermChange">
+          <text>{{item.value}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 名义本金 -->
+    <view class="param-row input-row">
+      <text class="param-label">名义本金<text class="required-mark">*</text></text>
+      <view class="input-wrapper">
+        <input
+          class="param-input"
+          type="digit"
+          placeholder="请输入金额"
+          value="{{notionalAmount}}"
+          bindinput="onNotionalAmountInput" />
+        <text class="input-unit">万元</text>
+      </view>
+    </view>
+    <text class="error-text" wx:if="{{formErrors.notionalAmount}}">{{formErrors.notionalAmount}}</text>
+
+    <!-- 行权价 -->
+    <view class="param-row input-row">
+      <text class="param-label">行权价<text class="required-mark">*</text></text>
+      <view class="input-wrapper">
+        <input
+          class="param-input"
+          type="digit"
+          placeholder="50-200"
+          value="{{strikePrice}}"
+          bindinput="onStrikePriceInput" />
+        <text class="input-unit">%</text>
+      </view>
+    </view>
+    <text class="error-text" wx:if="{{formErrors.strikePrice}}">{{formErrors.strikePrice}}</text>
+  </view>
+
+  <!-- 交易商选择区 -->
+  <view class="section dealer-section">
+    <view class="section-header">
+      <text class="section-title">指定交易商</text>
+      <text class="optional-hint">可选</text>
+    </view>
+
+    <view class="dealer-list">
+      <view
+        wx:for="{{dealers}}"
+        wx:key="code"
+        class="dealer-item {{selectedDealers.indexOf(item.code) > -1 ? 'selected' : ''}}"
+        data-code="{{item.code}}"
+        bindtap="onDealerToggle">
+        <text class="dealer-name">{{item.name}}</text>
+        <van-icon wx:if="{{selectedDealers.indexOf(item.code) > -1}}" name="success" class="check-icon" />
+      </view>
+    </view>
+
+    <view class="dealer-actions">
+      <text class="action-link" bindtap="onSelectAllDealers">全部选择</text>
+      <text class="action-link" bindtap="onClearDealers">清空选择</text>
+    </view>
+  </view>
+
+  <!-- 联系信息区 -->
+  <view class="section contact-section">
+    <view class="section-header">
+      <text class="section-title">联系信息</text>
+    </view>
+
+    <!-- 联系人 -->
+    <view class="contact-row">
+      <text class="contact-label">联系人<text class="required-mark">*</text></text>
+      <input
+        class="contact-input"
+        placeholder="请输入姓名"
+        value="{{contactName}}"
+        bindinput="onContactNameInput" />
+    </view>
+    <text class="error-text" wx:if="{{formErrors.contactName}}">{{formErrors.contactName}}</text>
+
+    <!-- 手机号 -->
+    <view class="contact-row">
+      <text class="contact-label">手机号<text class="required-mark">*</text></text>
+      <input
+        class="contact-input"
+        type="number"
+        maxlength="11"
+        placeholder="请输入手机号"
+        value="{{contactPhone}}"
+        bindinput="onContactPhoneInput" />
+    </view>
+    <text class="error-text" wx:if="{{formErrors.contactPhone}}">{{formErrors.contactPhone}}</text>
+
+    <!-- 邮箱 -->
+    <view class="contact-row">
+      <text class="contact-label">邮箱</text>
+      <input
+        class="contact-input"
+        placeholder="请输入邮箱（可选）"
+        value="{{contactEmail}}"
+        bindinput="onContactEmailInput" />
+    </view>
+    <text class="error-text" wx:if="{{formErrors.contactEmail}}">{{formErrors.contactEmail}}</text>
+
+    <!-- 备注 -->
+    <view class="contact-row textarea-row">
+      <text class="contact-label">备注</text>
+      <textarea
+        class="contact-textarea"
+        placeholder="请输入备注信息（可选）"
+        value="{{notes}}"
+        bindinput="onNotesInput"
+        maxlength="200" />
+    </view>
+  </view>
+
+  <!-- 底部操作栏 -->
+  <view class="footer-actions">
+    <van-button class="cancel-btn" plain bindtap="onCancel">取消</van-button>
+    <van-button
+      class="submit-btn"
+      type="primary"
+      loading="{{submitting}}"
+      disabled="{{submitting}}"
+      bindtap="onSubmitInquiry">
+      提交询价
+    </van-button>
+  </view>
+</view>
+
+<!-- Toast 提示 -->
+<van-toast id="van-toast" />

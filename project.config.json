@@ -2,46 +2,154 @@
   "description": "场外期权交易小程序项目配置",
   "packOptions": {
     "ignore": [
-      { "type": "folder", "value": "node_modules" },
-      { "type": "folder", "value": ".venv" },
-      { "type": "folder", "value": ".git" },
-      { "type": "folder", "value": "__pycache__" },
-      { "type": "folder", "value": ".pytest_cache" },
-      { "type": "folder", "value": "admin-ui" },
-      { "type": "folder", "value": "cloudfunctions" },
-      { "type": "folder", "value": "backend_utils" },
-      { "type": "folder", "value": "routes" },
-      
-      { "type": "folder", "value": "models" },
-      { "type": "folder", "value": "tests" },
-      { "type": "folder", "value": "migrations" },
-      { "type": "folder", "value": "logs" },
-      { "type": "folder", "value": "temp_uploads" },
-      { "type": "folder", "value": "docs" },
-      { "type": "folder", "value": "scripts" },
-      { "type": "folder", "value": "deploy" },
-      { "type": "folder", "value": "option-api" },
-      { "type": "folder", "value": "option-trade-api" },
-      { "type": "folder", "value": "backend_api_examples" },
-      { "type": "folder", "value": "export-data" },
-      { "type": "folder", "value": "Over-the-counter-options" },
-      
-      { "type": "folder", "value": "plugins" },
-      { "type": "folder", "value": "preview" },
-      { "type": "folder", "value": "resources" },
-      { "type": "folder", "value": "typedefs" },
-      
-      { "type": "file", "value": "*.py" },
-      { "type": "file", "value": "*.xlsx" },
-      { "type": "file", "value": "*.xls" },
-      { "type": "file", "value": "*.rar" },
-      { "type": "file", "value": "*.db" },
-      { "type": "file", "value": "*.log" },
-      { "type": "file", "value": "*.json.snap" },
-      { "type": "file", "value": "mock_db.json" },
-      { "type": "file", "value": "package-lock.json" },
-      { "type": "file", "value": ".env*" },
-      { "type": "file", "value": "*.txt" }
+      {
+        "type": "folder",
+        "value": "node_modules"
+      },
+      {
+        "type": "folder",
+        "value": ".venv"
+      },
+      {
+        "type": "folder",
+        "value": ".git"
+      },
+      {
+        "type": "folder",
+        "value": "__pycache__"
+      },
+      {
+        "type": "folder",
+        "value": ".pytest_cache"
+      },
+      {
+        "type": "folder",
+        "value": "admin-ui"
+      },
+      {
+        "type": "folder",
+        "value": "cloudfunctions"
+      },
+      {
+        "type": "folder",
+        "value": "backend_utils"
+      },
+      {
+        "type": "folder",
+        "value": "routes"
+      },
+      {
+        "type": "folder",
+        "value": "models"
+      },
+      {
+        "type": "folder",
+        "value": "tests"
+      },
+      {
+        "type": "folder",
+        "value": "migrations"
+      },
+      {
+        "type": "folder",
+        "value": "logs"
+      },
+      {
+        "type": "folder",
+        "value": "temp_uploads"
+      },
+      {
+        "type": "folder",
+        "value": "docs"
+      },
+      {
+        "type": "folder",
+        "value": "scripts"
+      },
+      {
+        "type": "folder",
+        "value": "deploy"
+      },
+      {
+        "type": "folder",
+        "value": "option-api"
+      },
+      {
+        "type": "folder",
+        "value": "option-trade-api"
+      },
+      {
+        "type": "folder",
+        "value": "backend_api_examples"
+      },
+      {
+        "type": "folder",
+        "value": "export-data"
+      },
+      {
+        "type": "folder",
+        "value": "Over-the-counter-options"
+      },
+      {
+        "type": "folder",
+        "value": "plugins"
+      },
+      {
+        "type": "folder",
+        "value": "preview"
+      },
+      {
+        "type": "folder",
+        "value": "resources"
+      },
+      {
+        "type": "folder",
+        "value": "typedefs"
+      },
+      {
+        "type": "file",
+        "value": "*.py"
+      },
+      {
+        "type": "file",
+        "value": "*.xlsx"
+      },
+      {
+        "type": "file",
+        "value": "*.xls"
+      },
+      {
+        "type": "file",
+        "value": "*.rar"
+      },
+      {
+        "type": "file",
+        "value": "*.db"
+      },
+      {
+        "type": "file",
+        "value": "*.log"
+      },
+      {
+        "type": "file",
+        "value": "*.json.snap"
+      },
+      {
+        "type": "file",
+        "value": "mock_db.json"
+      },
+      {
+        "type": "file",
+        "value": "package-lock.json"
+      },
+      {
+        "type": "file",
+        "value": ".env*"
+      },
+      {
+        "type": "file",
+        "value": "*.txt"
+      }
     ],
     "include": []
   },

@@ -1,0 +1,175 @@
+{
+  "description": "股票期权测试数据表 - 用于小程序提交询价功能测试",
+  "generatedAt": "2026-03-28",
+  "version": "1.0.0",
+  "dataFormat": "符合中信中证资本期权报价表格式",
+
+  "stocks": [
+    {"code": "600519", "name": "贵州茅台", "market": "SH", "price": 1678.90, "change": -12.34, "changePercent": -0.73, "industry": "白酒"},
+    {"code": "000858", "name": "五粮液", "market": "SZ", "price": 128.45, "change": 2.67, "changePercent": 2.15, "industry": "白酒"},
+    {"code": "600036", "name": "招商银行", "market": "SH", "price": 35.67, "change": 1.23, "changePercent": 3.57, "industry": "银行"},
+    {"code": "601318", "name": "中国平安", "market": "SH", "price": 47.40, "change": 0.47, "changePercent": 1.00, "industry": "保险"},
+    {"code": "000001", "name": "平安银行", "market": "SZ", "price": 11.36, "change": 0.61, "changePercent": 5.68, "industry": "银行"},
+    {"code": "000002", "name": "万科A", "market": "SZ", "price": 8.92, "change": -0.15, "changePercent": -1.66, "industry": "房地产"},
+    {"code": "300750", "name": "宁德时代", "market": "SZ", "price": 186.85, "change": 3.16, "changePercent": 1.72, "industry": "新能源"},
+    {"code": "002594", "name": "比亚迪", "market": "SZ", "price": 236.25, "change": 6.62, "changePercent": 2.88, "industry": "汽车"},
+    {"code": "600900", "name": "长江电力", "market": "SH", "price": 28.50, "change": 0.35, "changePercent": 1.24, "industry": "电力"},
+    {"code": "601888", "name": "中国中免", "market": "SH", "price": 82.30, "change": -1.56, "changePercent": -1.86, "industry": "零售"},
+    {"code": "601012", "name": "隆基绿能", "market": "SH", "price": 23.45, "change": 0.58, "changePercent": 2.51, "industry": "光伏"},
+    {"code": "000333", "name": "美的集团", "market": "SZ", "price": 58.20, "change": -0.85, "changePercent": -1.44, "industry": "家电"},
+    {"code": "002415", "name": "海康威视", "market": "SZ", "price": 32.80, "change": 0.42, "changePercent": 1.29, "industry": "安防"},
+    {"code": "600009", "名称": "上海机场", "market": "SH", "price": 45.60, "change": 1.15, "changePercent": 2.58, "industry": "机场"},
+    {"code": "600276", "name": "恒瑞医药", "market": "SH", "price": 38.90, "change": -0.72, "changePercent": -1.82, "industry": "医药"}
+  ],
+
+  "etfs": [
+    {"code": "510050", "name": "上证50ETF", "market": "SH", "price": 2.445, "change": -0.016, "changePercent": -0.65},
+    {"code": "510300", "name": "沪深300ETF", "market": "SH", "price": 3.812, "change": 0.025, "changePercent": 0.66},
+    {"code": "510500", "name": "中证500ETF", "market": "SH", "price": 5.623, "change": 0.089, "changePercent": 1.60},
+    {"code": "159915", "name": "创业板ETF", "market": "SZ", "price": 2.156, "change": 0.032, "changePercent": 1.50},
+    {"code": "512880", "name": "证券ETF", "market": "SH", "price": 1.235, "change": 0.028, "changePercent": 2.31}
+  ],
+
+  "indices": [
+    {"code": "000001", "name": "上证指数", "price": 3420.35, "change": 12.48, "changePercent": 0.37},
+    {"code": "399001", "name": "深证成指", "price": 10856.24, "change": -45.67, "changePercent": -0.42},
+    {"code": "399006", "name": "创业板指", "price": 2198.76, "change": 8.93, "changePercent": 0.41},
+    {"code": "000300", "name": "沪深300", "price": 3521.12, "change": 5.12, "changePercent": 0.15},
+    {"code": "000016", "name": "上证50", "price": 2456.78, "change": -8.23, "changePercent": -0.33}
+  ],
+
+  "optionQuotes": [
+    {"underlyingCode": "600519", "underlyingName": "贵州茅台", "strategy": "香草", "direction": "看涨", "term": "1个月", "strikePercent": 100, "strikePrice": 1678.90, "premiumRate": 3.25, "impliedVolatility": 25.5, "delta": 0.50, "trader": "中信证券"},
+    {"underlyingCode": "600519", "underlyingName": "贵州茅台", "strategy": "香草", "direction": "看涨", "term": "3个月", "strikePercent": 100, "strikePrice": 1678.90, "premiumRate": 5.80, "impliedVolatility": 26.8, "delta": 0.50, "trader": "中信证券"},
+    {"underlyingCode": "600519", "underlyingName": "贵州茅台", "strategy": "香草", "direction": "看涨", "term": "6个月", "strikePercent": 105, "strikePrice": 1762.85, "premiumRate": 8.52, "impliedVolatility": 28.5, "delta": 0.45, "trader": "中信证券"},
+    {"underlyingCode": "600519", "underlyingName": "贵州茅台", "strategy": "香草", "direction": "看跌", "term": "3个月", "strikePercent": 95, "strikePrice": 1594.95, "premiumRate": 6.38, "impliedVolatility": 26.8, "delta": -0.35, "trader": "华泰财富"},
+    {"underlyingCode": "000858", "underlyingName": "五粮液", "strategy": "香草", "direction": "看涨", "term": "3个月", "strikePercent": 100, "strikePrice": 128.45, "premiumRate": 4.52, "impliedVolatility": 24.2, "delta": 0.50, "trader": "中信证券"},
+    {"underlyingCode": "000858", "underlyingName": "五粮液", "strategy": "香草", "direction": "看跌", "term": "3个月", "strikePercent": 95, "strikePrice": 122.03, "premiumRate": 3.18, "impliedVolatility": 23.5, "delta": -0.38, "trader": "银河瑞德"},
+    {"underlyingCode": "600036", "underlyingName": "招商银行", "strategy": "香草", "direction": "看涨", "term": "1个月", "strikePercent": 100, "strikePrice": 35.67, "premiumRate": 2.15, "impliedVolatility": 18.5, "delta": 0.52, "trader": "中信证券"},
+    {"underlyingCode": "600036", "underlyingName": "招商银行", "strategy": "香草", "direction": "看涨", "term": "3个月", "strikePercent": 100, "strikePrice": 35.67, "premiumRate": 3.85, "impliedVolatility": 19.2, "delta": 0.50, "trader": "华泰财富"},
+    {"underlyingCode": "300750", "underlyingName": "宁德时代", "strategy": "香草", "direction": "看涨", "term": "3个月", "strikePercent": 100, "strikePrice": 186.85, "premiumRate": 6.25, "impliedVolatility": 32.5, "delta": 0.50, "trader": "中金公司"},
+    {"underlyingCode": "300750", "underlyingName": "宁德时代", "strategy": "香草", "direction": "看涨", "term": "6个月", "strikePercent": 110, "strikePrice": 205.54, "premiumRate": 12.80, "impliedVolatility": 35.2, "delta": 0.42, "trader": "光大证券"},
+    {"underlyingCode": "002594", "underlyingName": "比亚迪", "strategy": "香草", "direction": "看涨", "term": "2个月", "strikePercent": 100, "strikePrice": 236.25, "premiumRate": 5.82, "impliedVolatility": 32.0, "delta": 0.48, "trader": "华泰财富"},
+    {"underlyingCode": "002594", "underlyingName": "比亚迪", "strategy": "香草", "direction": "看涨", "term": "3个月", "strikePercent": 105, "strikePrice": 248.06, "premiumRate": 8.45, "impliedVolatility": 33.5, "delta": 0.45, "trader": "中信证券"},
+    {"underlyingCode": "510050", "underlyingName": "上证50ETF", "strategy": "香草", "direction": "看涨", "term": "3个月", "strikePercent": 100, "strikePrice": 2.445, "premiumRate": 2.85, "impliedVolatility": 20.5, "delta": 0.50, "trader": "中信证券"},
+    {"underlyingCode": "510050", "underlyingName": "上证50ETF", "strategy": "雪球", "direction": "看涨", "term": "6个月", "strikePercent": 100, "strikePrice": 2.445, "knockOut": 105, "knockIn": 80, "couponRate": 15.0, "trader": "银河瑞德"},
+    {"underlyingCode": "000300", "underlyingName": "沪深300", "strategy": "香草", "direction": "看跌", "term": "1个月", "strikePercent": 95, "strikePrice": 3345.06, "premiumRate": 1.85, "impliedVolatility": 20.5, "delta": -0.28, "trader": "银河瑞德"}
+  ],
+
+  "sampleInquiries": [
+    {
+      "id": "INQ_TEST_001",
+      "selectedProduct": {"code": "600519", "name": "贵州茅台", "type": "stock", "price": 1678.90},
+      "optionType": "call",
+      "structure": "vanilla",
+      "term": "3M",
+      "notionalAmount": 500,
+      "strikePrice": "100",
+      "selectedDealers": ["zx", "ht"],
+      "contactName": "测试用户A",
+      "phone": "13800138001",
+      "contactEmail": "test_a@example.com",
+      "notes": "测试询价-茅台看涨香草期权",
+      "status": "pending",
+      "source": "miniprogram_test",
+      "createdAt": "2026-03-28T10:00:00.000Z"
+    },
+    {
+      "id": "INQ_TEST_002",
+      "selectedProduct": {"code": "510050", "name": "上证50ETF", "type": "etf", "price": 2.445},
+      "optionType": "put",
+      "structure": "snowball",
+      "term": "6M",
+      "notionalAmount": 1000,
+      "strikePrice": "100",
+      "selectedDealers": ["zg", "yh"],
+      "contactName": "测试用户B",
+      "phone": "13800138002",
+      "contactEmail": "test_b@example.com",
+      "notes": "测试询价-50ETF雪球期权",
+      "status": "pending",
+      "source": "miniprogram_test",
+      "createdAt": "2026-03-28T10:05:00.000Z"
+    },
+    {
+      "id": "INQ_TEST_003",
+      "selectedProduct": {"code": "300750", "name": "宁德时代", "type": "stock", "price": 186.85},
+      "optionType": "call",
+      "structure": "vanilla",
+      "term": "6M",
+      "notionalAmount": 2000,
+      "strikePrice": "110",
+      "selectedDealers": ["ht", "gd", "zx"],
+      "contactName": "测试用户C",
+      "phone": "13800138003",
+      "contactEmail": "",
+      "notes": "测试询价-宁德时代看涨期权",
+      "status": "pending",
+      "source": "miniprogram_test",
+      "createdAt": "2026-03-28T10:10:00.000Z"
+    },
+    {
+      "id": "INQ_TEST_004",
+      "selectedProduct": {"code": "000300", "name": "沪深300", "type": "index", "price": 3521.12},
+      "optionType": "put",
+      "structure": "vanilla",
+      "term": "1M",
+      "notionalAmount": 100,
+      "strikePrice": "95",
+      "selectedDealers": ["zx"],
+      "contactName": "测试用户D",
+      "phone": "13800138004",
+      "contactEmail": "test_d@example.com",
+      "notes": "测试询价-沪深300看跌短期期权",
+      "status": "pending",
+      "source": "miniprogram_test",
+      "createdAt": "2026-03-28T10:15:00.000Z"
+    },
+    {
+      "id": "INQ_TEST_005",
+      "selectedProduct": {"code": "002594", "name": "比亚迪", "type": "stock", "price": 236.25},
+      "optionType": "call",
+      "structure": "vanilla",
+      "term": "2M",
+      "notionalAmount": 300,
+      "strikePrice": "100",
+      "selectedDealers": ["yh", "gd"],
+      "contactName": "测试用户E",
+      "phone": "13800138005",
+      "contactEmail": "",
+      "notes": "测试询价-比亚迪平值看涨期权",
+      "status": "pending",
+      "source": "miniprogram_test",
+      "createdAt": "2026-03-28T10:20:00.000Z"
+    }
+  ],
+
+  "dealers": [
+    {"code": "zx", "name": "中信证券", "rating": "AAA"},
+    {"code": "ht", "name": "华泰财富", "rating": "AAA"},
+    {"code": "yh", "name": "银河瑞德", "rating": "AA"},
+    {"code": "gd", "name": "光大证券", "rating": "AA"},
+    {"code": "zg", "name": "中金公司", "rating": "AAA"}
+  ],
+
+  "optionConfigs": {
+    "optionTypes": [
+      {"value": "call", "label": "看涨"},
+      {"value": "put", "label": "看跌"}
+    ],
+    "structures": [
+      {"value": "vanilla", "label": "香草期权"},
+      {"value": "snowball", "label": "雪球期权"},
+      {"value": "phoenix", "label": "凤凰期权"}
+    ],
+    "terms": [
+      {"value": "1M", "label": "1个月", "days": 30},
+      {"value": "2M", "label": "2个月", "days": 60},
+      {"value": "3M", "label": "3个月", "days": 90},
+      {"value": "6M", "label": "6个月", "days": 180},
+      {"value": "12M", "label": "12个月", "days": 365}
+    ],
+    "strikePriceRange": {"min": 50, "max": 200, "default": 100, "unit": "%"},
+    "notionalAmountRange": {"min": 100, "max": 100000, "default": 100, "unit": "万元"}
+  }
+}

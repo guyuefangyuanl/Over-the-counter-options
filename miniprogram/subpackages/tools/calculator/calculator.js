@@ -64,8 +64,9 @@ Page({
 
   // 跳转到标的物选择页面
   onUnderlyingTap: function() {
+    // 修正：使用分包正确路径
     wx.navigateTo({
-      url: '/pages/search/search?target=underlying'
+      url: '/subpackages/quotes/search/search?target=underlying'
     });
   },
 

@@ -12,8 +12,8 @@ Page({
       vipId: '',
       memberType: '会员',
       openid: '',
-      role: 'guest',  // 用户角色
-      isGuest: true   // 是否是游客/只读用户
+      role: 'guest',
+      isGuest: true
     },
     userStatistics: {
       totalInquiries: 0,
@@ -25,46 +25,43 @@ Page({
       {
         id: 'member',
         title: '会员合作',
-        icon: 'member',
-        path: '/pages/member/member',
-        showArrow: true,
-        devMode: false
+        iconSrc: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTIgMkMxMy4wOSA4IDIwIDlMMTMuMDkgMTUuNzRMMTIgMjJMMTAuOTEgMTUuNzRMNCA5TDEwLjkxIDhMMTIgMloiIHN0cm9rZT0iIzQwOUVGRiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=',
+        path: '/subpackages/user/member/member',
+        showArrow: true
       },
       {
         id: 'profile',
         title: '个人信息',
-        icon: 'profile',
-        path: '/pages/user-info/user-info',
-        showArrow: true,
-        devMode: false
+        iconSrc: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIwIDIxVjE5QTQgNCAwIDAgMCAxNiAxNUg4QTQgNCAwIDAgMCA0IDE5VjIxIiBzdHJva2U9IiM0MDlFRkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iNyIgcj0iNCIgc3Ryb2tlPSIjNDA5RUZGIiBzdHJva2Utd2lkdGg9IjIiLz4KPC9zdmc+',
+        path: '/subpackages/user/user-info/user-info',
+        showArrow: true
       },
       {
         id: 'orders',
         title: '我的订单',
-        icon: 'orders',
-        path: '/pages/orders/orders',
-        showArrow: true,
-        devMode: false
-      },
-      {
-        id: 'service',
-        title: '联系客服',
-        icon: 'service',
-        action: 'callService',
+        iconSrc: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3QgeD0iMyIgeT0iNCIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgc3Ryb2tlPSIjNDA5RUZGIiBzdHJva2Utd2lkdGg9IjIiLz4KPGxpbmUgeDE9IjE2IiB5MT0iMiIgeDI9IjE2IiB5Mj0iNiIgc3Ryb2tlPSIjNDA5RUZGIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8bGluZSB4MT0iOCIgeTE9IjIiIHgyPSI4IiB5Mj0iNiIgc3Ryb2tlPSIjNDA5RUZGIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8bGluZSB4MT0iMyIgeTE9IjEwIiB4Mj0iMjEiIHkyPSIxMCIgc3Ryb2tlPSIjNDA5RUZGIiBzdHJva2Utd2lkdGg9IjIiLz4KPC9zdmc+',
+        path: '/subpackages/user/orders/orders',
         showArrow: true
       },
       {
         id: 'inquiry-history',
         title: '询价记录',
-        icon: 'history',
-        path: '/pages/inquiry-history/inquiry-history',
+        iconSrc: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDhWMTJMMTUgMTUiIHN0cm9rZT0iIzQwOUVGRiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iOSIgc3Ryb2tlPSIjNDA5RUZGIiBzdHJva2Utd2lkdGg9IjIiLz4KPC9zdmc+',
+        path: '/subpackages/user/inquiry-history/inquiry-history',
+        showArrow: true
+      },
+      {
+        id: 'service',
+        title: '联系客服',
+        iconSrc: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIxIDExLjVDMjEgMTYuMTkgMTcuMTkgMjAgMTIuNSAyMEM3LjgxIDIwIDQgMTYuMTkgNCAxMS41QzQgNi44MSA3LjgxIDMgMTIuNSAzQzE3LjE5IDMgMjEgNi44MSAyMSAxMS41WiIgc3Ryb2tlPSIjNDA5RUZGIiBzdHJva2Utd2lkdGg9IjIiLz4KPHBhdGggZD0iTTggMTRDOC41NTIzIDE0IDkgMTMuNTUyMyA5IDEzQzkgMTIuNDQ3NyA4LjU1MjMgMTIgOCAxMkM3LjQ0NzcgMTIgNyAxMi40NDc3IDcgMTNDNyAxMy41NTIzIDcuNDQ3NyAxNCA4IDE0WiIgZmlsbD0iIzQwOUVGRiIvPgo8cGF0aCBkPSJNMTYgMTRDMTYuNTUyMyAxNCAxNyAxMy41NTIzIDE3IDEzQzE3IDEyLjQ0NzcgMTYuNTUyMyAxMiAxNiAxMkMxNS40NDc3IDEyIDE1IDEyLjQ0NzcgMTUgMTNDMTUgMTMuNTUyMyAxNS40NDc3IDE0IDE2IDE0WiIgZmlsbD0iIzQwOUVGRiIvPgo8cGF0aCBkPSJNOSAxOEM5LjUgMTguNSAxMSAxOSAxMi41IDE5QzE0IDE5IDE1LjUgMTguNSAxNiAxOCIgc3Ryb2tlPSIjNDA5RUZGIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4=',
+        action: 'callService',
         showArrow: true
       },
       {
         id: 'suggestion',
         title: '功能建议',
-        icon: 'suggestion',
-        path: '/pages/feedback/feedback',
+        iconSrc: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTUuMDkgOC4yNkwyMiA5TDE2IDEzTDE3LjE4IDIwTDEyIDE2LjM1TDYuODIgMjBMOCAxM0wyIDlMOC45MSA4LjI2TDEyIDJaIiBzdHJva2U9IiM0MDlFRkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPg==',
+        path: '/subpackages/user/feedback/feedback',
         showArrow: true
       }
     ],
@@ -147,7 +144,7 @@ Page({
         // 同步到本地存储（保留完整的用户信息，包括 role）
         const existingUserInfo = wx.getStorageSync('userInfo') || {};
         wx.setStorageSync('userInfo', {
-          ...existingUserInfo,  // 保留已有字段（如 loginTime, loginType 等）
+          ...existingUserInfo,
           nickname: userData.nickname || userData.username,
           avatar: userData.avatar,
           vipLevel: userData.vipLevel || 'V1',
@@ -238,7 +235,6 @@ Page({
 
   // 获取系统信息
   getSystemInfo: function() {
-    // 使用新的API替代已废弃的wx.getSystemInfo
     Promise.all([
       new Promise(resolve => {
         wx.getSystemSetting({
@@ -421,7 +417,7 @@ Page({
           // 清除本地存储
           wx.removeStorageSync('userInfo');
           wx.removeStorageSync('token');
-          wx.removeStorageSync('refresh_token');  // 统一使用下划线格式
+          wx.removeStorageSync('refresh_token');
 
           this.setData({
             'userInfo.isLoggedIn': false,
@@ -534,17 +530,10 @@ Page({
       '/pages/feedback/feedback',
       '/pages/agreement/user-agreement',
       '/pages/agreement/privacy-policy',
-      '/pages/inquiry/inquiry',
-      '/pages/position/position',
-      '/pages/search/search',
-      '/pages/search-stock/search-stock',
-      '/pages/stock-detail/stock-detail',
-      '/pages/account/account',
-      '/pages/workbench/workbench',
-      '/pages/quote/quote',
-      '/pages/chart/chart',
-      '/pages/data-explanation/data-explanation',
-      '/pages/option-matrix/option-matrix'
+      '/subpackages/user/inquiry-history/inquiry-history',
+      '/subpackages/user/position-history/position-history',
+      '/subpackages/quotes/stock-detail/stock-detail',
+      '/subpackages/quotes/search/search'
     ];
     return existingPages.includes(path);
   },

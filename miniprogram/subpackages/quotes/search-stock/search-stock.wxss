@@ -1,8 +1,9 @@
-/* 搜索股票页面样式 */
+/* 搜索股票页面样式 - 优化版 */
 .search-stock-container {
   min-height: 100vh;
   background-color: #f5f5f5;
-  padding-top: 20rpx;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 顶部搜索栏 */
@@ -12,6 +13,9 @@
   padding: 20rpx 30rpx;
   background-color: #ffffff;
   border-bottom: 1rpx solid #e5e5e5;
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
 .search-input-wrapper {
@@ -20,24 +24,27 @@
   align-items: center;
   background-color: #f5f5f5;
   border-radius: 30rpx;
-  padding: 0 20rpx;
-  height: 60rpx;
+  padding: 0 24rpx;
+  height: 72rpx;
   margin-right: 20rpx;
+}
+
+.search-icon-icon {
+  margin-right: 12rpx;
 }
 
 .search-input {
   flex: 1;
   font-size: 28rpx;
   color: #333333;
-  border: none;
-  background: transparent;
-  outline: none;
 }
 
-.search-icon {
-  font-size: 32rpx;
+.search-placeholder {
   color: #999999;
-  margin-left: 10rpx;
+}
+
+.search-clear {
+  padding: 10rpx;
 }
 
 .cancel-btn {
@@ -46,10 +53,49 @@
   white-space: nowrap;
 }
 
+/* 搜索历史 */
+.search-history {
+  background-color: #ffffff;
+  padding: 24rpx 30rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.history-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333333;
+}
+
+.history-clear {
+  font-size: 24rpx;
+  color: #999999;
+}
+
+.history-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.history-tag {
+  background-color: #f5f5f5;
+  padding: 12rpx 24rpx;
+  border-radius: 30rpx;
+  font-size: 24rpx;
+  color: #666666;
+}
+
 /* 搜索结果 */
 .search-results {
+  flex: 1;
   background-color: #ffffff;
-  min-height: calc(100vh - 120rpx);
 }
 
 .stock-item {
@@ -59,6 +105,7 @@
   padding: 30rpx;
   border-bottom: 1rpx solid #f0f0f0;
   background-color: #ffffff;
+  transition: background-color 0.2s;
 }
 
 .stock-item:active {
@@ -78,7 +125,7 @@
 }
 
 .stock-code {
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #999999;
 }
 
@@ -98,12 +145,54 @@
   font-size: 26rpx;
 }
 
-.up {
-  color: #ff3b30;
+/* 加载状态 */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100rpx 0;
 }
 
-.down {
-  color: #30b767;
+.loading-spinner {
+  width: 48rpx;
+  height: 48rpx;
+  border: 4rpx solid #e0e0e0;
+  border-top-color: #007aff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 20rpx;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 26rpx;
+  color: #999999;
+}
+
+.load-more {
+  display: flex;
+  justify-content: center;
+  padding: 30rpx 0;
+}
+
+.load-more-text {
+  font-size: 24rpx;
+  color: #999999;
+}
+
+.no-more {
+  display: flex;
+  justify-content: center;
+  padding: 30rpx 0;
+}
+
+.no-more-text {
+  font-size: 24rpx;
+  color: #cccccc;
 }
 
 /* 空状态 */
@@ -134,12 +223,19 @@
 }
 
 /* 热门股票 */
+.hot-stocks-container {
+  flex: 1;
+  background-color: #ffffff;
+}
+
 .hot-stocks {
   background-color: #ffffff;
-  margin-top: 20rpx;
 }
 
 .hot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 30rpx;
   border-bottom: 1rpx solid #f0f0f0;
 }
@@ -150,6 +246,11 @@
   color: #333333;
 }
 
+.hot-subtitle {
+  font-size: 24rpx;
+  color: #999999;
+}
+
 .hot-list {
   padding: 0 30rpx;
 }
@@ -157,8 +258,8 @@
 .hot-item {
   display: flex;
   justify-content: space-between;
-  align-items: center; /* 垂直居中 */
-  padding: 30rpx 0;
+  align-items: center;
+  padding: 28rpx 0;
   border-bottom: 1rpx solid #f0f0f0;
 }
 
@@ -170,67 +271,56 @@
   background-color: #f5f5f5;
 }
 
-.stock-left {
+.hot-left {
   display: flex;
   flex-direction: column;
-  align-items: center; /* 左侧内容居中对齐 */
-  width: 200rpx; /* 固定宽度 */
+  min-width: 200rpx;
 }
 
 .hot-name {
-  font-size: 36rpx; /* 放大名字 */
+  font-size: 30rpx;
   font-weight: 600;
   color: #333333;
   margin-bottom: 8rpx;
 }
 
 .hot-code-tag {
-  font-size: 24rpx;
-  color: #666;
+  font-size: 22rpx;
+  color: #666666;
   background-color: #f0f2f5;
-  padding: 2rpx 12rpx;
+  padding: 4rpx 12rpx;
   border-radius: 8rpx;
+  display: inline-block;
+  width: fit-content;
 }
 
-.stock-right-center {
+.hot-center {
+  flex: 1;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 1; /* 占据剩余空间 */
+  justify-content: center;
 }
 
-.all-tag {
-  font-size: 20rpx;
-  color: #ccc;
-  margin-bottom: 4rpx;
+.hot-price {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #333333;
 }
 
-.hot-percent {
-  font-size: 40rpx; /* 放大百分比 */
-  font-weight: bold;
-  margin-bottom: 4rpx;
+.hot-right {
+  min-width: 120rpx;
+  text-align: right;
 }
 
 .hot-change {
-  font-size: 24rpx;
-  font-weight: 500;
-  margin-bottom: 16rpx;
+  font-size: 28rpx;
+  font-weight: 600;
 }
 
-.hot-percent.up, .hot-change.up { color: #ff6b6b; } /* 红色 */
-.hot-percent.down, .hot-change.down { color: #30b767; } /* 绿色 */
+/* 涨跌颜色 */
+.up {
+  color: #ff3b30;
+}
 
-.add-btn {
-  width: 48rpx;
-  height: 48rpx;
-  background-color: #409eff; /* 蓝色圆圈 */
-  border-radius: 50%;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 36rpx;
-  font-weight: 300;
-  line-height: 1;
-  padding-bottom: 4rpx; /* 微调加号位置 */
+.down {
+  color: #34c759;
 }

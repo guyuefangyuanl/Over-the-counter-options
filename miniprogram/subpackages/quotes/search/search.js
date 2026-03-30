@@ -1,37 +1,84 @@
 
 // pages/search/search.js
 const app = getApp();
+const { quotesDataManager } = require('../../../utils/quotes-data-manager.js');
 
-// 模拟异步获取建议
-const fetchSuggestions = (query) => {
-  console.log(`Fetching suggestions for: ${query}`);
-  return new Promise(resolve => {
-    setTimeout(() => {
-      if (query) {
-        resolve([
-          { id: 1, text: `${query} - 热门建议` },
-          { id: 2, text: `${query} - 相关产品` },
-          { id: 3, text: `${query} - 深度分析` },
-        ]);
-      } else {
-        resolve([]);
-      }
-    }, 200); // 模拟网络延迟
-  });
+// ================== 安全函数 ==================
+
+/**
+ * 转义正则表达式特殊字符（防止ReDoS攻击）
+ * @param {string} string 用户输入
+ * @returns {string} 转义后的安全字符串
+ */
+const escapeRegExp = (string) => {
+  if (!string) return '';
+  // 转义正则元字符: \ ^ $ . | ? * + ( ) [ ] { }
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
-// 模拟异步获取搜索结果
+/**
+ * 安全地构建正则搜索条件
+ * @param {string} query 用户输入
+ * @param {number} maxLength 最大长度限制
+ * @returns {string} 安全的正则模式
+ */
+const buildSafeRegex = (query, maxLength = 50) => {
+  if (!query) return '';
+  // 限制长度防止DoS
+  const trimmed = query.trim().slice(0, maxLength);
+  return escapeRegExp(trimmed);
+};
+
+// ================== 数据获取 ==================
+
+/**
+ * 获取搜索建议 - 接入真实数据源
+ */
+const fetchSuggestions = async (query) => {
+  console.log(`[搜索建议] 查询: ${query}`);
+  
+  if (!query || query.trim().length < 1) {
+    return [];
+  }
+  
+  try {
+    // 使用数据管理器获取真实的搜索建议
+    const suggestions = await quotesDataManager.getSearchSuggestions(query, 5);
+    
+    return suggestions.map((item, index) => ({
+      id: index,
+      code: item.code,
+      text: `${item.name} (${item.code})`,
+      name: item.name,
+      price: item.price,
+      changePercent: item.changePercent,
+      type: item.type
+    }));
+  } catch (error) {
+    console.error('[搜索建议] 获取失败:', error);
+    return [];
+  }
+};
+
+// 安全的数据库搜索
 const fetchResults = (query) => {
   console.log(`[搜索] 开始查询: ${query}`);
+  
+  // 安全处理用户输入
+  const safeQuery = buildSafeRegex(query);
+  if (!safeQuery) {
+    return Promise.resolve([]);
+  }
+  
   const db = wx.cloud.database();
   const _ = db.command;
   
-  // 支持代码、名称、拼音首字母 (假设数据库中有 pinyin 字段，如果没有则只搜代码和名称)
+  // 使用安全的正则模式进行搜索
   return db.collection('quotes')
     .where(_.or([
-      { code: db.RegExp({ regexp: query, options: 'i' }) },
-      { name: db.RegExp({ regexp: query, options: 'i' }) },
-      { pinyin: db.RegExp({ regexp: query, options: 'i' }) }
+      { code: db.RegExp({ regexp: safeQuery, options: 'i' }) },
+      { name: db.RegExp({ regexp: safeQuery, options: 'i' }) },
+      { pinyin: db.RegExp({ regexp: safeQuery, options: 'i' }) }
     ]))
     .limit(20)
     .get()
@@ -44,6 +91,10 @@ const fetchResults = (query) => {
         changePercent: item.changePercent,
         type: item.type || 'stock'
       }));
+    })
+    .catch(err => {
+      console.error('[搜索] 数据库查询失败:', err);
+      return [];
     });
 };
 
@@ -58,11 +109,19 @@ Page({
     isLoading: false, // 是否正在加载
     isNoResult: false, // 是否无结果
     historyVisible: true, // 历史记录是否可见
+    // 动态快速查询关键词
+    quickQueries: [
+      { type: 'otc', name: '沪深场外个股期权', keyword: '', enabled: true },
+      { type: 'vanilla', name: '香草期权', keyword: '', enabled: true },
+      { type: 'exchange', name: '沪深场内期权', keyword: '', enabled: true }
+    ]
   },
 
   // --- 生命周期 ---
   onLoad: function (options) {
     this.loadHistory();
+    // 加载动态快速查询关键词
+    this.loadQuickQueries();
     // 保存来源页面，用于后续跳转逻辑
     this.setData({ 
       source: options.source || '',
@@ -169,21 +228,59 @@ Page({
     });
   },
 
-  // 快速查询
+  // 快速查询 - 支持动态关键词
   onQuickQuery: function (e) {
     const type = e.currentTarget.dataset.type;
     console.log('[快速查询] 类型:', type);
     
-    // 根据类型设置预设搜索词或直接跳转
-    let query = '';
-    switch(type) {
-      case 'otc': query = '场外个股'; break;
-      case 'vanilla': query = '香草'; break;
-      case 'exchange': query = '场内期权'; break;
-    }
+    // 从动态配置中获取关键词
+    const quickQuery = this.data.quickQueries.find(q => q.type === type);
     
-    if (query) {
+    if (quickQuery && quickQuery.enabled) {
+      // 如果有关键词配置，使用配置的关键词
+      const query = quickQuery.keyword || quickQuery.name;
       this.executeSearch(query);
+    } else {
+      // 降级：使用默认关键词
+      let query = '';
+      switch(type) {
+        case 'otc': query = '场外个股期权'; break;
+        case 'vanilla': query = '香草期权'; break;
+        case 'exchange': query = '场内期权'; break;
+      }
+      if (query) {
+        this.executeSearch(query);
+      }
+    }
+  },
+
+  // 加载动态快速查询关键词
+  loadQuickQueries: async function() {
+    try {
+      // 从云端获取热门关键词配置
+      const hotKeywords = await quotesDataManager.getHotKeywords(6);
+      
+      if (hotKeywords && hotKeywords.length > 0) {
+        // 更新快速查询配置
+        const quickQueries = this.data.quickQueries.map(q => {
+          // 根据类型匹配热门关键词
+          const matchedKeyword = hotKeywords.find(k => 
+            (q.type === 'otc' && (k.keyword.includes('场外') || k.type === 'otc')) ||
+            (q.type === 'vanilla' && (k.keyword.includes('香草') || k.type === 'vanilla')) ||
+            (q.type === 'exchange' && (k.keyword.includes('场内') || k.type === 'exchange'))
+          );
+          
+          return {
+            ...q,
+            keyword: matchedKeyword ? matchedKeyword.keyword : '',
+            enabled: true
+          };
+        });
+        
+        this.setData({ quickQueries });
+      }
+    } catch (error) {
+      console.warn('[快速查询] 加载动态关键词失败:', error);
     }
   },
 
@@ -240,8 +337,8 @@ Page({
     const price = item.price || '';
     const changePercent = item.changePercent || '';
 
-    // 跳转到股票详情页面
-    const url = `/pages/stock-detail/stock-detail?code=${encodedCode}&name=${encodedName}&price=${price}&changePercent=${changePercent}`;
+    // 跳转到股票详情页面（修正：使用分包正确路径）
+    const url = `/subpackages/quotes/stock-detail/stock-detail?code=${encodedCode}&name=${encodedName}&price=${price}&changePercent=${changePercent}`;
     console.log('[跳转] 目标URL:', url);
 
     wx.navigateTo({

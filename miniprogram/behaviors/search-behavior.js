@@ -61,10 +61,12 @@ module.exports = Behavior({
     },
 
     /**
-     * 搜索框获取焦点
+     * 搜索框获取焦点 - 跳转到搜索页面
      */
     onSearchFocus() {
-      this.setData({ showSearchResults: true });
+      wx.navigateTo({
+        url: '/subpackages/quotes/search/search'
+      });
     },
 
     /**

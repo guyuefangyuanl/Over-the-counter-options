@@ -71,6 +71,33 @@ const accountService = {
   // data: { closePrice, closeType: 'accounting' | 'order' }
   closePosition: (positionId, data) => {
     return api.post(`/trade/positions/${positionId}/close`, data, REALTIME_OPTIONS);
+  },
+
+  // ========== 登录历史记录 ==========
+
+  // 获取登录历史记录
+  getLoginHistory: (page = 1, pageSize = 10) => {
+    return api.get('/auth/login-history', { page, pageSize }, {}, REALTIME_OPTIONS);
+  },
+
+  // 获取登录统计信息
+  getLoginStats: (days = 30) => {
+    return api.get('/auth/login-history/stats', { days }, {}, REALTIME_OPTIONS);
+  },
+
+  // 获取登录设备列表
+  getSessions: () => {
+    return api.get('/auth/sessions', {}, {}, REALTIME_OPTIONS);
+  },
+
+  // 撤销指定设备
+  revokeSession: (sessionId) => {
+    return api.delete(`/auth/sessions/${sessionId}`, REALTIME_OPTIONS);
+  },
+
+  // 撤销所有其他设备
+  revokeAllSessions: () => {
+    return api.delete('/auth/sessions/all', REALTIME_OPTIONS);
   }
 };
 

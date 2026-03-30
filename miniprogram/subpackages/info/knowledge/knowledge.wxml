@@ -3,71 +3,128 @@
   <!-- 搜索栏 -->
   <view class="search-bar">
     <view class="search-input-wrap">
-      <image class="search-icon" src="/images/search.png" mode="aspectFit"></image>
-      <input 
-        class="search-input" 
-        placeholder="搜索文章" 
+      <text class="search-icon-text">🔍</text>
+      <input
+        class="search-input"
+        placeholder="搜索文章标题、摘要..."
+        placeholder-class="search-placeholder"
         value="{{searchKeyword}}"
         bindinput="onSearchInput"
         bindconfirm="onSearch"
+        confirm-type="search"
       />
+      <view class="search-clear" wx:if="{{searchKeyword}}" bindtap="onClearSearch">
+        <text>✕</text>
+      </view>
     </view>
   </view>
 
   <!-- 分类标签 -->
-  <scroll-view class="category-scroll" scroll-x="true">
+  <scroll-view class="category-scroll" scroll-x="true" enhanced="true" show-scrollbar="false">
     <view class="category-list">
-      <view 
-        class="category-item {{currentCategory === 0 ? 'active' : ''}}" 
-        data-id="{{0}}"
+      <view
+        class="category-item {{currentCategory === 'all' ? 'active' : ''}}"
+        data-id="all"
         bindtap="onCategoryChange"
       >
-        全部
+        <text class="category-text">全部</text>
+        <view class="category-count" wx:if="{{categoryCounts.all > 0}}">{{categoryCounts.all}}</view>
       </view>
-      <view 
-        class="category-item {{currentCategory === item.id ? 'active' : ''}}" 
-        wx:for="{{categories}}" 
-        wx:key="id"
-        data-id="{{item.id}}"
+      <view
+        class="category-item {{currentCategory === item.category ? 'active' : ''}}"
+        wx:for="{{categories}}"
+        wx:key="category"
+        data-id="{{item.category}}"
         bindtap="onCategoryChange"
       >
-        {{item.name}}
+        <text class="category-text">{{item.name}}</text>
+        <view class="category-count" wx:if="{{categoryCounts[item.category] > 0}}">{{categoryCounts[item.category]}}</view>
       </view>
     </view>
   </scroll-view>
 
-  <!-- 文章列表 -->
-  <view class="article-list" wx:if="{{!loading}}">
-    <view 
-      class="article-card" 
-      wx:for="{{articles}}" 
-      wx:key="id"
-      data-id="{{item.id}}"
-      bindtap="onArticleTap"
-    >
-      <view class="article-header">
-        <text class="article-title">{{item.title}}</text>
-        <text class="article-category">{{item.category}}</text>
-      </view>
-      <view class="article-summary">{{item.summary}}</view>
-      <view class="article-footer">
-        <view class="article-stats">
-          <text class="stat-item">{{item.views}} 阅读</text>
-          <text class="stat-item">{{item.likes}} 点赞</text>
-        </view>
-        <text class="article-time">{{item.createTime}}</text>
+  <!-- 搜索结果提示 -->
+  <view class="search-result-tip" wx:if="{{searchKeyword && !loading}}">
+    <text class="result-text">找到 <text class="highlight">{{filteredArticles.length}}</text> 篇相关文章</text>
+    <view class="clear-filter" bindtap="onClearSearch">清除搜索</view>
+  </view>
+
+  <!-- 加载中骨架屏 -->
+  <view class="skeleton-list" wx:if="{{loading}}">
+    <view class="skeleton-card" wx:for="{{3}}" wx:key="index">
+      <view class="skeleton-cover"></view>
+      <view class="skeleton-content">
+        <view class="skeleton-tag"></view>
+        <view class="skeleton-title"></view>
+        <view class="skeleton-summary"></view>
+        <view class="skeleton-meta"></view>
       </view>
     </view>
   </view>
 
-  <!-- 加载中 -->
-  <view class="loading-wrap" wx:if="{{loading}}">
-    <view class="loading-text">加载中...</view>
+  <!-- 文章列表 -->
+  <view class="article-list" wx:elif="{{filteredArticles.length > 0}}">
+    <view
+      class="article-card"
+      wx:for="{{filteredArticles}}"
+      wx:key="id"
+      data-id="{{item.id}}"
+      bindtap="onArticleTap"
+    >
+      <!-- 封面图 -->
+      <view class="article-cover-wrap" wx:if="{{item.cover}}">
+        <image
+          class="article-cover"
+          src="{{item.cover}}"
+          mode="aspectFill"
+          lazy-load="{{true}}"
+        />
+      </view>
+
+      <!-- 文章内容 -->
+      <view class="article-body">
+        <view class="article-header">
+          <view class="article-category-tag">{{item.categoryName}}</view>
+          <view class="article-views" wx:if="{{item.views}}">
+            <text class="views-icon">👁</text>
+            <text class="views-num">{{item.views}}</text>
+          </view>
+        </view>
+
+        <text class="article-title">{{item.title}}</text>
+
+        <text class="article-summary" wx:if="{{item.summary}}">{{item.summary}}</text>
+
+        <view class="article-footer">
+          <text class="article-date">{{item.date}}</text>
+          <view class="article-action">
+            <text class="action-text">阅读全文</text>
+            <text class="action-arrow">›</text>
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
 
   <!-- 空状态 -->
-  <view class="empty-state" wx:if="{{!loading && articles.length === 0}}">
-    <image class="empty-icon" src="/images/empty.png" mode="aspectFit"></image>
-    <text class="empty-text">暂无文章</text>
+  <view class="empty-state" wx:elif="{{!loading && filteredArticles.length === 0}}">
+    <text class="empty-icon">📚</text>
+    <text class="empty-title">{{searchKeyword ? '未找到相关文章' : '暂无文章'}}</text>
+    <text class="empty-desc">{{searchKeyword ? '试试其他关键词吧' : '敬请期待更多精彩内容'}}</text>
+    <view class="empty-action" wx:if="{{searchKeyword}}" bindtap="onClearSearch">
+      <text>清除搜索</text>
+    </view>
+  </view>
+
+  <!-- 底部加载更多 -->
+  <view class="load-more-wrap" wx:if="{{hasMore && !loading}}">
+    <view class="load-more-btn" bindtap="onLoadMore">
+      <text>加载更多</text>
+    </view>
+  </view>
+
+  <!-- 底部提示 -->
+  <view class="bottom-tip" wx:if="{{!hasMore && filteredArticles.length > 0 && !loading}}">
+    <text>— 已展示全部内容 —</text>
   </view>
 </view>

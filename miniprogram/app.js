@@ -396,15 +396,21 @@ App({
         alerts: alerts
       };
 
-      // 发送到后端
+      // 发送到后端（静默模式，不显示错误提示）
       if (api && api.request) {
-        api.request('/performance/metrics', 'POST', payload).catch(function(err) {
-          console.warn('同步性能数据失败:', err);
+        api.request('/performance/metrics', 'POST', payload, {}, {
+          silent: true,
+          suppressErrorLog: true,
+          suppressRetryLog: true,
+          retries: 0  // 性能监控不需要重试
+        }).catch(function(err) {
+          // 静默处理错误，仅在网络恢复后下次再同步
+          // 避免频繁打印错误日志
         });
       }
 
     } catch (e) {
-      console.error('同步性能数据失败:', e);
+      // 静默处理，不影响主流程
     }
   },
 

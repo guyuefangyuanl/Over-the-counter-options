@@ -70,11 +70,15 @@ module.exports = {
   <!-- 列表区域 -->
   <scroll-view scroll-y class="list-wrapper" enable-flex="true">
     <block wx:for="{{inquiryList}}" wx:key="_id">
-      <view class="inquiry-card" hover-class="card-hover" bindtap="goDetail" data-id="{{item._id}}">
+      <view class="inquiry-card" hover-class="card-hover">
         <view class="card-top">
-          <view class="card-product">
-            <text class="product-name">{{item.productName || (item.selectedProduct.name) || '--'}}</text>
-            <text class="product-code">{{item.productCode || (item.selectedProduct.code) || ''}}</text>
+          <view class="card-product" 
+                bindtap="goStockDetail" 
+                data-product-code="{{item.productCode || (item.selectedProduct && item.selectedProduct.code) || ''}}"
+                data-product-name="{{item.productName || (item.selectedProduct && item.selectedProduct.name) || ''}}">
+            <text class="product-name">{{item.productName || (item.selectedProduct && item.selectedProduct.name) || '--'}}</text>
+            <text class="product-code">{{item.productCode || (item.selectedProduct && item.selectedProduct.code) || ''}}</text>
+            <text class="view-stock-hint">查看标的</text>
           </view>
           <van-tag plain color="{{utils.statusColor(item.status)}}">{{utils.formatStatus(item.status)}}</van-tag>
         </view>
@@ -100,7 +104,10 @@ module.exports = {
 
         <view class="card-bottom">
           <text class="card-time">{{utils.formatTime(item.createdAt)}}</text>
-          <van-icon name="arrow" size="14px" color="#c0c4cc" />
+          <view class="card-actions">
+            <view class="action-btn" catchtap="goDetail" data-id="{{item._id}}">查看详情</view>
+            <van-icon name="arrow" size="14px" color="#c0c4cc" />
+          </view>
         </view>
       </view>
     </block>

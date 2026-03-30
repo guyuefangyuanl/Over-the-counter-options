@@ -63,8 +63,7 @@ Page({
       { id: 2, name: '期权计算器', icon: '/images/calculator.png', path: '/pages/calculator/calculator' },
       { id: 3, name: '询价中心', icon: '/images/inquiry.png', path: '/pages/quotes/quotes' },
       { id: 4, name: '持仓管理', icon: '/images/position.png', path: '/pages/account/account' },
-      { id: 5, name: '市场分析', icon: '/images/analysis.png', path: '/pages/analysis/analysis' },
-      { id: 6, name: '资讯中心', icon: '/images/news.png', path: '/pages/news/news' },
+      { id: 5, name: '资讯中心', icon: '/images/news.png', path: '/pages/news/news' },
     ],
     showRefreshAnimation: false
   },
@@ -234,13 +233,6 @@ Page({
     });
   },
 
-  // 查看市场详情
-  viewMarketDetail: function () {
-    wx.navigateTo({
-      url: '/pages/market/market'
-    });
-  },
-
   // 查看交易记录
   viewTransactionHistory: function () {
     wx.navigateTo({
@@ -252,13 +244,6 @@ Page({
   riskManagement: function () {
     wx.navigateTo({
       url: '/pages/risk/risk'
-    });
-  },
-
-  // 资产分析
-  assetAnalysis: function () {
-    wx.navigateTo({
-      url: '/pages/analysis/analysis'
     });
   },
 

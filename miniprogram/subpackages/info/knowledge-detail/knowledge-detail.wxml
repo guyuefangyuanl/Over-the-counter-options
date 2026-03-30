@@ -3,61 +3,91 @@
   <!-- 页面头部 -->
   <view class="page-header">
     <view class="back-btn" bindtap="goBack">
-      <image src="/images/back.png" class="back-icon" mode="aspectFit"/>
+      <text class="back-icon">‹</text>
     </view>
     <text class="page-title">文章详情</text>
-    <view class="share-btn" bindtap="onShare">
-      <text class="share-icon">↗️</text>
+    <view class="header-actions">
+      <view class="action-btn" bindtap="onCollect">
+        <text class="action-icon {{isCollected ? 'collected' : ''}}">{{isCollected ? '⭐' : '☆'}}</text>
+      </view>
+      <view class="action-btn" bindtap="onShare">
+        <text class="action-icon share">↗</text>
+      </view>
     </view>
   </view>
 
   <!-- 加载状态 -->
   <view class="loading-container" wx:if="{{loading}}">
-    <view class="loading-spinner"></view>
-    <text class="loading-text">加载中...</text>
+    <view class="loading-content">
+      <view class="loading-spinner"></view>
+      <text class="loading-text">加载中...</text>
+    </view>
   </view>
 
   <!-- 文章内容 -->
-  <scroll-view class="content-scroll" scroll-y="true" wx:else>
-    <view class="article-content">
-      <!-- 文章标题区 -->
+  <scroll-view class="content-scroll" scroll-y="true" enhanced="true" wx:else>
+    <view class="article-wrapper">
+      <!-- 文章头部 -->
       <view class="article-header">
-        <view class="category-tag">{{article.categoryName}}</view>
+        <view class="header-top">
+          <view class="category-tag">{{article.categoryName}}</view>
+          <view class="article-meta-right">
+            <view class="meta-item" wx:if="{{article.views}}">
+              <text class="meta-icon">👁</text>
+              <text class="meta-value">{{article.views}}</text>
+            </view>
+          </view>
+        </view>
+
         <text class="article-title">{{article.title}}</text>
+
         <view class="article-meta">
+          <text class="meta-author">期权知识库</text>
+          <text class="meta-dot">·</text>
           <text class="meta-date">{{article.date}}</text>
-          <text class="meta-views" wx:if="{{article.views}}">
-            <text class="meta-icon">👁</text> {{article.views}} 阅读
-          </text>
         </view>
       </view>
 
       <!-- 文章封面 -->
       <view class="article-cover" wx:if="{{article.cover}}">
-        <image src="{{article.cover}}" mode="widthFix" class="cover-image"/>
+        <image
+          src="{{article.cover}}"
+          mode="widthFix"
+          class="cover-image"
+          lazy-load="{{true}}"
+        />
       </view>
 
       <!-- 文章正文 -->
       <view class="article-body">
-        <rich-text nodes="{{article.content}}"></rich-text>
+        <rich-text nodes="{{article.content}}" class="rich-content"></rich-text>
       </view>
 
       <!-- 文章标签 -->
       <view class="article-tags" wx:if="{{article.tags && article.tags.length > 0}}">
-        <text class="tag-item" wx:for="{{article.tags}}" wx:key="index">{{item}}</text>
+        <view class="tags-title">相关标签</view>
+        <view class="tags-list">
+          <text class="tag-item" wx:for="{{article.tags}}" wx:key="index"># {{item}}</text>
+        </view>
       </view>
 
       <!-- 文章底部信息 -->
       <view class="article-footer">
         <view class="footer-divider"></view>
-        <text class="footer-text">本文仅供参考，不构成投资建议</text>
-        <text class="footer-date">更新时间：{{article.updateTime || article.date}}</text>
+        <view class="footer-content">
+          <text class="footer-icon">📋</text>
+          <text class="footer-text">本文仅供参考，不构成投资建议</text>
+        </view>
+        <text class="footer-update">更新时间：{{article.updateTime || article.date}}</text>
       </view>
     </view>
 
     <!-- 相关文章推荐 -->
     <view class="related-section" wx:if="{{relatedArticles.length > 0}}">
-      <view class="section-title">相关推荐</view>
+      <view class="section-header">
+        <text class="section-title">相关推荐</text>
+        <text class="section-more" bindtap="goBack">更多 ›</text>
+      </view>
       <view class="related-list">
         <view
           class="related-item"
@@ -67,11 +97,29 @@
           bindtap="onRelatedTap"
         >
           <view class="related-info">
+            <text class="related-category">{{item.categoryName || '期权知识'}}</text>
             <text class="related-title">{{item.title}}</text>
             <text class="related-date">{{item.date}}</text>
           </view>
-          <image wx:if="{{item.cover}}" src="{{item.cover}}" class="related-cover" mode="aspectFill"/>
+          <image
+            wx:if="{{item.cover}}"
+            src="{{item.cover}}"
+            class="related-cover"
+            mode="aspectFill"
+          />
         </view>
+      </view>
+    </view>
+
+    <!-- 外部链接提示 -->
+    <view class="external-link-section" wx:if="{{article.type === 'external'}}">
+      <view class="link-card" bindtap="onOpenExternal">
+        <view class="link-icon">🔗</view>
+        <view class="link-content">
+          <text class="link-title">在浏览器中查看完整内容</text>
+          <text class="link-desc">点击复制链接，在浏览器中粘贴打开</text>
+        </view>
+        <text class="link-arrow">›</text>
       </view>
     </view>
 
@@ -81,13 +129,13 @@
 
   <!-- 底部操作栏 -->
   <view class="bottom-bar" wx:if="{{!loading}}">
-    <view class="bar-item" bindtap="onLike">
-      <text class="bar-icon {{isLiked ? 'liked' : ''}}">{{isLiked ? '❤️' : '🤍'}}</text>
-      <text class="bar-text {{isLiked ? 'liked' : ''}}">{{article.likes || '点赞'}}</text>
+    <view class="bar-item {{isLiked ? 'active' : ''}}" bindtap="onLike">
+      <text class="bar-icon">{{isLiked ? '❤️' : '🤍'}}</text>
+      <text class="bar-text">{{article.likes || '点赞'}}</text>
     </view>
-    <view class="bar-item" bindtap="onCollect">
-      <text class="bar-icon {{isCollected ? 'collected' : ''}}">{{isCollected ? '⭐' : '☆'}}</text>
-      <text class="bar-text {{isCollected ? 'collected' : ''}}">{{isCollected ? '已收藏' : '收藏'}}</text>
+    <view class="bar-item {{isCollected ? 'active' : ''}}" bindtap="onCollect">
+      <text class="bar-icon">{{isCollected ? '⭐' : '☆'}}</text>
+      <text class="bar-text">{{isCollected ? '已收藏' : '收藏'}}</text>
     </view>
     <view class="bar-item" bindtap="onShare">
       <text class="bar-icon">↗️</text>

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 from bson import ObjectId
 import logging
@@ -287,6 +287,137 @@ class UserModel:
                 {'$set': updates}
             )
             return result.modified_count > 0
+
+    # --- Login History Methods ---
+    
+    def create_login_history(self, user_id: str, login_type: str, ip_address: str,
+                             device_info: Dict[str, Any] = None, location: Dict[str, Any] = None,
+                             status: str = 'success', user_agent: str = None) -> str:
+        """创建登录历史记录"""
+        now = datetime.utcnow()
+        
+        history_data = {
+            "user_id": user_id,
+            "login_type": login_type,  # wechat, phone, email, admin, guest
+            "login_time": now.isoformat() if self._is_cloud() else now,
+            "ip_address": ip_address,
+            "device_info": device_info or {},
+            "location": location or {},
+            "status": status,  # success, failed
+            "user_agent": user_agent or "",
+            "logout_time": None,
+            "session_duration": None,
+            "created_at": now.isoformat() if self._is_cloud() else now
+        }
+        
+        if self._is_cloud():
+            ids = self.cloud_client.add(collection="login_history", data=history_data)
+            return ids[0] if ids else None
+        else:
+            if self.db is not None:
+                result = self.db["login_history"].insert_one(history_data)
+                return str(result.inserted_id)
+            return None
+    
+    def get_login_history(self, user_id: str, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
+        """获取用户登录历史记录"""
+        if self._is_cloud():
+            query = f'db.collection("login_history").where({{user_id: "{user_id}"}}).orderBy("login_time", "desc").limit({limit}).skip({offset}).get()'
+            history = self.cloud_client.query(query)
+            for h in history:
+                if "_id" in h:
+                    h["_id"] = str(h["_id"])
+            return history
+        else:
+            if self.db is not None:
+                history = list(self.db["login_history"].find(
+                    {"user_id": user_id}
+                ).sort("login_time", -1).skip(offset).limit(limit))
+                for h in history:
+                    h["_id"] = str(h["_id"])
+                return history
+            return []
+    
+    def get_login_history_count(self, user_id: str) -> int:
+        """获取用户登录历史记录总数"""
+        if self._is_cloud():
+            query = f'db.collection("login_history").where({{user_id: "{user_id}"}}).count()'
+            return self.cloud_client.query(query) or 0
+        else:
+            if self.db is not None:
+                return self.db["login_history"].count_documents({"user_id": user_id})
+            return 0
+    
+    def update_login_history_logout(self, history_id: str, logout_time: datetime, session_duration: int):
+        """更新登录历史记录的登出时间和会话时长"""
+        if self._is_cloud():
+            where_js = json.dumps({"_id": history_id})
+            self.cloud_client.update_where(
+                collection="login_history",
+                where_js=where_js,
+                data={
+                    "logout_time": logout_time.isoformat(),
+                    "session_duration": session_duration
+                }
+            )
+        else:
+            if self.db is not None:
+                self.db["login_history"].update_one(
+                    {"_id": ObjectId(history_id)},
+                    {"$set": {
+                        "logout_time": logout_time,
+                        "session_duration": session_duration
+                    }}
+                )
+    
+    def get_recent_login_stats(self, user_id: str, days: int = 30) -> Dict[str, Any]:
+        """获取用户最近登录统计"""
+        now = datetime.utcnow()
+        start_time = now - timedelta(days=days)
+        
+        if self._is_cloud():
+            query = f'db.collection("login_history").where({{user_id: "{user_id}", login_time: _.gte("{start_time.isoformat()}")}}).get()'
+            records = self.cloud_client.query(query)
+        else:
+            if self.db is not None:
+                records = list(self.db["login_history"].find({
+                    "user_id": user_id,
+                    "login_time": {"$gte": start_time}
+                }))
+            else:
+                records = []
+        
+        # 统计信息
+        total_logins = len(records)
+        successful_logins = sum(1 for r in records if r.get('status') == 'success')
+        failed_logins = total_logins - successful_logins
+        
+        # 唯一IP数量
+        unique_ips = len(set(r.get('ip_address', '') for r in records))
+        
+        # 唯一设备数量
+        unique_devices = len(set(r.get('device_info', {}).get('name', '') for r in records))
+        
+        # 最近一次登录
+        last_login = records[0] if records else None
+        
+        # 常用登录方式
+        login_types = {}
+        for r in records:
+            login_type = r.get('login_type', 'unknown')
+            login_types[login_type] = login_types.get(login_type, 0) + 1
+        most_common_type = max(login_types.items(), key=lambda x: x[1])[0] if login_types else None
+        
+        return {
+            "total_logins": total_logins,
+            "successful_logins": successful_logins,
+            "failed_logins": failed_logins,
+            "unique_ips": unique_ips,
+            "unique_devices": unique_devices,
+            "last_login": last_login,
+            "most_common_login_type": most_common_type,
+            "period_days": days
+        }
 
     def update_balance(self, openid: str, amount_change: float) -> float:
         """

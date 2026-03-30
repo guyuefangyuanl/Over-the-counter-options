@@ -4,5 +4,7 @@
   "navigationBarTitleText": "期权报价",
   "enablePullDownRefresh": true,
   "backgroundColor": "#f5f5f5",
-  "backgroundTextStyle": "dark"
+  "backgroundTextStyle": "dark",
+  "navigationBarBackgroundColor": "#ffffff",
+  "navigationBarTextStyle": "black"
 }

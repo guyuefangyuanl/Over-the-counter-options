@@ -1,35 +1,106 @@
-/* pages/inquiry-history/inquiry-history.wxss */
+/* subpackages/user/inquiry-history/inquiry-history.wxss */
+/* ========================================
+   询价历史页面 - 现代化设计系统
+   ======================================== */
+
+/* ========== 设计系统变量 ========== */
+page {
+  /* 颜色系统 */
+  --color-primary: #1677ff;
+  --color-primary-light: #e6f4ff;
+  --color-primary-gradient: linear-gradient(135deg, #1677ff 0%, #4096ff 100%);
+  
+  --color-success: #52c41a;
+  --color-success-light: #f6ffed;
+  --color-warning: #faad14;
+  --color-warning-light: #fffbe6;
+  --color-danger: #ff4d4f;
+  --color-danger-light: #fff2f0;
+  
+  --color-rise: #cf1322;
+  --color-fall: #389e0d;
+  
+  /* 文字颜色 */
+  --color-text-primary: #1f1f1f;
+  --color-text-secondary: #595959;
+  --color-text-tertiary: #8c8c8c;
+  --color-text-quaternary: #bfbfbf;
+  
+  /* 背景与边框 */
+  --color-bg-container: #ffffff;
+  --color-bg-layout: #f5f7fa;
+  --color-border: #f0f0f0;
+  
+  /* 阴影 */
+  --shadow-sm: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4rpx 12rpx rgba(0, 0, 0, 0.08);
+  --shadow-primary: 0 4rpx 16rpx rgba(22, 119, 255, 0.24);
+  
+  /* 圆角 */
+  --radius-sm: 6rpx;
+  --radius-md: 12rpx;
+  --radius-lg: 16rpx;
+  --radius-xl: 24rpx;
+  --radius-full: 9999rpx;
+  
+  /* 字体 */
+  --font-size-xs: 22rpx;
+  --font-size-sm: 26rpx;
+  --font-size-base: 28rpx;
+  --font-size-md: 30rpx;
+  --font-size-lg: 34rpx;
+  
+  /* 间距 */
+  --spacing-xs: 8rpx;
+  --spacing-sm: 12rpx;
+  --spacing-md: 16rpx;
+  --spacing-lg: 24rpx;
+  --spacing-xl: 32rpx;
+  
+  /* 动画 */
+  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ========== 页面容器 ========== */
 .page-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  background-color: #f7f8fa;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f5f7fa 0%, #ffffff 100%);
 }
 
-/* 状态筛选 Tab */
+/* ========== 状态筛选 Tab ========== */
 .status-tabs {
-  background-color: #fff;
-  border-bottom: 1rpx solid #e5e5e5;
-  padding: 0 16rpx;
+  background: #fff;
+  padding: 0 var(--spacing-lg);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow-sm);
 }
 
 .tabs-scroll {
   white-space: nowrap;
-  height: 80rpx;
-  line-height: 80rpx;
+  height: 88rpx;
+  line-height: 88rpx;
+  display: flex;
 }
 
 .tab-item {
-  display: inline-block;
-  padding: 0 24rpx;
-  font-size: 28rpx;
-  color: #606266;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--spacing-lg);
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
   position: relative;
   font-weight: 500;
+  transition: all var(--transition-base);
 }
 
 .tab-item.is-active {
-  color: #409EFF;
+  color: var(--color-primary);
   font-weight: 600;
 }
 
@@ -37,121 +108,240 @@
   content: '';
   position: absolute;
   left: 50%;
-  bottom: 4rpx;
+  bottom: 12rpx;
   transform: translateX(-50%);
   width: 40rpx;
-  height: 4rpx;
-  background-color: #409EFF;
-  border-radius: 2rpx;
+  height: 6rpx;
+  background: var(--color-primary-gradient);
+  border-radius: 3rpx;
+  animation: tabIndicatorIn 0.25s ease-out;
 }
 
-/* 列表区域 */
+@keyframes tabIndicatorIn {
+  from { width: 0; opacity: 0; }
+  to { width: 40rpx; opacity: 1; }
+}
+
+/* ========== 列表区域 ========== */
 .list-wrapper {
   flex: 1;
-  padding: 16rpx 24rpx;
+  padding: var(--spacing-md) var(--spacing-lg);
 }
 
-/* 询价卡片 */
+/* ========== 询价卡片 ========== */
 .inquiry-card {
-  background-color: #fff;
-  border-radius: 12rpx;
-  padding: 24rpx;
-  margin-bottom: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  background: #fff;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
+  box-shadow: var(--shadow-sm);
+  border: 1rpx solid rgba(0, 0, 0, 0.03);
+  transition: all var(--transition-base);
+  position: relative;
+  overflow: hidden;
+}
+
+.inquiry-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 6rpx;
+  height: 100%;
+  background: var(--color-primary-gradient);
+  opacity: 0.6;
+  transition: opacity var(--transition-fast);
+}
+
+.inquiry-card:active {
+  box-shadow: var(--shadow-md);
+}
+
+.inquiry-card:active::before {
+  opacity: 1;
+  width: 8rpx;
 }
 
 .card-hover {
-  background-color: #f5f7fa;
+  background: var(--color-primary-light);
 }
 
+/* 卡片顶部 */
 .card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16rpx;
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1rpx solid var(--color-border);
 }
 
 .card-product {
   display: flex;
-  align-items: baseline;
-  gap: 12rpx;
+  align-items: center;
+  gap: var(--spacing-sm);
   flex: 1;
   min-width: 0;
 }
 
 .product-name {
-  font-size: 30rpx;
+  font-size: var(--font-size-md);
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .product-code {
-  font-size: 24rpx;
-  color: #909399;
+  font-size: var(--font-size-sm);
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  padding: 4rpx 12rpx;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
+  font-weight: 500;
 }
 
 /* 参数区域 */
 .card-params {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-  margin-bottom: 16rpx;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
 }
 
 .param-item {
   display: flex;
   flex-direction: column;
-  gap: 4rpx;
-  background: #f7f8fa;
-  border-radius: 8rpx;
-  padding: 10rpx 16rpx;
-  min-width: 130rpx;
-  flex: 1;
+  gap: 6rpx;
+  background: var(--color-bg-layout);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  transition: all var(--transition-fast);
+}
+
+.param-item:active {
+  transform: scale(0.98);
+  background: var(--color-primary-light);
 }
 
 .param-label {
-  font-size: 22rpx;
-  color: #909399;
-}
-
-.param-value {
-  font-size: 26rpx;
-  color: #303133;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
   font-weight: 500;
 }
 
-/* 底部 */
+.param-value {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 卡片底部 */
 .card-bottom {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-top: 1rpx solid #f0f0f0;
-  padding-top: 12rpx;
+  padding-top: var(--spacing-sm);
+  border-top: 1rpx solid var(--color-border);
 }
 
 .card-time {
-  font-size: 24rpx;
-  color: #c0c4cc;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-quaternary);
+  font-variant-numeric: tabular-nums;
 }
 
-/* 加载状态 */
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.action-btn {
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: var(--color-primary-light);
+  border-radius: var(--radius-full);
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.action-btn:active {
+  transform: scale(0.95);
+  background: var(--color-primary);
+  color: #fff;
+}
+
+/* 查看标的提示 */
+.view-stock-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  padding: 4rpx 12rpx;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.view-stock-hint:active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+/* ========== 加载状态 ========== */
 .load-more {
   display: flex;
   justify-content: center;
-  padding: 24rpx 0;
+  padding: var(--spacing-xl) 0;
 }
 
 .no-more {
   text-align: center;
-  padding: 24rpx 0;
-  font-size: 24rpx;
-  color: #c0c4cc;
+  padding: var(--spacing-xl) 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-quaternary);
 }
 
 .empty-wrapper {
-  padding: 80rpx 0;
+  padding: 100rpx 0;
+  display: flex;
+  justify-content: center;
+}
+
+/* ========== 动画效果 ========== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.inquiry-card {
+  animation: fadeInUp 0.4s ease-out backwards;
+}
+
+.inquiry-card:nth-child(1) { animation-delay: 0.05s; }
+.inquiry-card:nth-child(2) { animation-delay: 0.1s; }
+.inquiry-card:nth-child(3) { animation-delay: 0.15s; }
+.inquiry-card:nth-child(4) { animation-delay: 0.2s; }
+.inquiry-card:nth-child(5) { animation-delay: 0.25s; }
+
+/* ========== 响应式设计 ========== */
+@media screen and (max-width: 375px) {
+  .card-params {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .param-item {
+    min-width: 0;
+  }
 }

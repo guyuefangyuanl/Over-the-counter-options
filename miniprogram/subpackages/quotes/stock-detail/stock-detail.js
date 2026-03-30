@@ -1,12 +1,25 @@
-const OptionPricingSystem = require('../../utils/option-pricing.js');
-const api = require('../../utils/api.js');
-const { submitInquiry } = require('../../utils/inquiryService.js');
+/**
+ * 股票标的详情页面 - 优化版
+ * 
+ * 改进点：
+ * 1. 使用数据管理器统一管理数据加载
+ * 2. 智能缓存与请求去重
+ * 3. 下拉刷新支持
+ * 4. 改进的Canvas 2D API图片生成
+ * 5. 更好的加载状态和错误处理
+ * 6. 收藏功能优化
+ */
 
-const FAVORITES_STORAGE_KEY = 'INQUIRY_FAVORITES_V1';
-const CUSTOM_GROUPS_STORAGE_KEY = 'INQUIRY_CUSTOM_GROUPS_V1';
+const OptionPricingSystem = require('../../../utils/option-pricing.js');
+const api = require('../../../utils/api.js');
+const { submitInquiry } = require('../../../utils/inquiryService.js');
+const { FAVORITES_STORAGE_KEY, CUSTOM_GROUPS_STORAGE_KEY } = require('../../../utils/storage-keys.js');
+const favoritesService = require('../../../utils/favoritesService.js');
+const { quotesDataManager, QUOTES_TTL } = require('../../../utils/quotes-data-manager.js');
 
 Page({
   data: {
+    // 股票基本信息
     stock: {
       name: '平安银行',
       code: '000001.SZ',
@@ -14,36 +27,72 @@ Page({
       change: 0.07,
       changePercent: '0.61'
     },
+    
+    // 收藏状态
     isFavorite: false,
     showFavTooltip: false,
+    
+    // 搜索
     searchKeyword: '',
-    dateRange: ['请选择', '2024-12-19', '2024-12-18'],
+
+    // 筛选器（日期动态生成）
+    dateRange: ['请选择', (() => {
+      const now = new Date();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      return `${now.getFullYear()}-${month}-${day}`;
+    })(), (() => {
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const month = String(yesterday.getMonth() + 1).padStart(2, '0');
+      const day = String(yesterday.getDate()).padStart(2, '0');
+      return `${yesterday.getFullYear()}-${month}-${day}`;
+    })()],
     selectedDateIndex: 0,
     selectedDate: '请选择',
-    traderRange: ['请选择', '最优报价', '中信证券', '华泰财富', '银河瑞德', '亚洲证券'],
+    // 交易商使用缩写
+    traderRange: ['请选择', '最优报价', 'ZXZZ', 'HTCC', 'YHRD', 'YAZB'],
     selectedTraderIndex: 0,
     selectedTrader: '请选择',
+    
+    // Tab切换
     activeTab: 'vanilla',
     terms: ['2W', '1M', '2M', '3M', '6M', '12M'],
     matrixData: [],
+    
+    // 导航栏
     statusBarHeight: 20,
     navBarHeight: 44,
+    
+    // 弹窗状态
     showOrderModal: false,
     showGreeks: true,
+    showPreviewModal: false,
+    previewImage: '',
+    
+    // 下单表单
     orderForm: {
       direction: '买入',
-      trader: 'ZJGJ',
+      trader: 'ZXZZ', // 使用交易商缩写
       strike: '',
       term: '',
       rate: '',
       notional: 100,
       price: ''
     },
-    showPreviewModal: false,
-    previewImage: ''
+    
+    // === 新增：加载和刷新状态 ===
+    loading: false,
+    isPullRefreshing: false,
+    loadError: null,
+    lastUpdateTime: '',
+    
+    // === 新增：动画状态 ===
+    favAnimClass: '',
+    cellHighlightMap: {}  // 点击高亮效果
   },
 
   onLoad(options) {
+    // 获取系统信息
     const windowInfo = wx.getWindowInfo();
     this.setData({
       statusBarHeight: windowInfo.statusBarHeight,
@@ -52,8 +101,8 @@ Page({
 
     console.log('[股票详情] 接收参数:', options);
 
+    // 解析跳转参数
     if (options.code) {
-      // 对所有参数进行URL解码，确保正确处理编码后的中文等特殊字符
       const code = decodeURIComponent(options.code || '');
       const name = options.name ? decodeURIComponent(options.name) : '未知股票';
       const price = options.price || '--';
@@ -63,159 +112,317 @@ Page({
       console.log('[股票详情] 解码后参数:', { code, name, price, changePercent });
 
       this.setData({
-        stock: {
-          code,
-          name,
-          price,
-          change,
-          changePercent
-        }
+        stock: { code, name, price, change, changePercent }
       });
     }
 
+    // 检查收藏状态
     this.checkFavoriteStatus();
-    this.fetchQuotesFromCloud();
+    
+    // 加载期权矩阵数据
+    this.loadOptionMatrix();
+    
+    // 启动矩阵自动刷新（60秒间隔）
+    this._startMatrixAutoRefresh();
+  },
+  
+  onShow() {
+    // 页面显示时重新检查收藏状态
+    this.checkFavoriteStatus();
+    
+    // 如果矩阵刷新已停止，重新启动
+    if (!quotesDataManager.isMatrixAutoRefreshing()) {
+      this._startMatrixAutoRefresh();
+    }
+  },
+  
+  onHide() {
+    // 页面隐藏时停止自动刷新以节省资源
+    this._stopMatrixAutoRefresh();
+  },
+  
+  onUnload() {
+    // 清理资源
+    this._clearHighlightTimers();
+    
+    // 停止矩阵自动刷新
+    this._stopMatrixAutoRefresh();
+  },
+  
+  // 启动矩阵自动刷新
+  _startMatrixAutoRefresh() {
+    const { stock } = this.data;
+    quotesDataManager.startMatrixAutoRefresh(
+      stock,
+      (result) => {
+        if (result && result.data) {
+          this.setData({
+            matrixData: result.data,
+            lastUpdateTime: quotesDataManager.formatUpdateTime(Date.now())
+          });
+        }
+      },
+      60000 // 60秒刷新间隔
+    );
+  },
+  
+  // 停止矩阵自动刷新
+  _stopMatrixAutoRefresh() {
+    quotesDataManager.stopMatrixAutoRefresh();
+  },
+  
+  // 清理高亮定时器
+  _clearHighlightTimers() {
+    if (this._highlightTimers) {
+      this._highlightTimers.forEach(timer => clearTimeout(timer));
+      this._highlightTimers = null;
+    }
   },
 
+  // ==================== 收藏功能 ====================
+
   checkFavoriteStatus() {
-    const favoritesMap = wx.getStorageSync(FAVORITES_STORAGE_KEY) || {};
-    const isFavorite = !!favoritesMap[this.data.stock.code];
+    const isFavorite = favoritesService.isFavorite(this.data.stock.code);
     this.setData({ isFavorite });
   },
 
+  /**
+   * 切换收藏状态（优化版）
+   * 添加动画效果和更好的交互体验
+   */
   toggleFavorite() {
     const { stock, isFavorite } = this.data;
-    const favoritesMap = wx.getStorageSync(FAVORITES_STORAGE_KEY) || {};
-    
+
     if (isFavorite) {
       // 移除收藏
-      delete favoritesMap[stock.code];
-      wx.setStorageSync(FAVORITES_STORAGE_KEY, favoritesMap);
-      this.syncToOldFavorites(favoritesMap);
-      this.setData({ isFavorite: false });
-      wx.showToast({ 
-        title: '已从自选移除', 
-        icon: 'none', 
-        duration: 3000 
+      wx.showModal({
+        title: '移除确认',
+        content: `确定要将 ${stock.name} 从自选移除吗？\n移除后可在回收站恢复（7天内）`,
+        confirmText: '移除',
+        confirmColor: '#ff4d4f',
+        success: (res) => {
+          if (res.confirm) {
+            const result = favoritesService.removeFavorite(stock.code, { useRecycleBin: true });
+            if (result.success) {
+              // 添加移除动画
+              this.setData({ 
+                isFavorite: false, 
+                favAnimClass: 'fav-remove-anim' 
+              });
+              
+              setTimeout(() => {
+                this.setData({ favAnimClass: '' });
+              }, 300);
+              
+              wx.showToast({
+                title: result.message,
+                icon: 'success',
+                duration: 2000
+              });
+            } else {
+              wx.showToast({
+                title: result.message || '移除失败',
+                icon: 'none'
+              });
+            }
+          }
+        }
       });
     } else {
-      // 添加收藏逻辑
-      // 1. 自动归类逻辑
-      let defaultGroupId = 'all';
-      const code = stock.code;
-      if (code.startsWith('60') || code.startsWith('00') || code.startsWith('30')) {
-        defaultGroupId = 'hs'; // 归类到沪深
-      }
+      // 添加收藏
+      this._showAddFavoriteSheet(stock);
+    }
+  },
+  
+  /**
+   * 显示添加收藏的选择面板
+   * @private
+   */
+  _showAddFavoriteSheet(stock) {
+    // 自动归类逻辑
+    let defaultGroupId = 'all';
+    const code = stock.code;
+    if (code.startsWith('60') || code.startsWith('00') || code.startsWith('30')) {
+      defaultGroupId = 'hs';
+    }
 
-      // 2. 加载可用分组
-      const customGroups = wx.getStorageSync(CUSTOM_GROUPS_STORAGE_KEY) || [];
-      const groups = [
-        { id: 'all', name: '全部' },
-        { id: 'hs', name: '沪深' },
-        { id: 'holding', name: '我的持仓' },
-        ...customGroups
-      ];
+    // 加载可用分组
+    const customGroups = wx.getStorageSync(CUSTOM_GROUPS_STORAGE_KEY) || [];
+    const groups = [
+      { id: 'all', name: '全部' },
+      { id: 'hs', name: '沪深' },
+      { id: 'holding', name: '我的持仓' },
+      ...customGroups
+    ];
 
-      // 弹出分组选择（模拟编辑分组弹窗）
-      const itemList = groups.map(g => `移动到: ${g.name}`);
+    const itemList = groups.map(g => `移动到: ${g.name}`);
+
+    const executeAdd = (selectedGroupId) => {
+      const success = favoritesService.addFavorite({
+        code: stock.code,
+        name: stock.name,
+        price: stock.price,
+        changePercent: stock.changePercent,
+        groupId: selectedGroupId
+      });
       
-      const executeAdd = (selectedGroupId) => {
-        favoritesMap[stock.code] = {
-          groupId: selectedGroupId,
-          name: stock.name,
-          code: stock.code,
-          price: stock.price,
-          changePercent: stock.changePercent,
-          addedTime: Date.now()
-        };
-        wx.setStorageSync(FAVORITES_STORAGE_KEY, favoritesMap);
-        this.syncToOldFavorites(favoritesMap);
-        this.setData({ isFavorite: true });
+      if (success) {
+        // 添加成功动画
+        this.setData({ 
+          isFavorite: true, 
+          favAnimClass: 'fav-add-anim' 
+        });
+        
+        setTimeout(() => {
+          this.setData({ favAnimClass: '' });
+        }, 300);
+        
         wx.showToast({ title: '已添加到自选', icon: 'success' });
-      };
+      } else {
+        wx.showToast({ title: '添加失败或已存在', icon: 'none' });
+      }
+    };
 
-      wx.showActionSheet({
-        itemList: itemList,
-        success: (res) => {
-          executeAdd(groups[res.tapIndex].id);
-        },
-        fail: () => {
-          // 用户取消 ActionSheet 时，使用默认的自动归类分组
-          executeAdd(defaultGroupId);
+    wx.showActionSheet({
+      itemList: itemList,
+      success: (res) => {
+        executeAdd(groups[res.tapIndex].id);
+      },
+      fail: () => {
+        // 用户取消时使用默认分组
+        executeAdd(defaultGroupId);
+      }
+    });
+  },
+
+  // ==================== 数据加载 ====================
+
+  /**
+   * 加载期权矩阵数据（优化版）
+   * 使用数据管理器进行缓存和请求管理
+   */
+  async loadOptionMatrix(forceRefresh = false) {
+    const { stock, selectedTrader } = this.data;
+    
+    if (!stock || !stock.code) {
+      this.setData({ loadError: '股票信息不完整' });
+      return;
+    }
+    
+    this.setData({ loading: true, loadError: null });
+    
+    try {
+      // 使用数据管理器加载矩阵数据
+      const result = await quotesDataManager.loadStockDetailMatrix(stock, {
+        forceRefresh,
+        trader: selectedTrader === '请选择' ? 'ALL' : selectedTrader
+      });
+      
+      if (result && result.data) {
+        this.setData({
+          matrixData: result.data,
+          lastUpdateTime: quotesDataManager.formatUpdateTime(Date.now()),
+          loading: false
+        });
+        
+        // 如果是降级数据，显示提示
+        if (result.fallback) {
+          wx.showToast({
+            title: '使用参考数据',
+            icon: 'none',
+            duration: 2000
+          });
         }
+      } else {
+        throw new Error('数据加载失败');
+      }
+    } catch (error) {
+      console.error('[股票详情] 加载矩阵失败:', error);
+      
+      // 生成模拟数据作为降级方案
+      const mockMatrix = this._generateMockMatrix(stock);
+      this.setData({
+        matrixData: mockMatrix,
+        loading: false,
+        loadError: '加载失败，显示参考数据'
+      });
+      
+      wx.showToast({
+        title: '加载失败，显示参考数据',
+        icon: 'none',
+        duration: 2000
       });
     }
   },
-
-  // 同步到旧的数组格式存储，保持向下兼容
-  syncToOldFavorites(map) {
-    const list = Object.keys(map).map(id => ({
-      ...map[id],
-      id: id
-    }));
-    wx.setStorageSync('favorites', list);
-  },
-
-  fetchQuotesFromCloud() {
-    wx.showLoading({ title: '加载中...' });
-    const db = wx.cloud.database();
-    const { stock, selectedDate, selectedTrader } = this.data;
-
-    db.collection('quotes').where({
-      code: stock.code
-    }).get().then(res => {
-      wx.hideLoading();
-      if (res.data && res.data.length > 0) {
-        this.processQuotes(res.data);
-      } else {
-        // 没数据则生成模拟数据
-        this.generateMockMatrix();
-      }
-    }).catch(err => {
-      console.error('云函数调用失败', err);
-      wx.hideLoading();
-      this.generateMockMatrix();
-    });
-  },
-
-  processQuotes(data) {
-    // 这里根据云端返回的数据结构转换为矩阵
-    // 假设数据是一个数组，每个元素包含 strike, term, premiumPercent, delta 等
-    this.generateMockMatrix(); // 暂时用模拟逻辑，等确定结构再改
-  },
-
-  generateMockMatrix() {
-    const strikes = ['100C', '103C', '105C', '110C', '80C', '90C', '95C', '8080', '9090', '9070'];
+  
+  /**
+   * 生成模拟期权矩阵（降级方案）
+   * @private
+   */
+  _generateMockMatrix(stock) {
+    const strikes = ['100C', '103C', '105C', '110C', '90C', '95C'];
     const terms = this.data.terms;
     
-    // 模拟设计图中的真实数据
-    const mockData = {
-      '100C': { '1M': '3.65%', '2M': '5.16%', '3M': '6.16%', '6M': '8.97%' },
-      '103C': { '1M': '3.43%', '2M': '5.43%', '3M': '6.56%', '6M': '9.07%' },
-      '105C': { '1M': '2.22%', '2M': '3.75%', '3M': '4.78%', '6M': '7.76%' },
-      '110C': { '1M': '2.04%', '2M': '3.49%', '3M': '4.58%', '6M': '7.06%' },
-      '80C': { '1M': '20.45%', '2M': '21.14%', '3M': '21.68%', '6M': '23.34%' },
-      '90C': { '1M': '11.28%', '2M': '12.74%', '3M': '13.65%', '6M': '15.89%' },
-      '95C': {},
-      '8080': { '1M': '19.63%', '2M': '20.04%', '3M': '20.40%', '6M': '21.66%' },
-      '9090': { '1M': '10.89%', '2M': '12.19%', '3M': '13.01%', '6M': '15.05%' },
-      '9070': { '1M': '10.11%', '2M': '11.09%', '3M': '11.73%', '6M': '13.37%' }
-    };
-
-    const matrixData = strikes.map(strike => {
-      return {
-        strike,
-        values: terms.map(term => {
-          let value = '--';
-          if (mockData[strike] && mockData[strike][term]) {
-            value = mockData[strike][term];
-          }
-          return { term, value };
-        })
-      };
+    // 基于股票价格生成相对合理的期权费率
+    const basePrice = parseFloat(stock.price) || 50;
+    const volatility = 0.25 + Math.random() * 0.15;
+    
+    return strikes.map(strike => {
+      const strikeMultiplier = parseFloat(strike.replace(/[CP]/, '')) / 100;
+      const row = { strike, values: [] };
+      
+      terms.forEach(term => {
+        const termDays = this._getTermDays(term);
+        const T = termDays / 365;
+        
+        // 简化的期权费率计算
+        let baseRate = volatility * Math.sqrt(T) * 0.4;
+        if (strikeMultiplier > 1) {
+          baseRate *= (1 - (strikeMultiplier - 1) * 0.3);
+        } else if (strikeMultiplier < 1) {
+          baseRate *= (1 + (1 - strikeMultiplier) * 0.5);
+        }
+        
+        const value = `${(baseRate * 100).toFixed(2)}%`;
+        row.values.push({ term, value });
+      });
+      
+      return row;
     });
-    this.setData({ matrixData });
   },
+  
+  /**
+   * 获取期限对应天数
+   * @private
+   */
+  _getTermDays(term) {
+    const map = {
+      '2W': 14, '1M': 30, '2M': 60,
+      '3M': 90, '6M': 180, '12M': 365
+    };
+    return map[term] || 30;
+  },
+
+  // ==================== 下拉刷新 ====================
+
+  /**
+   * 下拉刷新
+   */
+  async onPullDownRefresh() {
+    this.setData({ isPullRefreshing: true });
+    
+    try {
+      await this.loadOptionMatrix(true);
+      wx.showToast({ title: '数据已更新', icon: 'success' });
+    } catch (error) {
+      wx.showToast({ title: '刷新失败', icon: 'none' });
+    } finally {
+      this.setData({ isPullRefreshing: false });
+      wx.stopPullDownRefresh();
+    }
+  },
+
+  // ==================== 交互事件 ====================
 
   onBack() {
     wx.navigateBack({
@@ -226,7 +433,7 @@ Page({
   },
 
   goToSearch() {
-    wx.navigateTo({ url: '/pages/search-stock/search-stock' });
+    wx.navigateTo({ url: '/subpackages/quotes/search/search' });
   },
 
   onClearSearch() {
@@ -239,7 +446,7 @@ Page({
       selectedDateIndex: idx,
       selectedDate: this.data.dateRange[idx]
     });
-    this.fetchQuotesFromCloud();
+    this.loadOptionMatrix(true);
   },
 
   onTraderChange(e) {
@@ -248,21 +455,39 @@ Page({
       selectedTraderIndex: idx,
       selectedTrader: this.data.traderRange[idx]
     });
-    this.fetchQuotesFromCloud();
+    this.loadOptionMatrix(true);
   },
 
   switchTab(e) {
     const tab = e.currentTarget.dataset.tab;
     this.setData({ activeTab: tab });
-    this.fetchQuotesFromCloud();
+    this.loadOptionMatrix();
   },
 
+  /**
+   * 点击矩阵单元格
+   * 添加点击高亮效果
+   */
   onCellTap(e) {
     const { strike, term } = e.currentTarget.dataset;
     const row = this.data.matrixData.find(r => r.strike === strike);
-    const cell = row.values.find(v => v.term === term);
+    const cell = row ? row.values.find(v => v.term === term) : null;
     
-    if (cell.value === '--') return;
+    if (!cell || cell.value === '--') return;
+
+    // 添加点击高亮效果
+    const cellKey = `${strike}_${term}`;
+    this.setData({
+      [`cellHighlightMap.${cellKey}`]: true
+    });
+    
+    // 延迟移除高亮
+    this._highlightTimers = this._highlightTimers || [];
+    this._highlightTimers.push(setTimeout(() => {
+      this.setData({
+        [`cellHighlightMap.${cellKey}`]: false
+      });
+    }, 200));
 
     this.setData({
       showOrderModal: true,
@@ -299,10 +524,108 @@ Page({
     this.setData({ 'orderForm.price': e.detail.value });
   },
 
+  // ==================== 图片生成（Canvas 2D API）====================
+
+  // ==================== 表单校验 ====================
+
+  /**
+   * 校验下单表单
+   * @returns {Object} { valid: boolean, errors: string[] }
+   */
+  _validateOrderForm() {
+    const { orderForm, stock } = this.data;
+    const errors = [];
+
+    // 1. 方向校验
+    if (!orderForm.direction || !['买入', '卖出'].includes(orderForm.direction)) {
+      errors.push('请选择买卖方向');
+    }
+
+    // 2. 交易商校验
+    if (!orderForm.trader || orderForm.trader === '请选择') {
+      errors.push('请选择交易商');
+    }
+
+    // 3. 标的资产校验
+    if (!stock || !stock.code) {
+      errors.push('标的资产信息不完整');
+    }
+
+    // 4. 结构期限校验
+    if (!orderForm.strike) {
+      errors.push('请选择期权结构');
+    }
+    if (!orderForm.term) {
+      errors.push('请选择期限');
+    }
+
+    // 5. 期权费率校验
+    const rate = parseFloat(orderForm.rate);
+    if (isNaN(rate)) {
+      errors.push('期权费率格式错误');
+    } else if (rate <= 0) {
+      errors.push('期权费率必须大于0');
+    } else if (rate > 100) {
+      errors.push('期权费率不能超过100%');
+    }
+
+    // 6. 名义本金校验（必填）
+    const notional = parseFloat(orderForm.notional);
+    if (!orderForm.notional || orderForm.notional.toString().trim() === '') {
+      errors.push('名义本金为必填项');
+    } else if (isNaN(notional)) {
+      errors.push('名义本金格式错误');
+    } else if (notional < 1) {
+      errors.push('名义本金不能小于1万元');
+    } else if (notional > 100000) {
+      errors.push('名义本金不能超过10亿元');
+    }
+
+    // 7. 买入价格校验（可选，但如果填写需校验格式）
+    if (orderForm.price && orderForm.price.toString().trim() !== '') {
+      const price = parseFloat(orderForm.price);
+      if (isNaN(price)) {
+        errors.push('买入价格格式错误');
+      } else if (price <= 0) {
+        errors.push('买入价格必须大于0');
+      } else if (price > 100000) {
+        errors.push('买入价格超出合理范围');
+      }
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors
+    };
+  },
+
+  /**
+   * 显示校验错误
+   * @param {string[]} errors 错误列表
+   */
+  _showValidationErrors(errors) {
+    wx.showModal({
+      title: '信息填写不完整',
+      content: errors.join('\n'),
+      showCancel: false,
+      confirmText: '去修改'
+    });
+  },
+
+  /**
+   * 提交询价并生成分享图片（带校验）
+   */
   async copyOrderText() {
+    // 表单校验
+    const validation = this._validateOrderForm();
+    if (!validation.valid) {
+      this._showValidationErrors(validation.errors);
+      return;
+    }
+
     const { stock, orderForm } = this.data;
     const priceText = orderForm.price ? `${orderForm.price}元` : '市价';
-    const text = `【下单申请】
+    const text = `【期权询价申请】
 方向: ${orderForm.direction}
 交易商: ${orderForm.trader}
 标的资产: ${stock.name} ${stock.code}
@@ -312,39 +635,140 @@ Page({
 买入价格: ${priceText}
 申请时间: ${new Date().toLocaleString()}`;
 
-    // 1. 复制文本到剪贴板
     wx.setClipboardData({
       data: text,
       success: () => {
-        wx.showToast({ title: '已复制下单文本', icon: 'success' });
-        // 2. 提交询价数据到云数据库
+        // 先提交询价数据
         this.submitInquiryToDatabase();
-        // 3. 生成图片并预览
-        this.generateOrderImage();
+        // 生成分享图片
+        this.generateOrderImageWithCanvas2D();
       }
     });
   },
 
-  // 提交询价数据到云数据库
+  /**
+   * 使用 Canvas 2D API 生成订单图片（新版API）
+   * 解决旧版Canvas API在某些机型上的兼容性问题
+   */
+  async generateOrderImageWithCanvas2D() {
+    wx.showLoading({ title: '生成图片中...' });
+    
+    try {
+      const { stock, orderForm } = this.data;
+      const dateStr = new Date().toLocaleDateString();
+      
+      // 获取 Canvas 2D 上下文
+      const query = wx.createSelectorQuery();
+      const res = await new Promise((resolve, reject) => {
+        query.select('#orderCanvas2d')
+          .fields({ node: true, size: true })
+          .exec((res) => {
+            if (res && res[0] && res[0].node) {
+              resolve(res[0]);
+            } else {
+              reject(new Error('Canvas节点获取失败'));
+            }
+          });
+      });
+      
+      const canvas = res.node;
+      const ctx = canvas.getContext('2d');
+      
+      // 设置画布尺寸
+      const dpr = wx.getWindowInfo().pixelRatio;
+      canvas.width = 375 * dpr;
+      canvas.height = 500 * dpr;
+      ctx.scale(dpr, dpr);
+      
+      // 绘制背景
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 375, 500);
+      
+      // 绘制标题栏
+      const headerColor = orderForm.direction === '买入' ? '#6fb2f9' : '#ff3b30';
+      ctx.fillStyle = headerColor;
+      ctx.fillRect(0, 0, 375, 50);
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '18px sans-serif';
+      ctx.fillText(orderForm.direction, 20, 32);
+      ctx.fillText(dateStr, 250, 32);
+      
+      // 绘制表格内容
+      let currentY = 50;
+      const drawRow = (y, label, value) => {
+        ctx.strokeStyle = '#eeeeee';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(375, y);
+        ctx.stroke();
+        
+        ctx.fillStyle = '#333333';
+        ctx.font = '16px sans-serif';
+        ctx.fillText(label, 20, y + 30);
+        
+        ctx.fillStyle = '#666666';
+        ctx.fillText(value, 120, y + 30);
+        
+        ctx.beginPath();
+        ctx.moveTo(110, y);
+        ctx.lineTo(110, y + 50);
+        ctx.stroke();
+      };
+      
+      drawRow(currentY, '交易商', orderForm.trader);
+      currentY += 50;
+      drawRow(currentY, '标的资产', `${stock.name} ${stock.code}`);
+      currentY += 50;
+      drawRow(currentY, '结构期限', `${orderForm.strike} - ${orderForm.term}`);
+      currentY += 50;
+      drawRow(currentY, '期权费率', `${orderForm.rate} %`);
+      currentY += 50;
+      drawRow(currentY, '名义本金', `${orderForm.notional} 万`);
+      currentY += 50;
+      drawRow(currentY, '买入价格', orderForm.price ? `${orderForm.price}元` : '市价');
+      currentY += 50;
+      
+      // 绘制底部色块
+      ctx.fillStyle = headerColor;
+      ctx.fillRect(0, currentY, 375, 50);
+      
+      // 生成图片
+      wx.canvasToTempFilePath({
+        canvas: canvas,
+        success: (res) => {
+          wx.hideLoading();
+          this.setData({
+            previewImage: res.tempFilePath,
+            showPreviewModal: true,
+            showOrderModal: false
+          });
+        },
+        fail: (err) => {
+          console.error('Canvas转图片失败:', err);
+          wx.hideLoading();
+          wx.showToast({ title: '图片生成失败', icon: 'none' });
+        }
+      });
+    } catch (error) {
+      console.error('生成图片失败:', error);
+      wx.hideLoading();
+      wx.showToast({ title: '图片生成失败', icon: 'none' });
+    }
+  },
+
+  /**
+   * 提交询价数据到云数据库
+   */
   submitInquiryToDatabase() {
     const { stock, orderForm } = this.data;
-    
-    // 获取用户信息
+
     const storedUserInfo = wx.getStorageSync('userInfo') || {};
-    const loginService = require('../../utils/loginService.js');
+    const loginService = require('../../../utils/loginService.js');
     const currentUser = loginService.getCurrentUser() || {};
-    
-    // 组合用户信息
-    const userInfo = {
-      ...storedUserInfo,
-      ...currentUser,
-      userId: currentUser.userId || storedUserInfo.userId || 'anonymous_' + Date.now(),
-      openid: currentUser.openid || storedUserInfo.openid || 'anonymous',
-      nickname: currentUser.nickName || storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || '匿名用户'
-    };
-    
-    // 从行权价字符串中提取期权类型和行权价
-    // 例如: "100C" -> optionType: "call", strikePrice: "100"
+
+    // 解析 strike 字符串，提取期权类型和行权价
     const strikeStr = orderForm.strike || '';
     let optionType = 'call';
     let strikePrice = '100';
@@ -355,150 +779,40 @@ Page({
       optionType = 'put';
       strikePrice = strikeStr.replace('P', '');
     }
-    
-    // 构造提交数据（与inquiry页面格式保持一致）
+
+    // 构造符合后端 API 期望的数据结构
     const submitData = {
       // 产品信息
-      selectedProduct: {
-        name: stock.name,
-        code: stock.code,
-        type: 'stock'
-      },
+      selectedProduct: { name: stock.name, code: stock.code, type: 'stock' },
       productName: stock.name,
       productCode: stock.code,
-      
+
       // 询价参数
-      optionType: optionType,
-      structure: 'vanilla',  // 默认香草期权
+      optionType,
+      structure: 'vanilla',
       term: orderForm.term || '1M',
-      notionalAmount: orderForm.notional || 100,
-      strikePrice: strikePrice,
+      notionalAmount: parseFloat(orderForm.notional) || 100,
+      strikePrice,
       selectedDealers: [orderForm.trader || 'ZJGJ'],
-      
-      // 询价详情
-      direction: orderForm.direction,
-      rate: orderForm.rate,
-      price: orderForm.price || '市价',
-      
-      // 联系信息（从用户信息或存储中获取）
-      contactName: storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || '转发用户',
-      phone: storedUserInfo.phone || '',
-      contactPhone: storedUserInfo.phone || '',
-      contactEmail: storedUserInfo.email || '',
+
+      // 联系信息（优先使用表单输入，其次使用存储的用户信息）
+      contactName: storedUserInfo.nickName || currentUser.nickName || '转发用户',
+      contactPhone: storedUserInfo.phone || currentUser.phone || '',
+      contactEmail: storedUserInfo.email || currentUser.email || '',
       notes: `通过转发下单图片提交 - ${orderForm.direction}`,
-      
-      // 状态与时间
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      
-      // 用户信息
-      userId: userInfo.userId || userInfo.openid || 'anonymous_' + Date.now(),
-      userName: userInfo.nickname || '转发用户',
-      openid: userInfo.openid || 'anonymous',
-      
-      // 额外字段
-      source: 'miniprogram_forward',  // 标识来源为转发图片功能
-      history: [],
-      
-      contactInfo: {
-        name: storedUserInfo.nickName || storedUserInfo.userInfo?.nickName || '转发用户',
-        phone: storedUserInfo.phone || '',
-        email: storedUserInfo.email || ''
-      }
+
+      // 来源标记
+      source: 'miniprogram_stock_detail'
     };
-    
-    console.log('转发图片同时提交询价数据:', submitData);
-    
-    // 通过云函数提交询价（静默，不影响图片生成流程）
+
+    console.log('提交询价数据:', submitData);
+
     submitInquiry(submitData).then(result => {
-      console.log('询价数据提交成功，ID:', result.data.inquiryId);
+      console.log('询价数据提交成功，ID:', result.data?.id || result.data?.inquiryId);
+      wx.showToast({ title: '询价已提交', icon: 'success' });
     }).catch(err => {
       console.error('询价数据提交失败:', err);
-      // 静默失败，不影响图片生成流程
-    });
-  },
-
-  async generateOrderImage() {
-    wx.showLoading({ title: '生成图片中...' });
-    const ctx = wx.createCanvasContext('orderCanvas');
-    const { stock, orderForm } = this.data;
-    const dateStr = new Date().toLocaleDateString();
-
-    // 背景
-    ctx.setFillStyle('#ffffff');
-    ctx.fillRect(0, 0, 375, 500);
-
-    // 标题栏 (买入蓝/卖出红)
-    const headerColor = orderForm.direction === '买入' ? '#6fb2f9' : '#ff3b30';
-    ctx.setFillStyle(headerColor);
-    ctx.fillRect(0, 0, 375, 50);
-
-    ctx.setFillStyle('#ffffff');
-    ctx.setFontSize(18);
-    ctx.fillText(orderForm.direction, 20, 32);
-    ctx.fillText(dateStr, 250, 32);
-
-    // 表格内容
-    const drawRow = (y, label, value) => {
-      ctx.setStrokeStyle('#eeeeee');
-      ctx.setLineWidth(1);
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(375, y);
-      ctx.stroke();
-
-      ctx.setFillStyle('#333333');
-      ctx.setFontSize(16);
-      ctx.fillText(label, 20, y + 30);
-      
-      ctx.setFillStyle('#666666');
-      ctx.fillText(value, 120, y + 30);
-      
-      ctx.beginPath();
-      ctx.moveTo(110, y);
-      ctx.lineTo(110, y + 50);
-      ctx.stroke();
-    };
-
-    let currentY = 50;
-    drawRow(currentY, '交易商', orderForm.trader);
-    currentY += 50;
-    drawRow(currentY, '标的资产', `${stock.name} ${stock.code}`);
-    currentY += 50;
-    drawRow(currentY, '结构期限', `${orderForm.strike} - ${orderForm.term}`);
-    currentY += 50;
-    drawRow(currentY, '期权费率', `${orderForm.rate} %`);
-    currentY += 50;
-    drawRow(currentY, '名义本金', `${orderForm.notional} 万`);
-    currentY += 50;
-    drawRow(currentY, '买入价格', orderForm.price ? `${orderForm.price}元` : '市价');
-    currentY += 50;
-
-    // 底部颜色块
-    ctx.setFillStyle(headerColor);
-    ctx.fillRect(0, currentY, 375, 50);
-
-    // 绘制二维码占位符 (如果有真实二维码路径可替换)
-    // ctx.drawImage('/images/common/qr-code.png', 280, currentY - 80, 70, 70);
-
-    ctx.draw(false, () => {
-      wx.canvasToTempFilePath({
-        canvasId: 'orderCanvas',
-        success: (res) => {
-          wx.hideLoading();
-          this.setData({
-            previewImage: res.tempFilePath,
-            showPreviewModal: true,
-            showOrderModal: false
-          });
-        },
-        fail: (err) => {
-          console.error(err);
-          wx.hideLoading();
-          wx.showToast({ title: '图片生成失败', icon: 'none' });
-        }
-      });
+      wx.showToast({ title: err.message || '提交失败', icon: 'none' });
     });
   },
 
@@ -526,7 +840,7 @@ Page({
   onShareAppMessage() {
     return {
       title: `${this.data.orderForm.direction}申请: ${this.data.stock.name}`,
-      path: `/pages/stock-detail/stock-detail?code=${this.data.stock.code}`,
+      path: `/subpackages/quotes/stock-detail/stock-detail?code=${this.data.stock.code}`,
       imageUrl: this.data.previewImage
     };
   },
@@ -535,7 +849,11 @@ Page({
     wx.saveImageToPhotosAlbum({
       filePath: this.data.previewImage,
       success: () => {
-        wx.showToast({ title: '已保存到相册' });
+        wx.showToast({ title: '已保存到相册', icon: 'success' });
+      },
+      fail: (err) => {
+        console.error('保存图片失败:', err);
+        wx.showToast({ title: '保存失败', icon: 'none' });
       }
     });
   },

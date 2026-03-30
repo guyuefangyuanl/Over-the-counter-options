@@ -18,8 +18,10 @@ import {
   Input,
   InputNumber,
   Select,
+  Tooltip,
 } from 'antd';
-import { UploadOutlined, ReloadOutlined, DeleteOutlined, EditOutlined, SearchOutlined, SyncOutlined } from '@ant-design/icons';
+import { UploadOutlined, ReloadOutlined, DeleteOutlined, EditOutlined, SyncOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import api, { getApiErrorMessage, type ApiResponse } from '../utils/api';
 import type { ColumnsType } from 'antd/es/table';
 import PageState from '../components/PageState';
@@ -130,8 +132,73 @@ function formatSyncError(err: unknown) {
   return JSON.stringify(err);
 }
 
+// 交易商名称到缩写的映射
+const TRADER_ABBREVIATION_MAP: Record<string, string> = {
+  '中信证券': 'ZXZZ',
+  '中信中证': 'ZXZZ',
+  '中信': 'ZXZZ',
+  '华泰财富': 'HTCC',
+  '华泰长城': 'HTCC',
+  '华泰': 'HTCC',
+  '银河瑞德': 'YHRD',
+  '银河德睿': 'YHRD',
+  '银河': 'YHRD',
+  '亚洲证券': 'YAZB',
+  '招商证券': 'ZSZQ',
+  '招商': 'ZSZQ',
+  '国泰君安': 'GTJA',
+  '国君': 'GTJA',
+  '中金': 'ZJ',
+  '中金国际': 'ZJ',
+  '申万宏源': 'SWHY',
+  '申万': 'SWHY',
+  '海通证券': 'HTZQ',
+  '海通': 'HTZQ',
+  '广发证券': 'GFZQ',
+  '广发': 'GFZQ',
+  '东方证券': 'DFZQ',
+  '东方': 'DFZQ',
+};
+
+// 获取交易商缩写
+function getTraderAbbreviation(trader: string | undefined): string {
+  if (!trader) return '-';
+  // 如果已经是缩写（全大写字母或短字符串），直接返回
+  if (/^[A-Z]{2,6}$/.test(trader)) return trader;
+  // 查找映射
+  const abbr = TRADER_ABBREVIATION_MAP[trader];
+  if (abbr) return abbr;
+  // 如果没有找到映射，返回原字符串的前4个字符
+  return trader.length > 4 ? trader.slice(0, 4) : trader;
+}
+
+// 格式化日期为简洁格式
+function formatDateShort(dateStr: string | undefined): string {
+  if (!dateStr) return '-';
+  try {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+
+    if (isToday) {
+      return `今天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    }
+    if (isYesterday) {
+      return `昨天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    }
+    // 其他日期显示 MM-DD HH:mm
+    return `${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  } catch {
+    return '-';
+  }
+}
+
 const Quotes: React.FC = () => {
   const { message } = App.useApp();
+  const navigate = useNavigate();
   const [isFetching, setIsFetching] = useState(false);
   const [isCrawling, setIsCrawling] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -159,8 +226,12 @@ const Quotes: React.FC = () => {
   const [syncAllResult, setSyncAllResult] = useState<SyncResultPayload | null>(null);
   
   // 筛选相关状态
-  const [filterForm] = Form.useForm();
   const [filters, setFilters] = useState<{ keyword?: string; type?: string; trader?: string }>({});
+  
+  // 筛选值临时状态（用于输入控件）
+  const [keywordValue, setKeywordValue] = useState('');
+  const [typeValue, setTypeValue] = useState<string | undefined>();
+  const [traderValue, setTraderValue] = useState('');
   
   // 编辑相关状态
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -293,7 +364,7 @@ const Quotes: React.FC = () => {
       title: '交易商',
       dataIndex: 'trader',
       key: 'trader',
-      render: (val) => val || '-',
+      render: (val) => getTraderAbbreviation(val),
     },
     {
       title: '费率/价格',
@@ -336,7 +407,7 @@ const Quotes: React.FC = () => {
         const timeB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
         return timeA - timeB;
       },
-      render: (val) => val ? new Date(val).toLocaleString() : '-',
+      render: (val) => formatDateShort(val),
     },
     {
       title: '操作',
@@ -365,16 +436,22 @@ const Quotes: React.FC = () => {
   
   // 筛选处理
   const handleFilterSubmit = useCallback(() => {
-    const values = filterForm.getFieldsValue();
-    setFilters(values);
-    void fetchQuotes(1, pagination.pageSize, values);
-  }, [fetchQuotes, filterForm, pagination.pageSize]);
+    const newFilters = {
+      keyword: keywordValue.trim() || undefined,
+      type: typeValue,
+      trader: traderValue.trim() || undefined,
+    };
+    setFilters(newFilters);
+    void fetchQuotes(1, pagination.pageSize, newFilters);
+  }, [fetchQuotes, keywordValue, typeValue, traderValue, pagination.pageSize]);
   
   const handleFilterReset = useCallback(() => {
-    filterForm.resetFields();
+    setKeywordValue('');
+    setTypeValue(undefined);
+    setTraderValue('');
     setFilters({});
     void fetchQuotes(1, pagination.pageSize, {});
-  }, [fetchQuotes, filterForm, pagination.pageSize]);
+  }, [fetchQuotes, pagination.pageSize]);
   
   // 编辑处理
   const handleEditOpen = useCallback((record: Quote) => {
@@ -892,8 +969,18 @@ const Quotes: React.FC = () => {
 
   return (
     <Card>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Title level={4}>行情管理</Title>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
+        <Space align="center">
+          <Tooltip title="返回首页">
+            <Button
+              type="text"
+              icon={<ArrowLeftOutlined />}
+              onClick={() => navigate('/')}
+              style={{ marginRight: 8 }}
+            />
+          </Tooltip>
+          <Title level={4} style={{ margin: 0 }}>行情管理</Title>
+        </Space>
         <Space>
           {selectedRowKeys.length > 0 && (
             <Button 
@@ -965,50 +1052,52 @@ const Quotes: React.FC = () => {
       </div>
       
       {/* 筛选表单 */}
-      <Form
-        form={filterForm}
-        layout="inline"
-        style={{ marginBottom: 16 }}
-        onFinish={handleFilterSubmit}
-      >
-        <Form.Item name="keyword" style={{ marginBottom: 8 }}>
-          <Input 
-            placeholder="股票代码/名称" 
-            allowClear 
-            style={{ width: 150 }}
-            prefix={<SearchOutlined />}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 16 }}>
+        <Space wrap>
+          <Input.Search
+            placeholder="搜索股票代码/名称"
+            allowClear
+            style={{ width: 220 }}
+            value={keywordValue}
+            onSearch={() => void handleFilterSubmit()}
+            onChange={(e) => setKeywordValue(e.target.value)}
+            enterButton
           />
-        </Form.Item>
-        <Form.Item name="type" style={{ marginBottom: 8 }}>
-          <Select 
-            placeholder="类型" 
-            allowClear 
-            style={{ width: 120 }}
+          <Select
+            placeholder="类型筛选"
+            allowClear
+            style={{ width: 140 }}
+            value={typeValue}
             options={[
               { label: '香草', value: '香草' },
               { label: 'Call', value: 'Call' },
               { label: 'Put', value: 'Put' },
             ]}
+            onChange={(value) => {
+              setTypeValue(value);
+              // 立即触发筛选
+              const newFilters = {
+                keyword: keywordValue.trim() || undefined,
+                type: value,
+                trader: traderValue.trim() || undefined,
+              };
+              setFilters(newFilters);
+              void fetchQuotes(1, pagination.pageSize, newFilters);
+            }}
           />
-        </Form.Item>
-        <Form.Item name="trader" style={{ marginBottom: 8 }}>
-          <Input 
-            placeholder="交易商" 
-            allowClear 
-            style={{ width: 120 }}
+          <Input
+            placeholder="交易商"
+            allowClear
+            style={{ width: 140 }}
+            value={traderValue}
+            onChange={(e) => setTraderValue(e.target.value)}
+            onBlur={() => void handleFilterSubmit()}
           />
-        </Form.Item>
-        <Form.Item style={{ marginBottom: 8 }}>
-          <Space>
-            <Button type="primary" htmlType="submit" loading={isFetching}>
-              筛选
-            </Button>
-            <Button onClick={handleFilterReset}>
-              重置
-            </Button>
-          </Space>
-        </Form.Item>
-      </Form>
+          <Button onClick={handleFilterReset}>
+            重置筛选
+          </Button>
+        </Space>
+      </div>
       
       <PageState
         loading={tableLoading}

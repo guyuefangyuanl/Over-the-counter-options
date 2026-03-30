@@ -14,6 +14,109 @@ from contextlib import contextmanager
 logger = logging.getLogger(__name__)
 
 
+# ================== 正则安全模块 ==================
+
+# 正则表达式元字符（需要转义的字符）
+REGEX_META_CHARS = r'\^$.|?*+()[]{}'
+
+def escape_regex_pattern(pattern: str) -> str:
+    """
+    转义正则表达式特殊字符，防止ReDoS攻击
+    
+    Args:
+        pattern: 原始字符串
+        
+    Returns:
+        转义后的安全字符串
+    """
+    if not pattern:
+        return ''
+    # 转义所有正则元字符
+    return re.escape(pattern)
+
+def sanitize_for_regex(value: Any, max_length: int = 100) -> str:
+    """
+    安全地处理用于正则匹配的用户输入
+    
+    安全措施：
+    1. 类型检查和转换
+    2. 长度限制（防止DoS）
+    3. 移除控制字符
+    4. 转义正则元字符
+    
+    Args:
+        value: 用户输入值
+        max_length: 最大允许长度
+        
+    Returns:
+        安全的字符串
+    """
+    if value is None:
+        return ''
+    
+    # 转换为字符串
+    raw = str(value).strip()
+    
+    # 长度限制
+    if len(raw) > max_length:
+        raw = raw[:max_length]
+        logger.debug(f"输入已截断至 {max_length} 字符")
+    
+    # 移除控制字符（保留常见空白）
+    clean = ''.join(c for c in raw if ord(c) >= 32 or c in '\t\n\r')
+    
+    # 转义正则元字符
+    return re.escape(clean)
+
+def validate_regex_pattern(pattern: str, max_complexity: int = 100) -> Tuple[bool, str]:
+    """
+    验证正则表达式模式的安全性
+    
+    检测潜在的ReDoS模式：
+    - 嵌套量词
+    - 重叠的交替分支
+    - 过长的模式
+    
+    Args:
+        pattern: 正则表达式模式
+        max_complexity: 最大允许的复杂度评分
+        
+    Returns:
+        (是否安全, 原因说明)
+    """
+    if not pattern:
+        return True, "空模式"
+    
+    # 长度检查
+    if len(pattern) > 1000:
+        return False, "正则表达式过长"
+    
+    # 检测危险的嵌套量词模式（如 (a+)+, (a*)+, (a|b)+ 等）
+    dangerous_patterns = [
+        r'\([^)]*[+*][^)]*\)[+*]',  # 嵌套量词
+        r'\([^)]*\|[^)]*\)[+*]',     # 带交替的量词
+        r'\[[^\]]*\][+*][+*]',       # 字符类后的双重量词
+    ]
+    
+    for dangerous in dangerous_patterns:
+        if re.search(dangerous, pattern):
+            return False, "检测到潜在的ReDoS模式"
+    
+    # 复杂度评估（简单评分）
+    complexity = 0
+    complexity += pattern.count('+') * 2
+    complexity += pattern.count('*') * 2
+    complexity += pattern.count('?') * 1
+    complexity += pattern.count('|') * 3
+    complexity += pattern.count('(') * 2
+    complexity += pattern.count('[') * 2
+    
+    if complexity > max_complexity:
+        return False, f"正则表达式复杂度过高 ({complexity})"
+    
+    return True, "安全"
+
+
 # ================== 安全配置 ==================
 
 # 允许的文件扩展名

@@ -156,10 +156,35 @@ Page({
   },
 
   /**
+   * 跳转到个股标的详情页面
+   */
+  goStockDetail(e) {
+    // 从 dataset 获取股票代码和名称（注意：小程序会将 data-product-code 转为 productcode）
+    const stockCode = e.currentTarget.dataset.productcode;
+    const stockName = e.currentTarget.dataset.productname || '';
+
+    if (!stockCode) {
+      wx.showToast({ title: '标的信息不完整', icon: 'none' });
+      return;
+    }
+
+    // 跳转到股票详情页面
+    const url = `/subpackages/quotes/stock-detail/stock-detail?code=${encodeURIComponent(stockCode)}&name=${encodeURIComponent(stockName)}`;
+    
+    wx.navigateTo({
+      url: url,
+      fail: (err) => {
+        console.error('[goStockDetail] 跳转失败:', err);
+        wx.showToast({ title: '跳转失败，请重试', icon: 'none' });
+      }
+    });
+  },
+
+  /**
    * 格式化期权类型
    */
   _formatOptionType(type) {
-    var map = { call: '看涨', put: '看跌' };
+    const map = { call: '看涨', put: '看跌' };
     return map[type] || type || '--';
   },
 
@@ -167,7 +192,7 @@ Page({
    * 格式化结构类型
    */
   _formatStructure(structure) {
-    var map = { vanilla: '香草', snowball: '雪球', phoenix: '凤凰' };
+    const map = { vanilla: '香草', snowball: '雪球', phoenix: '凤凰' };
     return map[structure] || structure || '--';
   },
 

@@ -1457,7 +1457,7 @@ Page({
     }
     
     wx.navigateTo({
-      url: '/pages/inquiry-history/inquiry-history',
+      url: '/subpackages/user/inquiry-history/inquiry-history',
       success: () => {
         this.recordUserAction('go_to_records');
       },
