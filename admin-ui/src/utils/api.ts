@@ -54,8 +54,13 @@ export function getApiErrorMessage(error: unknown, fallbackMessage: string): str
   return fallbackMessage;
 }
 
+// 生产环境使用云托管后端地址，开发环境使用相对路径（由 Vite 代理）
+const API_BASE_URL = import.meta.env.PROD
+  ? 'https://flask-ym1v-210758-7-1374336462.sh.run.tcloudbase.com/api/v1'
+  : '/api/v1';
+
 const client = axios.create({
-  baseURL: '/api/v1',
+  baseURL: API_BASE_URL,
   timeout: 300000,
 });
 

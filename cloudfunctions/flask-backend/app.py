@@ -184,12 +184,14 @@ def create_app() -> Flask:
     # CORS配置
     allowed_origins = os.getenv('ALLOWED_ORIGINS', '').split(',')
     if not allowed_origins or allowed_origins == ['']:
-        # 默认允许本地开发环境
+        # 默认允许本地开发环境和云托管前端
         allowed_origins = [
             'http://localhost:5173',
             'http://localhost:3000',
             'http://127.0.0.1:5173',
-            'http://127.0.0.1:3000'
+            'http://127.0.0.1:3000',
+            # 云托管静态网站前端
+            'https://develop-8gx7kh9g045e6c9a-1331886872.tcloudbaseapp.com',
         ]
         logger.info(f"使用默认CORS配置: {allowed_origins}")
     else:
