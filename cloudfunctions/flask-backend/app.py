@@ -161,6 +161,7 @@ def create_app() -> Flask:
     from routes.trade import trade_bp
     from routes.message import message_bp
     from routes.config import config_bp
+    from routes.performance import performance_bp
 
     flask_app = Flask(__name__)
     flask_app.json = CustomJSONProvider(flask_app)
@@ -256,6 +257,7 @@ def create_app() -> Flask:
     flask_app.register_blueprint(auth_bp, url_prefix="/api/v1/auth")
     flask_app.register_blueprint(inquiry_bp, url_prefix='/api/v1')
     flask_app.register_blueprint(stock_bp, url_prefix='/api/v1/stock')
+    # stock_quotes_bp 已合并到 stock_bp 中
     flask_app.register_blueprint(admin_bp, url_prefix='/api/v1/admin')
     flask_app.register_blueprint(group_bp, url_prefix='/api/v1')
     flask_app.register_blueprint(fee_bp, url_prefix='/api/v1/admin')
@@ -263,7 +265,8 @@ def create_app() -> Flask:
     flask_app.register_blueprint(trade_bp, url_prefix='/api/v1/trade')
     flask_app.register_blueprint(message_bp, url_prefix='/api/v1/admin')
     flask_app.register_blueprint(config_bp, url_prefix='/api/v1/admin')
-    
+    flask_app.register_blueprint(performance_bp, url_prefix='/api/v1/performance')
+
     @flask_app.before_request
     def log_request_info():
         logger.info(f">>> Request: {request.method} {request.url}")

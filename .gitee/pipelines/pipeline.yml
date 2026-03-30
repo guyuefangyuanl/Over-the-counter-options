@@ -1,0 +1,96 @@
+name: Gitee Go Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+stages:
+  - name: Build Frontend
+    jobs:
+      - name: admin-ui-build
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+
+          - name: Setup Node.js
+            uses: actions/setup-node@v4
+            with:
+              node-version: '22'
+
+          - name: Install Dependencies
+            run: |
+              cd admin-ui
+              npm ci
+
+          - name: Lint
+            run: |
+              cd admin-ui
+              npm run lint
+
+          - name: Build
+            run: |
+              cd admin-ui
+              npm run build
+
+          - name: Upload Artifacts
+            uses: actions/upload-artifact@v4
+            with:
+              name: admin-ui-dist
+              path: admin-ui/dist/
+
+  - name: Test Backend
+    jobs:
+      - name: python-api-test
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+
+          - name: Setup Python
+            uses: actions/setup-python@v5
+            with:
+              python-version: '3.11'
+
+          - name: Install Dependencies
+            run: |
+              pip install -r requirements.txt
+
+          - name: Run Tests
+            run: |
+              SKIP_DB_INIT=1 NODE_ENV=testing python -m unittest
+
+  - name: Deploy
+    needs:
+      - Build Frontend
+      - Test Backend
+    jobs:
+      - name: deploy-to-cloudbase
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/main'
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+
+          - name: Setup Node.js
+            uses: actions/setup-node@v4
+            with:
+              node-version: '22'
+
+          - name: Install CloudBase CLI
+            run: npm install -g @cloudbase/cli
+
+          - name: Build Frontend
+            run: |
+              cd admin-ui
+              npm ci
+              npm run build
+
+          - name: Deploy to CloudBase
+            run: |
+              tcb hosting deploy admin-ui/dist -e ${{ secrets.TCB_ENV_ID }}
+            env:
+              TCB_ENV_ID: ${{ secrets.TCB_ENV_ID }}
