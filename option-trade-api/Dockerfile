@@ -31,6 +31,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# ===== 后端部署 =====
+# 复制依赖文件并安装
+COPY option-trade-api/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 复制后端代码
+COPY option-trade-api/ .
+
 # ===== 前端构建 =====
 # 复制 admin-ui 源码 (利用构建缓存)
 COPY admin-ui/package*.json ./admin-ui/
@@ -43,14 +51,6 @@ RUN npm run build
 
 # 返回主工作目录
 WORKDIR /app
-
-# ===== 后端部署 =====
-# 复制依赖文件并安装
-COPY option-trade-api/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# 复制后端代码
-COPY option-trade-api/ .
 
 # 删除开发环境配置文件
 RUN rm -f .env .env.local
