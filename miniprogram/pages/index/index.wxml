@@ -1,33 +1,41 @@
-<view class="container" style="position: relative; left: 0rpx; top: -188rpx">
+<view class="container">
   <!-- 加载状态 -->
   <view class="loading-container" wx:if="{{loading}}">
     <van-loading type="spinner" color="#409EFF" size="48rpx" vertical>加载中...</van-loading>
   </view>
 
   <!-- 主内容 -->
-  <view class="main-content" wx:else>
+  <view class="main-content" wx:else style="position: relative; left: 0rpx; top: -199rpx">
     
-    <!-- 搜索区域 -->
-    <view class="search-container">
-      <view class="search-box">
-        <view class="search-icon">🔍</view>
-        <input 
-          class="search-input" 
-          placeholder="搜索" 
-          value="{{searchValue}}"
-          bindinput="onSearchInput"
-          bindfocus="onSearchFocus"
-          bindconfirm="onSearch"
-        />
-        <view class="search-btn" bindtap="onSearch" wx:if="{{searchValue}}">
-          搜索
+    <!-- ========== 模块开始：顶部标题和搜索 ========== -->
+    <view class="header-section" style="position: relative; left: 0rpx; top: -448rpx; height: 283rpx; display: block; box-sizing: border-box">
+      <view class="header-top" style="position: relative; left: 0rpx; top: 193rpx; width: 703rpx; height: 48rpx; display: flex; box-sizing: border-box">
+        <text class="app-title" style="position: relative; left: 0rpx; top: 257rpx">期权大师</text>
+      </view>
+      <view class="search-container">
+        <view class="search-box" style="position: relative; left: 0rpx; top: 487rpx">
+          <view class="search-icon">
+            <image src="/images/search.svg" class="search-icon-img" mode="aspectFit" />
+          </view>
+          <input 
+            class="search-input" 
+            placeholder="搜索" 
+            value="{{searchValue}}"
+            bindinput="onSearchInput"
+            bindfocus="onSearchFocus"
+            bindconfirm="onSearch"
+          />
+          <view class="search-btn" bindtap="onSearch" wx:if="{{searchValue}}">
+            搜索
+          </view>
         </view>
       </view>
     </view>
+    <!-- ========== 模块结束：顶部标题和搜索 ========== -->
 
     <!-- 快捷功能 -->
     <view class="section quick-actions-section" wx:if="{{!showSearchResults}}">
-      <view class="quick-actions">
+      <view class="quick-actions" style="position: relative; left: 0rpx; top: -31rpx">
         <view 
           class="action-item" 
           wx:for="{{quickActions}}" 
@@ -36,7 +44,7 @@
           data-params="{{item.params}}"
           bindtap="onQuickActionTap">
           <view wx:if="{{item.id == 1}}" class="action-icon-svg action-icon-fav-selected"></view>
-          <image wx:elif="{{item.id == 4}}" class="action-icon-img action-icon-inquiry" src="{{item.icon}}" mode="aspectFit" />
+          <image wx:elif="{{item.id == 4}}" class="action-icon-img action-icon-etf" src="{{item.icon}}" mode="aspectFit" />
           <image wx:elif="{{item.id == 5}}" class="action-icon-img action-icon-calculator" src="{{item.icon}}" mode="aspectFit" />
           <image wx:else class="action-icon-img" src="{{item.icon}}" mode="aspectFit" />
           <text class="action-name">{{item.name}}</text>
@@ -48,13 +56,11 @@
     <view class="banner-container enhanced-card" wx:if="{{!showSearchResults}}">
       <swiper 
         class="banner-swiper"
-        indicator-dots="{{swiperConfig.indicatorDots}}"
         autoplay="{{swiperConfig.autoplay}}"
         interval="{{swiperConfig.interval}}"
         duration="{{swiperConfig.duration}}"
         circular="{{swiperConfig.circular}}"
-        indicator-color="rgba(255,255,255,0.5)"
-        indicator-active-color="#4caf50"
+        bindchange="onSwiperChange"
       >
         <swiper-item 
           wx:for="{{swiperImgurls}}" 
@@ -70,7 +76,7 @@
               <van-icon name="photo-fail" size="48rpx" color="#c0c4cc" />
               <text class="banner-error-text">{{item.title || '加载失败'}}</text>
             </view>
-            <image 
+            <image style="position: relative; left: -1rpx; top: 1rpx" 
               class="banner-image {{item.loaded ? 'loaded' : ''}}" 
               src="{{item.url}}" 
               mode="aspectFill"
@@ -81,6 +87,14 @@
           </view>
         </swiper-item>
       </swiper>
+      <!-- 横线指示器 -->
+      <view class="banner-indicators" wx:if="{{swiperImgurls.length > 1}}">
+        <view 
+          class="indicator-line {{currentSwiper === index ? 'active' : ''}}" 
+          wx:for="{{swiperImgurls}}" 
+          wx:key="id"
+        ></view>
+      </view>
     </view>
 
     <!-- 搜索结果 -->
@@ -122,7 +136,7 @@
     <!-- 首页内容 -->
     <view class="home-content" wx:if="{{!showSearchResults}}">
 
-      <!-- 市场指数 -->
+      <!-- ========== 模块开始：市场指数 ========== -->
       <view class="section market-indices-section" wx:if="{{marketIndices.length > 0}}">
         <view class="section-header">
           <view class="section-title-wrapper">
@@ -147,8 +161,9 @@
           </scroll-view>
         </view>
       </view>
+      <!-- ========== 模块结束：市场指数 ========== -->
 
-      <!-- 持仓案例卡片 -->
+      <!-- ========== 模块开始：持仓案例 ========== -->
       <view class="section holding-section">
         <view class="section-header">
           <view class="section-title-wrapper">
@@ -160,23 +175,23 @@
         </view>
 
         <view class="holding-card enhanced-card">
-          <!-- Tab 导航（与账户页分类对齐：存续中 / 临近到期 / 已完结） -->
+          <!-- Tab 导航（原型：存续持仓/近期到期/已到期） -->
           <view class="holding-tabs">
             <view
               class="holding-tab-item {{holdingsData.activeTab === 'active' ? 'active' : ''}}"
               data-tab="active"
               bindtap="onHoldingTabChange"
-            >存续中</view>
+            >存续持仓</view>
             <view
               class="holding-tab-item {{holdingsData.activeTab === 'expiring' ? 'active' : ''}}"
               data-tab="expiring"
               bindtap="onHoldingTabChange"
-            >临近到期</view>
+            >近期到期</view>
             <view
               class="holding-tab-item {{holdingsData.activeTab === 'finished' ? 'active' : ''}}"
               data-tab="finished"
               bindtap="onHoldingTabChange"
-            >已完结</view>
+            >已到期</view>
           </view>
 
           <!-- 加载错误提示 -->
@@ -184,9 +199,16 @@
             <text class="holding-error-text">持仓数据暂时无法加载，下拉刷新重试</text>
           </view>
 
-          <!-- 持仓列表 -->
+          <!-- 持仓列表 - 表格样式 -->
           <block wx:elif="{{holdingsData.filteredPositions.length > 0}}">
             <view class="holding-list {{holdingsAnimate ? 'fade-in' : ''}}">
+              <!-- 表头 -->
+              <view class="holding-table-header">
+                <text class="table-header-cell cell-first">标的 | 结构期限</text>
+                <text class="table-header-cell cell-second">最新费率 | 存续规模</text>
+                <text class="table-header-cell cell-third">净盈利 | 净利率</text>
+              </view>
+              <!-- 表格内容 -->
               <view
                 class="holding-item"
                 wx:for="{{holdingsData.filteredPositions}}"
@@ -195,25 +217,17 @@
                 data-indexstatus="{{item.indexStatus}}"
                 bindtap="onHoldingItemTap"
               >
-                <view class="holding-left">
+                <view class="holding-cell cell-first">
                   <text class="holding-name">{{item.productName}}</text>
-                  <view class="holding-row">
-                    <text class="holding-code">{{item.productCode}}</text>
-                    <text class="holding-dealer">{{item.dealer}}</text>
-                  </view>
-                  <view class="holding-row">
-                    <text class="holding-notional">{{item.notionalWan}}万</text>
-                    <text class="holding-days {{item.daysLeft <= 7 && item.status === 'CONTINUING' ? 'expiring-tip' : ''}}"
-                      wx:if="{{item.status === 'CONTINUING'}}"
-                    >剩{{item.daysLeft}}天</text>
-                  </view>
+                  <text class="holding-structure">{{item.productCode}} {{item.structure || '100C6m'}}</text>
                 </view>
-                <view class="holding-right">
-                  <view class="holding-profit">
-                    <text class="profit {{item.pnl >= 0 ? 'up' : 'down'}}">{{item.pnl >= 0 ? '+' : ''}}{{item.pnl}}</text>
-                    <text class="profit-rate {{item.pnlRate >= 0 ? 'up' : 'down'}}">{{item.pnlRate >= 0 ? '+' : ''}}{{item.pnlRate}}%</text>
-                  </view>
-                  <text class="holding-nav-hint">查看详情 ›</text>
+                <view class="holding-cell cell-second">
+                  <text class="holding-fee">{{item.feeRate || '--'}}%</text>
+                  <text class="holding-scale">{{item.notionalWan}}万</text>
+                </view>
+                <view class="holding-cell cell-third">
+                  <text class="profit {{item.pnl >= 0 ? 'up' : 'down'}}">{{item.pnl >= 0 ? '+' : ''}}{{item.pnl}}万</text>
+                  <text class="profit-rate {{item.pnlRate >= 0 ? 'up' : 'down'}}">{{item.pnlRate >= 0 ? '+' : ''}}{{item.pnlRate}}%</text>
                 </view>
               </view>
             </view>
@@ -223,7 +237,7 @@
           <view class="holding-empty" wx:else>
             <text class="holding-empty-icon">∅</text>
             <text class="holding-empty-text">
-              {{holdingsData.activeTab === 'active' ? '暂无存续中持仓' : (holdingsData.activeTab === 'expiring' ? '暂无临近到期持仓' : '暂无已完结持仓')}}
+              {{holdingsData.activeTab === 'active' ? '暂无存续持仓' : (holdingsData.activeTab === 'expiring' ? '暂无近期到期持仓' : '暂无已到期持仓')}}
             </text>
             <view class="holding-empty-action" data-type="holdings" bindtap="onViewMore">
               <text>前往账户录入持仓</text>
@@ -231,8 +245,9 @@
           </view>
         </view>
       </view>
+      <!-- ========== 模块结束：持仓案例 ========== -->
 
-      <!-- 热门产品 -->
+      <!-- ========== 模块开始：热门产品 ========== -->
       <view class="section">
         <view class="section-header">
           <view class="section-title-wrapper">
@@ -259,17 +274,18 @@
                 <view class="market-badge {{item.market === 'SH' ? 'sh' : 'sz'}}">{{item.market || 'SH'}}</view>
                 <text class="option-name">{{item.name}}</text>
                 <text class="option-code">{{item.code}}</text>
-                <text class="option-structure">{{item.structure || '100C6m'}}</text>
               </view>
-              <view class="option-tags">
-                 <text class="tag-vanilla">香草</text>
-              </view>
+              <view class="option-structure-tag">{{item.structure || '100C6m'}}</view>
+            </view>
+            <view class="option-footer">
+              <view class="vanilla-tag">香草</view>
             </view>
           </view>
         </view>
       </view>
+      <!-- ========== 模块结束：热门产品 ========== -->
 
-      <!-- 知识 -->
+      <!-- ========== 模块开始：知识 ========== -->
       <view class="section knowledge-section-outer">
          <view class="section-header knowledge-header">
             <view class="section-title-wrapper">
@@ -344,6 +360,7 @@
             </view>
          </view>
       </view>
+      <!-- ========== 模块结束：知识 ========== -->
 
     </view>
   </view>

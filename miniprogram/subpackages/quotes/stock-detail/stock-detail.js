@@ -445,12 +445,19 @@ Page({
 
   // ==================== 交互事件 ====================
 
+  /**
+   * 返回按钮点击事件
+   * 优先返回上一页面，若无历史则跳转到报价页
+   */
   onBack() {
-    wx.navigateBack({
-      fail: () => {
-        wx.switchTab({ url: '/pages/index/index' });
-      }
-    });
+    const pages = getCurrentPages();
+    if (pages.length > 1) {
+      // 有上一级页面，直接返回
+      wx.navigateBack();
+    } else {
+      // 无上一级页面，跳转到报价页（Tab页面）
+      wx.switchTab({ url: '/pages/quotes/quotes' });
+    }
   },
 
   goToSearch() {

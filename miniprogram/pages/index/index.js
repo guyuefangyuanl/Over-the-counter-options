@@ -81,14 +81,17 @@ Page({
     // 热门期权
     hotOptions: [],
 
-    // 快捷功能
+    // 快捷功能（原型：自选、个股、指数、ETF、计算器）
     quickActions: [
       { id: 1, icon: '/images/star.png', name: '自选', path: '/pages/quotes/quotes', params: { tab: '自选' } },
       { id: 2, icon: '/images/个股.svg', name: '个股', path: '/pages/quotes/quotes', params: { tab: '个股' } },
       { id: 3, icon: '/images/指数.svg', name: '指数', path: '/pages/quotes/quotes', params: { tab: '指数' } },
-      { id: 4, icon: '/images/询价.svg', name: '询价', path: '/pages/quotes/quotes', params: { tab: '个股', action: 'inquiry' } },
+      { id: 4, icon: '/images/ETF.svg', name: 'ETF', path: '/pages/quotes/quotes', params: { tab: 'ETF' } },
       { id: 5, icon: '/images/计算器.svg', name: '计算器', path: '/pages/calculator/calculator' }
     ],
+
+    // 轮播图当前位置
+    currentSwiper: 0,
 
     // 加载状态
     loading: true,
@@ -354,6 +357,15 @@ Page({
   },
 
   // ==================== 事件处理 ====================
+
+  /**
+   * 轮播图切换
+   */
+  onSwiperChange(e) {
+    this.setData({
+      currentSwiper: e.detail.current
+    });
+  },
 
   /**
    * 轮播图点击

@@ -2,22 +2,21 @@
 <view class="container">
   <!-- 1. 顶部自定义导航栏 -->
   <view class="custom-nav">
-    <view class="back-btn" bindtap="onBack">
-      <image class="nav-icon" src="/images/back.png" mode="aspectFit" />
+    <view class="nav-left" style="position: relative; left: 0rpx; top: 11rpx; width: -71rpx; display: flex; box-sizing: border-box">
+      <view class="back-btn" bindtap="onBack" style="position: relative; left: -219rpx; top: -6rpx">
+        <text class="back-icon">‹</text>
+      </view>
     </view>
     <view class="nav-title">期权报价</view>
-    <view class="nav-placeholder"></view>
+    <view class="nav-right"></view>
   </view>
 
   <scroll-view scroll-y class="main-scroll" refresher-enabled="{{true}}" refresher-triggered="{{isPullRefreshing}}" bindrefresherrefresh="onPullDownRefresh">
     <!-- 2. 搜索与客服区域 -->
     <view class="top-action-bar">
       <view class="search-section" bindtap="goToSearch">
-        <image class="search-icon" src="/images/inquiry.png" mode="aspectFit" />
-        <input class="search-input" placeholder=" " disabled />
-        <view class="search-clear-btn" wx:if="{{searchKeyword}}" catchtap="onClearSearch">
-          <text>×</text>
-        </view>
+        <text class="search-icon">🔍</text>
+        <text class="search-placeholder">搜索股票代码/名称</text>
       </view>
       <view class="service-section" bindtap="onContactService">
         <image class="service-icon" src="/images/phone-icon.png" mode="aspectFit" />
@@ -183,10 +182,10 @@
         <view class="preview-header">
           <view class="preview-actions">
             <view class="action-icon" bindtap="copyOrderTextOnly">
-              <image src="/images/back.png" mode="aspectFit" style="transform: rotate(90deg);" />
+              <text class="action-text">📋</text>
             </view>
             <view class="action-icon" bindtap="saveImage">
-              <image src="/images/arrow-down.svg" mode="aspectFit" />
+              <text class="action-text">⬇️</text>
             </view>
           </view>
           <text class="preview-title">转发下单图片</text>

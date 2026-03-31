@@ -291,31 +291,77 @@ def create_app() -> Flask:
             path = 'index.html'
         return send_from_directory('admin-web', path)
 
-    @flask_app.route('/')
-    @flask_app.route('/<path:path>')
-    def serve_admin(path='index.html'):
-        if not path or path == '':
-            path = 'index.html'
+    # 静态托管前端地址
+    STATIC_FRONTEND_URL = 'https://develop-8gx7kh9g045e6c9a-1331886872.tcloudbaseapp.com'
 
-        # 如果是 API 请求，不应该进入静态资源处理
+    @flask_app.route('/')
+    def serve_root():
+        """根路径重定向到静态托管前端"""
+        # 返回一个引导页面，自动跳转到前端
+        html = f'''<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="0;url={STATIC_FRONTEND_URL}">
+    <title>期权数据服务</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }}
+        .container {{
+            text-align: center;
+            padding: 40px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }}
+        h1 {{ margin-bottom: 20px; }}
+        a {{
+            color: #fff;
+            text-decoration: none;
+            padding: 12px 30px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px;
+            display: inline-block;
+            margin-top: 20px;
+        }}
+        a:hover {{ background: rgba(255,255,255,0.3); }}
+        .api-info {{
+            margin-top: 30px;
+            font-size: 14px;
+            opacity: 0.8;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>期权数据服务平台</h1>
+        <p>正在跳转到前端界面...</p>
+        <a href="{STATIC_FRONTEND_URL}">点击此处访问前端</a>
+        <div class="api-info">
+            <p>API 服务运行正常</p>
+            <p>API 地址: https://flask-ym1v-210758-7-1374336462.sh.run.tcloudbase.com/api/</p>
+        </div>
+    </div>
+</body>
+</html>'''
+        return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
+
+    @flask_app.route('/<path:path>')
+    def serve_admin(path):
+        # 如果是 API 请求，返回 404（API 路由在其他地方定义）
         if path.startswith('api/'):
             return flask_error_response("资源不存在", code=404)
 
-        dist_dir = os.path.join(flask_app.root_path, 'admin-ui/dist')
-        
-        # 如果 dist 目录不存在，返回 API 服务提示
-        if not os.path.exists(dist_dir):
-            return flask_success_response(
-                data={"service": "期权数据服务 API", "version": "v1"},
-                message="API 服务运行正常，前端资源未构建"
-            )
-
-        target_file = os.path.join(dist_dir, path)
-        if os.path.exists(target_file) and os.path.isfile(target_file):
-            return send_from_directory(dist_dir, path)
-
-        # React 路由回退到 index.html
-        return send_from_directory(dist_dir, 'index.html')
+        # 其他非 API 请求重定向到静态托管前端
+        return flask.redirect(f'{STATIC_FRONTEND_URL}/{path}')
 
     @flask_app.errorhandler(404)
     def not_found(error):

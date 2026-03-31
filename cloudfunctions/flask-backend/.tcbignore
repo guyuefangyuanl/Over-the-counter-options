@@ -1,0 +1,17 @@
+# tcbignore - 控制 tcb CLI 上传时忽略的文件
+# 这里只排除不需要的文件，保留 dist 目录
+
+__pycache__
+*.pyc
+*.pyo
+*.log
+.env.local
+.git
+.gitignore
+*.md
+!README.md
+
+# 不忽略 admin-ui/dist 目录（前端构建产物）
+!admin-ui/
+!admin-ui/dist/
+!admin-ui/dist/**

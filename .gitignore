@@ -152,3 +152,10 @@ diagnose_*.py
 *.xlsx
 *.xls
 *.db
+
+# Cloud function build outputs (keep dist for deployment)
+cloudfunctions/*/admin-ui/node_modules/
+cloudfunctions/*/admin-ui/.env
+# But keep dist for cloud function deployment
+!cloudfunctions/*/admin-ui/dist/
+!cloudfunctions/*/admin-ui/dist/**

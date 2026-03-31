@@ -1,32 +1,47 @@
 /* ==================== 设计系统基础 ==================== */
 /* 颜色 Token（语义化命名，便于维护） */
 /* 注意：小程序不支持:root选择器，CSS变量必须定义在page下 */
+/* ==================== 原型HTML配色方案 ==================== */
 page {
   /* ==================== 修复：确保页面有默认背景色 ==================== */
   background-color: #f5f7fa;
   
-  --color-primary: #1677ff;
+  /* 主色调 - 匹配原型HTML */
+  --color-primary: #409EFF;          /* 主题蓝 - 原型主色 */
   --color-primary-light: #e6f4ff;
-  --color-primary-dark: #0958d9;
-  --color-rise: #cf1322;           /* 涨 - 更醒目的红色 */
+  --color-primary-dark: #0297D7;     /* 选中蓝 - 原型选中色 */
+  --color-prototype-blue: #71B7FF;   /* 原型蓝 - 股票代码颜色 */
+  
+  /* 涨跌色 */
+  --color-rise: #cf1322;             /* 涨 - 红色 */
   --color-rise-bg: #fff1f0;
   --color-rise-light: #ff4d4f;
-  --color-fall: #389e0d;           /* 跌 - 更清晰的绿色 */
+  --color-fall: #389e0d;             /* 跌 - 绿色 */
   --color-fall-bg: #f6ffed;
   --color-fall-light: #52c41a;
-  --color-warning: #fa8c16;        /* 警示/强调 - 橙色 */
+  
+  /* 警示/强调 */
+  --color-warning: #fa8c16;
   --color-warning-bg: #fff7e6;
-  --color-text-primary: #1f1f1f;
-  --color-text-secondary: #595959;
-  --color-text-tertiary: #8c8c8c;
+  
+  /* 文字颜色 - 匹配原型 */
+  --color-text-primary: #333333;     /* 原型文字主色 */
+  --color-text-secondary: #606266;
+  --color-text-tertiary: #909399;
   --color-text-quaternary: #bfbfbf;
+  
+  /* 边框与背景 */
   --color-border: #f0f0f0;
   --color-border-light: #e8e8e8;
   --color-bg-container: #ffffff;
   --color-bg-layout: #f5f7fa;
   --color-bg-elevated: #ffffff;
+  
+  /* 阴影 */
   --shadow-card: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
   --shadow-elevated: 0 4rpx 16rpx rgba(0, 0, 0, 0.08);
+  
+  /* 圆角 */
   --radius-sm: 6rpx;
   --radius-md: 12rpx;
   --radius-lg: 16rpx;
@@ -616,7 +631,7 @@ page {
 
 .stock-code {
   font-size: 22rpx;
-  color: var(--color-text-tertiary);
+  color: var(--color-prototype-blue);  /* 原型蓝 #71B7FF */
   font-weight: 400;
   background-color: transparent;
   padding: 0;
@@ -680,21 +695,21 @@ page {
   }
 }
 
-/* 期权费率样式（突出、带趋势指示 - 优化版） */
+/* 期权费率样式 - 匹配原型HTML */
 .td.col-val {
-  color: var(--color-primary);
-  font-weight: 600;
+  color: var(--color-text-primary);  /* 原型中为深灰色 #333 */
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   position: relative;
   padding-right: var(--spacing-xs);
 }
 
 .td.col-val.text-blue {
-  color: var(--color-primary);
+  color: var(--color-text-primary);  /* 原型中为深灰色 */
 }
 
 .td.col-val.text-gray {
-  color: var(--color-text-secondary);
+  color: var(--color-text-secondary);  /* 灰色 #666 */
   font-weight: 500;
 }
 
@@ -1832,11 +1847,11 @@ page {
 }
 
 .chip.active {
-  background: linear-gradient(135deg, var(--color-primary-light) 0%, rgba(230, 244, 255, 0.9) 100%);
-  color: var(--color-primary);
+  background-color: var(--color-primary);  /* 原型选中背景 */
+  color: #ffffff;                           /* 白色文字 */
   border-color: var(--color-primary);
   font-weight: 600;
-  box-shadow: 0 2rpx 6rpx rgba(22, 119, 255, 0.15);
+  box-shadow: 0 2rpx 6rpx rgba(64, 158, 255, 0.25);
 }
 
 /* 下拉触发器样式增强版 */

@@ -1,11 +1,16 @@
+# -*- coding: utf-8 -*-
+"""云函数入口函数 - 支持HTTP网关触发"""
 import json
 import os
 from app import app
 
+# 版本标识，用于确认代码是否更新
+HANDLER_VERSION = "v2-20260331-HTML-SUPPORT"
+
 def handler(event, context):
     """云函数入口函数 - 支持HTTP网关触发"""
-    print(f"Received event: {event}")
-    print(f"Context: {context}")
+    print(f"[{HANDLER_VERSION}] Received event: {event}")
+    print(f"[{HANDLER_VERSION}] Context: {context}")
     
     # 处理HTTP网关触发
     if 'requestContext' in event:
@@ -37,16 +42,19 @@ def handler(event, context):
             elif http_method == 'PUT':
                 response = client.put(path, json=body, headers=headers)
             elif http_method == 'DELETE':
-                response = client.delete(path, headers=headers)
+                response = client.delete(path, json=body, headers=headers)
             else:
                 response = client.open(path, method=http_method, json=body, headers=headers)
+            
+            # 从 Flask 响应中获取正确的 Content-Type（支持 HTML 响应）
+            content_type = response.headers.get('Content-Type', 'application/json')
             
             # 构造API网关响应格式
             return {
                 'isBase64Encoded': False,
                 'statusCode': response.status_code,
                 'headers': {
-                    'Content-Type': 'application/json',
+                    'Content-Type': content_type,
                     'Access-Control-Allow-Origin': '*',
                     'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
                     'Access-Control-Allow-Headers': 'Content-Type,Authorization'
@@ -59,6 +67,7 @@ def handler(event, context):
         'statusCode': 200,
         'body': json.dumps({
             'message': 'Flask backend is running!',
+            'version': HANDLER_VERSION,
             'event': event
         })
     }

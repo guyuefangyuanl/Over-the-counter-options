@@ -20,7 +20,7 @@
   <!-- 内容滚动区域 -->
   <scroll-view scroll-y class="content-scroll" style="padding-top: {{statusBarHeight + navBarHeight}}px;">
 
-    <!-- 1. 个股列表展示 (根据设计图重构) -->
+    <!-- 1. 个股列表展示 (根据设计图重构 - 匹配原型HTML) -->
     <view class="stock-list-view" wx:if="{{currentTab === '个股'}}">
       <!-- 次级导航 (匹配设计图) -->
       <view class="sub-nav-bar">
@@ -77,42 +77,27 @@
         </view>
       </view>
 
-      <!-- 数据表格 (热门个股列表 - 优化版卡片式布局) -->
-      <view class="hot-stocks-container">
-        <!-- 列表头部提示 -->
-        <view class="list-header-bar">
-          <view class="header-left">
-            <text class="header-title">热门个股</text>
-            <text class="stock-count">共 {{hotStocks.length}} 只</text>
-          </view>
-          <view class="header-right">
-            <text class="update-indicator {{isRealtimeUpdating ? 'updating' : ''}}">{{updateTime}}</text>
-          </view>
+      <!-- 数据表格 (个股列表 - 匹配原型HTML表格形式) -->
+      <view class="data-table">
+        <view class="table-header">
+          <view class="th col-name">标的|代码</view>
+          <view class="th col-change">涨跌幅</view>
+          <view class="th col-val">平值</view>
+          <view class="th col-val">虚值105</view>
+          <view class="th col-val">虚值110</view>
         </view>
-
-        <!-- 卡片列表 -->
-        <view class="hot-list">
-          <view class="stock-card" wx:for="{{hotStocks}}" wx:key="code" bindtap="onViewDetail" data-item="{{item}}">
-            <view class="card-left">
-              <view class="stock-name-box">
-                <text class="stock-name">{{item.name}}</text>
-                <text class="stock-code">{{item.code}}</text>
-              </view>
+        <view class="table-body">
+          <view class="table-row" wx:for="{{hotStocks}}" wx:key="code" bindtap="onViewDetail" data-item="{{item}}">
+            <view class="td col-name">
+              <text class="stock-name">{{item.name}}</text>
+              <text class="stock-code">{{item.code}}</text>
             </view>
-            <view class="card-center">
-              <view class="price-box">
-                <text class="price-val {{item.changePercent >= 0 ? 'up' : 'down'}}">{{item.price}}</text>
-              </view>
+            <view class="td col-change {{item.changePercent >= 0 ? 'up' : 'down'}}">
+              {{item.changePercent >= 0 ? '+' : ''}}{{item.changePercent}}%
             </view>
-            <view class="card-right">
-              <view class="change-box {{item.changePercent >= 0 ? 'bg-up' : 'bg-down'}}">
-                <text class="change-val">{{item.changePercent >= 0 ? '+' : ''}}{{item.changePercent}}%</text>
-              </view>
-              <view class="atm-box">
-                <text class="atm-label">平值</text>
-                <text class="atm-val">{{item.atm}}%</text>
-              </view>
-            </view>
+            <view class="td col-val text-gray">{{item.atm}}%</view>
+            <view class="td col-val text-gray">{{item.otm105}}%</view>
+            <view class="td col-val text-gray">{{item.otm110}}%</view>
           </view>
         </view>
       </view>
