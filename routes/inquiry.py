@@ -816,7 +816,7 @@ def admin_batch_update_inquiries():
 
 @inquiry_bp.route('/admin/inquiries/export', methods=['GET'])
 @require_auth
-@rate_limit(limit=10, window=60)  # 每分钟最多10次导出请求
+@rate_limit(max_requests=10, window_seconds=60)  # 每分钟最多10次导出请求
 def admin_export_inquiries():
     """导出询价列表（云托管简化版，返回JSON）"""
     try:

@@ -685,81 +685,81 @@ def parse_quotes_file(*, filename: str, content: bytes, sheet_name: Optional[str
                     elif h_lower in ('成交量', 'volume'):
                         col_map['volume'] = i
                     elif h_lower in ('成交额', 'amount'):
-                    col_map['amount'] = i
-            
-            # 解析数据行
-            for idx, row in data_df.iterrows():
-                try:
-                    if 'stock_code' not in col_map:
-                        # 尝试第一列作为代码
+                        col_map['amount'] = i
+
+                # 解析数据行
+                for idx, row in data_df.iterrows():
+                    try:
+                        if 'stock_code' not in col_map:
+                            # 尝试第一列作为代码
+                            code = _normalize_stock_code(row.iloc[0])
+                        else:
+                            code = _normalize_stock_code(row.iloc[col_map['stock_code']])
+
+                        if not code:
+                            continue
+
+                        item = {
+                            "stock_code": code,
+                            "code": code,
+                            "name": str(row.iloc[col_map.get('name', 1)]).strip() if 'name' in col_map else "",
+                            "updateSource": "file_upload",
+                            "updated_at": now,
+                        }
+
+                        # 添加可选字段
+                        if 'price' in col_map:
+                            item['price'] = _safe_float(row.iloc[col_map['price']])
+                        if 'changePercent' in col_map:
+                            item['changePercent'] = _safe_float(row.iloc[col_map['changePercent']])
+                        if 'open' in col_map:
+                            item['open'] = _safe_float(row.iloc[col_map['open']])
+                        if 'high' in col_map:
+                            item['high'] = _safe_float(row.iloc[col_map['high']])
+                        if 'low' in col_map:
+                            item['low'] = _safe_float(row.iloc[col_map['low']])
+                        if 'pre_close' in col_map:
+                            item['pre_close'] = _safe_float(row.iloc[col_map['pre_close']])
+                        if 'volume' in col_map:
+                            item['volume'] = _safe_float(row.iloc[col_map['volume']])
+                        if 'amount' in col_map:
+                            item['amount'] = _safe_float(row.iloc[col_map['amount']])
+
+                        items.append(item)
+                    except Exception as e:
+                        parsing_errors.append({"row": idx, "error": str(e)})
+                        continue
+            else:
+                # 未知格式，尝试通用解析
+                logger.warning(f"无法识别文件格式，尝试通用解析")
+                now = _utc_now_iso()
+
+                for idx, row in df.iterrows():
+                    try:
+                        # 假设第一列是代码，第二列是名称
+                        if len(row) < 2:
+                            continue
                         code = _normalize_stock_code(row.iloc[0])
-                    else:
-                        code = _normalize_stock_code(row.iloc[col_map['stock_code']])
-                    
-                    if not code:
+                        if not code:
+                            continue
+
+                        item = {
+                            "stock_code": code,
+                            "code": code,
+                            "name": str(row.iloc[1]).strip() if not pd.isna(row.iloc[1]) else "",
+                            "updateSource": "file_upload",
+                            "updated_at": now,
+                        }
+
+                        # 尝试解析其他列作为数值
+                        for i in range(2, min(len(row), 10)):
+                            val = _safe_float(row.iloc[i])
+                            if val is not None:
+                                item[f'field_{i}'] = val
+
+                        items.append(item)
+                    except Exception:
                         continue
-                    
-                    item = {
-                        "stock_code": code,
-                        "code": code,
-                        "name": str(row.iloc[col_map.get('name', 1)]).strip() if 'name' in col_map else "",
-                        "updateSource": "file_upload",
-                        "updated_at": now,
-                    }
-                    
-                    # 添加可选字段
-                    if 'price' in col_map:
-                        item['price'] = _safe_float(row.iloc[col_map['price']])
-                    if 'changePercent' in col_map:
-                        item['changePercent'] = _safe_float(row.iloc[col_map['changePercent']])
-                    if 'open' in col_map:
-                        item['open'] = _safe_float(row.iloc[col_map['open']])
-                    if 'high' in col_map:
-                        item['high'] = _safe_float(row.iloc[col_map['high']])
-                    if 'low' in col_map:
-                        item['low'] = _safe_float(row.iloc[col_map['low']])
-                    if 'pre_close' in col_map:
-                        item['pre_close'] = _safe_float(row.iloc[col_map['pre_close']])
-                    if 'volume' in col_map:
-                        item['volume'] = _safe_float(row.iloc[col_map['volume']])
-                    if 'amount' in col_map:
-                        item['amount'] = _safe_float(row.iloc[col_map['amount']])
-                    
-                    items.append(item)
-                except Exception as e:
-                    parsing_errors.append({"row": idx, "error": str(e)})
-                    continue
-        else:
-            # 未知格式，尝试通用解析
-            logger.warning(f"无法识别文件格式，尝试通用解析")
-            now = _utc_now_iso()
-            
-            for idx, row in df.iterrows():
-                try:
-                    # 假设第一列是代码，第二列是名称
-                    if len(row) < 2:
-                        continue
-                    code = _normalize_stock_code(row.iloc[0])
-                    if not code:
-                        continue
-                    
-                    item = {
-                        "stock_code": code,
-                        "code": code,
-                        "name": str(row.iloc[1]).strip() if not pd.isna(row.iloc[1]) else "",
-                        "updateSource": "file_upload",
-                        "updated_at": now,
-                    }
-                    
-                    # 尝试解析其他列作为数值
-                    for i in range(2, min(len(row), 10)):
-                        val = _safe_float(row.iloc[i])
-                        if val is not None:
-                            item[f'field_{i}'] = val
-                    
-                    items.append(item)
-                except Exception:
-                    continue
         
         logger.info(f"文件解析完成: {safe_filename}, 共解析 {len(items)} 条记录, 错误 {len(parsing_errors)} 条")
         
