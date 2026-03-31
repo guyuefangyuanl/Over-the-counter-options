@@ -15,6 +15,7 @@ env/
 venv/
 node_modules/
 admin-web/node_modules/
+admin-ui/node_modules/
 *.log
 docs/
 tests/
