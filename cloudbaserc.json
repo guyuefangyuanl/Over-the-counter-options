@@ -19,6 +19,13 @@
       "timeout": 60,
       "runtime": "Nodejs18.15",
       "handler": "index.main"
+    },
+    {
+      "name": "flask-backend",
+      "timeout": 60,
+      "runtime": "Python3.9",
+      "handler": "scf_bootstrap.main",
+      "installDependency": true
     }
   ]
 }
