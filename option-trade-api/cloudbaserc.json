@@ -3,7 +3,8 @@
   "cloudrun": {
     "name": "option-trade-api",
     "type": "container",
-    "path": "./",
+    "path": "../",
+    "dockerfile": "./option-trade-api/Dockerfile",
     "cpu": 0.25,
     "mem": 0.5,
     "minNum": 0,
