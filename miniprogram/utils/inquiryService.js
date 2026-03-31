@@ -320,11 +320,79 @@ function getInquiryDetail(inquiryId) {
   });
 }
 
+/**
+ * 获取交易商列表
+ * 优先从API获取，失败时使用默认列表
+ * @returns {Promise<{success: boolean, data: Array}>}
+ */
+function getDealers() {
+  return new Promise((resolve) => {
+    // 先尝试从缓存获取（缓存1小时）
+    try {
+      const cached = wx.getStorageSync('dealers_cache');
+      if (cached && cached.expireTime > Date.now()) {
+        resolve({ success: true, data: cached.data });
+        return;
+      }
+    } catch (e) {
+      // 缓存读取失败，继续请求API
+    }
+    
+    // 从API获取
+    const url = getApiUrl('/dealers');
+    
+    wx.request({
+      url: url,
+      method: 'GET',
+      header: { 'Content-Type': 'application/json' },
+      success: (res) => {
+        const result = res.data || {};
+        if (result.success && result.data && result.data.length > 0) {
+          // 缓存结果
+          try {
+            wx.setStorageSync('dealers_cache', {
+              data: result.data,
+              expireTime: Date.now() + 3600000 // 1小时
+            });
+          } catch (e) {
+            // 缓存失败不影响返回结果
+          }
+          resolve({ success: true, data: result.data });
+        } else {
+          // API返回空或失败，使用默认列表
+          resolve({ success: true, data: getDefaultDealers() });
+        }
+      },
+      fail: () => {
+        // 网络失败，使用默认列表
+        resolve({ success: true, data: getDefaultDealers() });
+      }
+    });
+  });
+}
+
+/**
+ * 获取默认交易商列表
+ * @returns {Array}
+ */
+function getDefaultDealers() {
+  return [
+    { code: 'zx', name: '中信证券' },
+    { code: 'ht', name: '华泰财富' },
+    { code: 'yh', name: '银河瑞德' },
+    { code: 'gd', name: '光大证券' },
+    { code: 'zg', name: '中金公司' },
+    { code: 'gz', name: '国泰君安' }
+  ];
+}
+
 module.exports = {
   submitInquiry,
   getMyInquiries,
   getInquiryDetail,
   getUserStatus,
   checkSubmitPermission,
-  buildSubmitData
+  buildSubmitData,
+  getDealers,
+  getDefaultDealers
 }

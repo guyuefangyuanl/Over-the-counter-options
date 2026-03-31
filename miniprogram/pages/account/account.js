@@ -4,13 +4,6 @@ const app = getApp();
 
 Page({
   data: {
-    // 用户信息
-    userInfo: null,
-    
-    // 头像上传状态
-    isAvatarUploading: false,
-    showAvatarPreview: false,
-
     // 账户选择
     accounts: [
       { id: 'W0008888', name: '场外期权账户' },
@@ -22,18 +15,30 @@ Page({
     // 资产概览
     overview: { totalScale: 0, totalProfit: 0, completedProfit: 0 },
     costDetails: { total: 0, optionFee: 0, commission: 0 },
-    isCostExpanded: false,
 
     // 持仓数据
     activeTab: 'continuing',
     allPositions: [],
     filteredPositions: [],
 
+    // 持仓数量统计
+    continuingCount: 0,
+    expiringCount: 0,
+    expiredCount: 0,
+    closedCount: 0,
+
     // 加载与错误状态
     isPageLoading: false,
     refresherTriggered: false,
     overviewError: false,
     positionsError: false,
+
+    // 数据说明弹窗
+    showDataInfoPopup: false,
+
+    // 操作菜单
+    showActionMenu: false,
+    currentActionPosition: null,
 
     // 持仓录入表单
     showAddPositionForm: false,
@@ -49,18 +54,19 @@ Page({
     isSubmittingPosition: false,
 
     // 持仓操作相关
-    editingPosition: null,           // 当前编辑的持仓
-    showEditPositionForm: false,     // 编辑持仓弹窗
-    showClosePositionDialog: false,  // 平仓确认弹窗
-    closingPosition: null,           // 待平仓的持仓
-    closeType: 'accounting',         // 平仓类型：accounting/order
-    closePrice: '',                  // 平仓价格
-    isClosingPosition: false,        // 平仓提交中
-    // 来自首页跳转的高亮持仓 id（2s 后自动清除）
+    editingPosition: null,
+    showEditPositionForm: false,
+    showClosePositionDialog: false,
+    closingPosition: null,
+    closeType: 'accounting',
+    closePrice: '',
+    isClosingPosition: false,
+
+    // 来自首页跳转的高亮持仓 id
     highlightPositionId: null
   },
 
-  // 防并发标记（不放入 data，避免触发 setData 开销）
+  // 防并发标记
   _isFetchingProfile: false,
   _isFetchingPage: false,
 
@@ -72,17 +78,14 @@ Page({
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
       this.getTabBar().setData({ selected: 2 });
     }
-    // 每次显示时刷新用户资料（防重复并发）
-    this._refreshUserProfile();
 
-    // 处理来自首页持仓案例的跳转定向（切换到对应 tab 并高亮目标持仓）
+    // 处理来自首页持仓案例的跳转定向
     const focus = getApp().globalData.pendingPositionFocus;
     if (focus) {
       getApp().globalData.pendingPositionFocus = null;
       const targetTab = focus.tab || 'continuing';
       this.setData({ activeTab: targetTab, highlightPositionId: focus.positionId });
       this._filterPositions();
-      // 2s 后清除高亮，避免持续样式残留
       setTimeout(() => {
         this.setData({ highlightPositionId: null });
       }, 2000);
@@ -90,14 +93,14 @@ Page({
   },
 
   onPullDownRefresh() {
-    // 同时兼容 scroll-view refresher 和系统下拉刷新
     this.setData({ refresherTriggered: true });
     this.loadPageData().finally(() => {
       this.setData({ refresherTriggered: false });
-      wx.stopPullDownRefresh(); // 停止系统下拉刷新（enablePullDownRefresh: true 时生效）
+      wx.stopPullDownRefresh();
     });
   },
 
+  // ========== 账户选择 ==========
   toggleAccountSelector() {
     this.setData({ showAccountSelector: !this.data.showAccountSelector });
   },
@@ -109,23 +112,29 @@ Page({
     this.loadPageData();
   },
 
+  // ========== Tab切换 ==========
   switchTab(e) {
     const tab = e.currentTarget.dataset.tab;
     this.setData({ activeTab: tab });
     this._filterPositions();
   },
 
-  toggleCostDetails() {
-    this.setData({ isCostExpanded: !this.data.isCostExpanded });
+  // ========== 数据说明弹窗 ==========
+  showDataInfo() {
+    this.setData({ showDataInfoPopup: true });
   },
 
+  hideDataInfo() {
+    this.setData({ showDataInfoPopup: false });
+  },
+
+  // ========== 录持仓 ==========
   handleAddPosition() {
     this.openAddPositionForm();
   },
 
   /**
    * 检查游客/只读用户权限
-   * @returns {boolean} true 表示是游客/只读用户，已弹出提示；false 表示可以继续操作
    */
   _checkGuestPermission() {
     const role = this.data.userInfo?.role;
@@ -151,6 +160,7 @@ Page({
     return false;
   },
 
+  // ========== 持仓操作 ==========
   handlePositionAction(e) {
     const id = e.currentTarget.dataset.id;
     const action = e.currentTarget.dataset.action;
@@ -161,6 +171,17 @@ Page({
       return;
     }
 
+    // 如果是"更多"操作，显示操作菜单
+    if (action === 'more') {
+      this.setData({ showActionMenu: true, currentActionPosition: position });
+      return;
+    }
+
+    this._executePositionAction(action, position);
+  },
+
+  // 执行持仓操作
+  _executePositionAction(action, position) {
     switch (action) {
       case 'modify':
         this.openModifyPositionForm(position);
@@ -179,9 +200,36 @@ Page({
     }
   },
 
-  // 打开修改持仓弹窗
+  // 操作菜单选择
+  onActionMenuSelect(e) {
+    const action = e.currentTarget.dataset.action;
+    const position = this.data.currentActionPosition;
+
+    this.setData({ showActionMenu: false, currentActionPosition: null });
+
+    if (position && action) {
+      this._executePositionAction(action, position);
+    }
+  },
+
+  hideActionMenu() {
+    this.setData({ showActionMenu: false, currentActionPosition: null });
+  },
+
+  // ========== 成本详情展开 ==========
+  toggleCostDetail(e) {
+    const id = e.currentTarget.dataset.id;
+    const positions = this.data.filteredPositions.map(p => {
+      if (p.id === id) {
+        return { ...p, showCostDetail: !p.showCostDetail };
+      }
+      return p;
+    });
+    this.setData({ filteredPositions: positions });
+  },
+
+  // ========== 修改持仓 ==========
   openModifyPositionForm(position) {
-    // 游客权限检查
     if (this._checkGuestPermission()) return;
 
     this.setData({
@@ -199,13 +247,11 @@ Page({
     });
   },
 
-  // 关闭修改持仓弹窗
   hideEditPositionForm() {
     if (this.data.isSubmittingPosition) return;
     this.setData({ showEditPositionForm: false, editingPosition: null });
   },
 
-  // 提交修改持仓
   async submitEditPositionForm() {
     if (this.data.isSubmittingPosition) return;
 
@@ -247,9 +293,8 @@ Page({
     }
   },
 
-  // 打开平仓确认弹窗
+  // ========== 平仓操作 ==========
   openClosePositionDialog(position, closeType) {
-    // 游客权限检查
     if (this._checkGuestPermission()) return;
 
     this.setData({
@@ -260,23 +305,19 @@ Page({
     });
   },
 
-  // 关闭平仓确认弹窗
   hideClosePositionDialog() {
     if (this.data.isClosingPosition) return;
     this.setData({ showClosePositionDialog: false, closingPosition: null });
   },
 
-  // 平仓价格输入
   onClosePriceInput(e) {
     this.setData({ closePrice: e.detail.value });
   },
 
-  // 切换平仓类型
   onCloseTypeChange(e) {
     this.setData({ closeType: e.detail.value });
   },
 
-  // 确认平仓
   async confirmClosePosition() {
     if (this.data.isClosingPosition) return;
 
@@ -312,9 +353,8 @@ Page({
     }
   },
 
-  // 确认删除持仓
+  // ========== 删除持仓 ==========
   confirmDeletePosition(position) {
-    // 游客权限检查
     if (this._checkGuestPermission()) return;
 
     wx.showModal({
@@ -336,311 +376,8 @@ Page({
     });
   },
 
-  // 更新头像 - 增强版（多重容错）
-  async onChooseAvatar(e) {
-    try {
-      const { avatarUrl: tempFilePath } = e.detail;
-      
-      // 🔧 增强验证：检查文件是否存在且可访问
-      if (!tempFilePath || typeof tempFilePath !== 'string') {
-        throw new Error('头像文件路径无效');
-      }
-
-      // 验证文件
-      const validationResult = avatarUtils.validateAvatarFile(tempFilePath);
-      if (!validationResult.valid) {
-        wx.showToast({
-          title: validationResult.message,
-          icon: 'none'
-        });
-        return;
-      }
-
-      // 显示上传状态
-      this.setData({ 
-        isAvatarUploading: true,
-        'userInfo.avatar': tempFilePath // 先显示本地预览
-      });
-
-      // 🔧 增强压缩：添加更多选项和错误处理
-      let compressedPath = tempFilePath; // 默认使用原图
-      try {
-        compressedPath = await avatarUtils.compressImage(tempFilePath, {
-          quality: 80,
-          maxWidth: 800,
-          maxHeight: 800
-        });
-      } catch (compressError) {
-        console.warn('图片压缩失败，使用原图:', compressError.message);
-        // 压缩失败时继续使用原图
-      }
-
-      // 🔧 增强上传：添加重试机制
-      let uploadedUrl;
-      let retryCount = 0;
-      const maxRetries = 2;
-      
-      while (retryCount <= maxRetries) {
-        try {
-          uploadedUrl = await avatarUtils.uploadAvatar(compressedPath, this.data.userInfo?.openid);
-          break; // 上传成功，跳出循环
-        } catch (uploadError) {
-          retryCount++;
-          if (retryCount > maxRetries) {
-            throw uploadError; // 超过重试次数，抛出错误
-          }
-          console.warn(`上传失败，第${retryCount}次重试:`, uploadError.message);
-          // 等待一段时间后重试
-          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-        }
-      }
-
-      // 更新用户信息
-      await accountService.updateUserProfile({ 
-        avatar: uploadedUrl,
-        nickname: this.data.userInfo?.nickname
-      });
-
-      // 更新本地数据
-      this.setData({
-        'userInfo.avatar': uploadedUrl
-      });
-
-      wx.showToast({
-        title: '头像更新成功',
-        icon: 'success'
-      });
-
-    } catch (error) {
-      console.error('头像上传失败:', error);
-      wx.showModal({
-        title: '头像更新失败',
-        content: error.message || '头像上传过程中出现问题，请稍后重试',
-        showCancel: false,
-        confirmText: '知道了'
-      });
-      
-      // 🔧 恢复之前的头像或默认头像
-      const previousAvatar = this.data.userInfo?.avatar;
-      this.setData({
-        'userInfo.avatar': previousAvatar && previousAvatar !== avatarUtils.getDefaultAvatar() 
-          ? previousAvatar 
-          : avatarUtils.getDefaultAvatar()
-      });
-    } finally {
-      this.setData({ isAvatarUploading: false });
-    }
-  },
-
-  // 头像点击预览
-  onAvatarTap() {
-    if (this.data.userInfo?.avatar) {
-      avatarUtils.previewAvatar(this.data.userInfo.avatar);
-    }
-  },
-
-  // 头像加载失败处理
-  onAvatarError(event) {
-    avatarUtils.onAvatarError(event, this, 'userInfo.avatar');
-  },
-
-  // 更新昵称
-  async onNicknameChange(e) {
-    const nickname = (e.detail.value || '').trim();
-    if (!nickname) return;
-
-    const oldNickname = this.data.userInfo?.nickname;
-    this.setData({ 'userInfo.nickname': nickname });
-
-    try {
-      await accountService.updateUserProfile({ nickname });
-      wx.showToast({ title: '昵称已更新', icon: 'success', duration: 1500 });
-    } catch (err) {
-      console.warn('昵称更新失败:', err.message);
-      // 恢复旧昵称
-      this.setData({ 'userInfo.nickname': oldNickname });
-      wx.showToast({ title: '昵称更新失败', icon: 'none' });
-    }
-  },
-
-  /**
-   * 刷新用户资料（防并发重复）
-   * 后端返回格式：{ success, code, data: { nickname, avatar, openid, phone, role, ... } }
-   */
-  async _refreshUserProfile() {
-    if (this._isFetchingProfile) return;
-    this._isFetchingProfile = true;
-    try {
-      const res = await accountService.getUserProfile();
-      // 兼容后端返回 { data: {...} } 或直接返回对象
-      const user = (res && res.data) ? res.data : res;
-      if (user && typeof user === 'object') {
-        // 检测游客模式：role === 'guest' 表示游客，限制部分功能
-        const userRole = user.role || 'user';
-        const isGuest = userRole === 'guest';
-        
-        // 调试日志：输出用户角色信息
-        console.log('[account] 用户资料:', {
-          nickname: user.nickname || user.username,
-          role: userRole,
-          isGuest: isGuest,
-          openid: user.openid
-        });
-        
-        this.setData({
-          userInfo: {
-            nickname: user.nickname || user.username || '微信用户',
-            avatar: user.avatar || '',
-            openid: user.openid || user.username || '',
-            phone: user.phone || '',
-            role: userRole,
-            isGuest: isGuest
-          }
-        });
-
-        // 游客模式提示（仅在首次加载时显示）
-        if (isGuest && !this._hasShownGuestTip) {
-          this._hasShownGuestTip = true;
-          console.log('[account] 游客模式：持仓创建功能受限');
-        }
-      }
-    } catch (e) {
-      // api.js 已处理 401 跳转，这里只打日志，不弹错误 toast
-      console.warn('[account] 获取用户资料失败:', e.message);
-    } finally {
-      this._isFetchingProfile = false;
-    }
-  },
-
-  /**
-   * 加载页面主要数据（资产概览 + 持仓列表并发，错误隔离）
-   * 单个接口失败不影响其他模块展示
-   */
-  async loadPageData() {
-    if (this._isFetchingPage) return;
-    this._isFetchingPage = true;
-    this.setData({ isPageLoading: true, overviewError: false, positionsError: false });
-    wx.showLoading({ title: '加载中', mask: false });
-
-    try {
-      // 并发请求，使用 allSettled 保证单个失败不阻断整体
-      const [overviewResult, positionsResult] = await Promise.allSettled([
-        accountService.getAssetOverview(),
-        accountService.getPositions(1, 100)
-      ]);
-
-      // --- 处理资产概览 ---
-      let overview = { totalScale: 0, totalProfit: 0, completedProfit: 0 };
-      let costDetails = { total: 0, optionFee: 0, commission: 0 };
-      if (overviewResult.status === 'fulfilled') {
-        // 后端: flask_success_response(data={ totalMarketValue, totalProfitLoss, completedProfit, optionFee, commission, totalCount })
-        // api.js resolve 的是整个 body: { success, code, data: {...} }
-        const stats = (overviewResult.value && overviewResult.value.data)
-          ? overviewResult.value.data
-          : (overviewResult.value || {});
-        overview = {
-          totalScale: stats.totalMarketValue != null ? stats.totalMarketValue : 0,
-          totalProfit: stats.totalProfitLoss != null ? stats.totalProfitLoss : 0,
-          completedProfit: stats.completedProfit != null ? stats.completedProfit : 0
-        };
-        costDetails = {
-          optionFee: stats.optionFee != null ? stats.optionFee : 0,
-          commission: stats.commission != null ? stats.commission : 0,
-          total: (stats.optionFee || 0) + (stats.commission || 0)
-        };
-      } else {
-        console.warn('[account] 资产概览加载失败:', overviewResult.reason && overviewResult.reason.message);
-        this.setData({ overviewError: true });
-      }
-
-      // --- 处理持仓列表 ---
-      let positions = [];
-      if (positionsResult.status === 'fulfilled') {
-        // 后端: flask_paginated_response → { success, code, data: { items: [...], pagination: {...} } }
-        const body = (positionsResult.value && positionsResult.value.data)
-          ? positionsResult.value.data
-          : (positionsResult.value || {});
-        const rawItems = body.items || body.list || (Array.isArray(body) ? body : []);
-        positions = rawItems.map(p => this._mapPosition(p));
-      } else {
-        console.warn('[account] 持仓列表加载失败:', positionsResult.reason && positionsResult.reason.message);
-        this.setData({ positionsError: true });
-      }
-
-      this.setData({ overview, costDetails, allPositions: positions });
-      this._filterPositions();
-    } catch (e) {
-      // 捕获意外异常，防止整个 loadPageData 崩溃
-      console.error('[account] loadPageData 意外异常:', e.message);
-      wx.showToast({ title: '数据加载失败', icon: 'none' });
-    } finally {
-      this.setData({ isPageLoading: false });
-      wx.hideLoading();
-      this._isFetchingPage = false;
-    }
-  },
-
-  /**
-   * 将后端持仓记录映射为前端展示格式
-   * @param {object} p 原始持仓数据
-   */
-  _mapPosition(p) {
-    const quantity = Number(p.quantity) || 0;
-    const price = Number(p.price) || 0; // 成本价
-    const marketValue = Number(p.marketValue) || 0;
-    // 避免除零：当 quantity 为 0 时显示 '--'
-    const currentPrice = quantity > 0 ? (marketValue / quantity).toFixed(3) : '--';
-    const pnl = Number(p.profitLoss) || 0;
-    const costBasis = quantity * price;
-    const pnlRate = costBasis > 0 ? ((pnl / costBasis) * 100).toFixed(2) : '0.00';
-    const isActive = p.status === 'active';
-
-    return {
-      id: p._id || p.id || '',
-      productCode: p.productCode || '',
-      productName: p.productName || '未知产品',
-      dealer: p.dealer || '自营',
-      notional: marketValue,
-      fillPrice: price,
-      currentPrice,
-      pnlRate: Number(pnlRate),
-      pnl,
-      daysLeft: p.daysLeft != null ? p.daysLeft : 30,
-      status: isActive ? 'CONTINUING' : 'CLOSED',
-      statusText: isActive ? '存续中' : '已完结'
-    };
-  },
-
-  /**
-   * 根据当前 tab 过滤持仓列表
-   */
-  _filterPositions() {
-    const { activeTab, allPositions = [] } = this.data;
-    let filtered = [];
-    if (activeTab === 'continuing') {
-      filtered = allPositions.filter(i => i.status === 'CONTINUING');
-    } else if (activeTab === 'expiring') {
-      // 临近到期：存续中且剩余天数 <= 7
-      filtered = allPositions.filter(i => i.status === 'CONTINUING' && Number(i.daysLeft) <= 7);
-    } else if (activeTab === 'closed') {
-      filtered = allPositions.filter(i => i.status === 'CLOSED');
-    }
-    this.setData({ filteredPositions: filtered });
-  },
-
-  // 兼容外部调用的旧命名
-  filterPositions() {
-    this._filterPositions();
-  },
-
   // ========== 持仓录入表单 ==========
-
-  /**
-   * 打开持仓录入弹窗
-   * 游客/只读用户禁止创建持仓，引导用户登录
-   */
   openAddPositionForm() {
-    // 游客/只读用户权限检查
     if (this._checkGuestPermission()) return;
 
     this.setData({
@@ -650,24 +387,16 @@ Page({
     });
   },
 
-  /**
-   * 关闭持仓录入弹窗
-   */
   hideAddPositionForm() {
     if (this.data.isSubmittingPosition) return;
     this.setData({ showAddPositionForm: false });
   },
 
-  /**
-   * 持仓表单字段输入处理（bind:change 实时更新，与项目其他表单保持一致）
-   */
   onPositionFormInput(e) {
     const field = e.currentTarget.dataset.field;
-    // bind:change 事件：e.detail 可能是字符串或包含 value 的对象
     const value = typeof e.detail === 'string' ? e.detail : (e.detail && e.detail.value !== undefined ? e.detail.value : '');
     const newForm = Object.assign({}, this.data.positionForm);
     newForm[field] = value;
-    // 只有该字段有错误时才更新 errors，减少无效渲染
     const update = { positionForm: newForm };
     if (this.data.positionFormErrors[field]) {
       const errors = Object.assign({}, this.data.positionFormErrors);
@@ -677,9 +406,6 @@ Page({
     this.setData(update);
   },
 
-  /**
-   * 提交持仓录入表单
-   */
   async submitPositionForm() {
     if (this.data.isSubmittingPosition) return;
 
@@ -711,50 +437,186 @@ Page({
         daysLeft: form.daysLeft ? Number(form.daysLeft) : 30,
         status: 'active'
       };
-      
-      // 调试日志：输出当前用户角色和请求信息
-      console.log('[account] 提交持仓录入:', {
-        payload: payload,
-        userInfo: this.data.userInfo,
-        token: wx.getStorageSync('token') ? '已设置' : '未设置'
-      });
-      
+
       await accountService.createPosition(payload);
       this.setData({ showAddPositionForm: false });
       wx.showToast({ title: '录入成功', icon: 'success' });
       this.loadPageData();
     } catch (err) {
-      // 详细的错误日志
-      console.error('[account] 持仓录入失败:', {
-        message: err && err.message,
-        details: err && err.details,
-        userInfo: this.data.userInfo
-      });
-
-      // 如果是权限错误，显示更详细的提示并引导用户登录
       const errorMsg = (err && err.message) || '';
-      const userRole = this.data.userInfo?.role;
-      const isGuestOrViewer = userRole === 'guest' || userRole === 'viewer';
-
-      if (errorMsg.includes('权限') || errorMsg.includes('登录') || isGuestOrViewer) {
-        wx.showModal({
-          title: '需要登录',
-          content: isGuestOrViewer
-            ? '游客/只读用户无法录入持仓。请使用微信授权登录后使用完整功能。'
-            : `${errorMsg}\n\n当前角色: ${userRole || '未知'}`,
-          confirmText: '去登录',
-          cancelText: '取消',
-          success: (res) => {
-            if (res.confirm) {
-              wx.navigateTo({ url: '/pages/login/login' });
-            }
-          }
-        });
-      } else {
-        wx.showToast({ title: errorMsg || '录入失败', icon: 'none' });
-      }
+      wx.showToast({ title: errorMsg || '录入失败', icon: 'none' });
     } finally {
       this.setData({ isSubmittingPosition: false });
     }
+  },
+
+  // ========== 数据加载 ==========
+  async loadPageData() {
+    if (this._isFetchingPage) return;
+    this._isFetchingPage = true;
+    this.setData({ isPageLoading: true, overviewError: false, positionsError: false });
+    wx.showLoading({ title: '加载中', mask: false });
+
+    try {
+      const [overviewResult, positionsResult] = await Promise.allSettled([
+        accountService.getAssetOverview(),
+        accountService.getPositions(1, 100)
+      ]);
+
+      // 处理资产概览
+      let overview = { totalScale: 0, totalProfit: 0, completedProfit: 0 };
+      let costDetails = { total: 0, optionFee: 0, commission: 0 };
+      if (overviewResult.status === 'fulfilled') {
+        const stats = (overviewResult.value && overviewResult.value.data)
+          ? overviewResult.value.data
+          : (overviewResult.value || {});
+        overview = {
+          totalScale: stats.totalMarketValue != null ? stats.totalMarketValue : 0,
+          totalProfit: stats.totalProfitLoss != null ? stats.totalProfitLoss : 0,
+          completedProfit: stats.completedProfit != null ? stats.completedProfit : 0
+        };
+        costDetails = {
+          optionFee: stats.optionFee != null ? stats.optionFee : 0,
+          commission: stats.commission != null ? stats.commission : 0,
+          total: (stats.optionFee || 0) + (stats.commission || 0)
+        };
+      } else {
+        console.warn('[account] 资产概览加载失败:', overviewResult.reason && overviewResult.reason.message);
+        this.setData({ overviewError: true });
+      }
+
+      // 处理持仓列表
+      let positions = [];
+      if (positionsResult.status === 'fulfilled') {
+        const body = (positionsResult.value && positionsResult.value.data)
+          ? positionsResult.value.data
+          : (positionsResult.value || {});
+        const rawItems = body.items || body.list || (Array.isArray(body) ? body : []);
+        positions = rawItems.map(p => this._mapPosition(p));
+      } else {
+        console.warn('[account] 持仓列表加载失败:', positionsResult.reason && positionsResult.reason.message);
+        this.setData({ positionsError: true });
+      }
+
+      this.setData({ overview, costDetails, allPositions: positions });
+      this._updatePositionCounts();
+      this._filterPositions();
+    } catch (e) {
+      console.error('[account] loadPageData 意外异常:', e.message);
+      wx.showToast({ title: '数据加载失败', icon: 'none' });
+    } finally {
+      this.setData({ isPageLoading: false });
+      wx.hideLoading();
+      this._isFetchingPage = false;
+    }
+  },
+
+  /**
+   * 将后端持仓记录映射为前端展示格式
+   * 场外期权标准计算逻辑：
+   * - 投入成本 = 期权费（optionFee）或 名义本金 × 期权费率（premiumRate）
+   * - 盈亏率 = 净盈利 / 投入成本
+   */
+  _mapPosition(p) {
+    // 基础字段
+    const notional = Number(p.notional) || Number(p.marketValue) || 0;  // 名义本金
+    const entryPrice = Number(p.price) || Number(p.entryPrice) || 0;    // 进场价
+    const strikePrice = Number(p.strikePrice) || 0;                     // 执行价
+    const optionFee = Number(p.optionFee) || 0;                         // 期权费（权利金）
+    const premiumRate = Number(p.premiumRate) || 0;                     // 期权费率（%）
+    const currentPrice = Number(p.currentPrice) || 0;                   // 当前价
+
+    // 投入成本 = 期权费（优先）或 名义本金 × 期权费率
+    // 若 optionFee 存在，直接使用；否则通过 premiumRate 计算
+    const investedCost = optionFee > 0
+      ? optionFee
+      : (premiumRate > 0 ? notional * (premiumRate / 100) : 0);
+
+    // 净盈利（使用后端计算值）
+    const pnl = Number(p.profitLoss) || 0;
+
+    // 盈亏率 = 净盈利 / 投入成本
+    const pnlRate = investedCost > 0
+      ? ((pnl / investedCost) * 100).toFixed(2)
+      : '0.00';
+
+    // 距执行价百分比（看涨期权：当前价相对于执行价的距离）
+    const distanceToStrike = currentPrice > 0 && strikePrice > 0
+      ? ((currentPrice - strikePrice) / strikePrice * 100).toFixed(2)
+      : '--';
+
+    // 持仓状态判断
+    const isActive = p.status === 'active';
+    const daysLeft = p.daysLeft != null ? p.daysLeft : 30;
+    const isExpired = daysLeft <= 0;
+
+    return {
+      id: p._id || p.id || '',
+      productCode: p.productCode || '',
+      productName: p.productName || '未知产品',
+      dealer: p.dealer || '自营',
+      notionalWan: (notional / 10000).toFixed(2),  // 名义本金（万）
+      fillPrice: entryPrice,                       // 进场价
+      strikePrice,                                  // 执行价
+      optionFee,                                    // 期权费
+      premiumRate,                                  // 期权费率
+      investedCost,                                 // 投入成本（修正后）
+      currentPrice: currentPrice || '--',
+      distanceToStrike,                             // 距执行价百分比
+      pnl,
+      pnlRate: Number(pnlRate),
+      daysLeft,
+      status: isActive ? (isExpired ? 'EXPIRED' : 'CONTINUING') : 'CLOSED',
+      statusText: isActive ? (isExpired ? '已到期' : '存续中') : '已完结',
+      showCostDetail: false
+    };
+  },
+
+  /**
+   * 更新各状态持仓数量统计
+   */
+  _updatePositionCounts() {
+    const { allPositions = [] } = this.data;
+
+    const continuingCount = allPositions.filter(p => p.status === 'CONTINUING' && p.daysLeft > 7).length;
+    const expiringCount = allPositions.filter(p => p.status === 'CONTINUING' && p.daysLeft > 0 && p.daysLeft <= 7).length;
+    const expiredCount = allPositions.filter(p => p.status === 'EXPIRED' || (p.status === 'CONTINUING' && p.daysLeft <= 0)).length;
+    const closedCount = allPositions.filter(p => p.status === 'CLOSED').length;
+
+    this.setData({
+      continuingCount,
+      expiringCount,
+      expiredCount,
+      closedCount
+    });
+  },
+
+  /**
+   * 根据当前 tab 过滤持仓列表
+   */
+  _filterPositions() {
+    const { activeTab, allPositions = [] } = this.data;
+    let filtered = [];
+
+    if (activeTab === 'continuing') {
+      // 存续持仓：存续中且剩余天数 > 7
+      filtered = allPositions.filter(i => i.status === 'CONTINUING' && i.daysLeft > 7);
+    } else if (activeTab === 'expiring') {
+      // 近期到期：存续中且剩余天数 1-7 天
+      filtered = allPositions.filter(i => (i.status === 'CONTINUING' && i.daysLeft > 0 && i.daysLeft <= 7));
+    } else if (activeTab === 'expired') {
+      // 已到期：存续中但剩余天数 <= 0
+      filtered = allPositions.filter(i => i.status === 'EXPIRED' || (i.status === 'CONTINUING' && i.daysLeft <= 0));
+    } else if (activeTab === 'closed') {
+      // 已完结：已平仓
+      filtered = allPositions.filter(i => i.status === 'CLOSED');
+    }
+
+    this.setData({ filteredPositions: filtered });
+  },
+
+  // 兼容外部调用的旧命名
+  filterPositions() {
+    this._filterPositions();
   }
 });

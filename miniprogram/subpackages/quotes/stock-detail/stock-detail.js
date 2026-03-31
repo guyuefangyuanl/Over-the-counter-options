@@ -77,7 +77,8 @@ Page({
       term: '',
       rate: '',
       notional: 100,
-      price: ''
+      price: '',
+      contactPhone: '' // 联系电话（必填）
     },
     
     // === 新增：加载和刷新状态 ===
@@ -88,7 +89,18 @@ Page({
     
     // === 新增：动画状态 ===
     favAnimClass: '',
-    cellHighlightMap: {}  // 点击高亮效果
+    cellHighlightMap: {},  // 点击高亮效果
+    
+    // === 新增：询价增强功能 ===
+    showInquiryFromSearch: false,  // 是否从搜索页询价入口进入
+    // 行权价类型预设（与报价矩阵对应）
+    strikePriceTypes: [
+      { value: 'atm', label: '平值(100%)', strike: 100 },
+      { value: 'otm105', label: '虚值105%', strike: 105 },
+      { value: 'otm110', label: '虚值110%', strike: 110 },
+      { value: 'itm95', label: '实值95%', strike: 95 },
+      { value: 'itm90', label: '实值90%', strike: 90 }
+    ]
   },
 
   onLoad(options) {
@@ -118,6 +130,12 @@ Page({
 
     // 检查收藏状态
     this.checkFavoriteStatus();
+    
+    // 检查是否从询价入口进入（搜索页询价来源）
+    if (options.showInquiry === '1') {
+      console.log('[股票详情] 从询价入口进入，将自动弹出询价弹窗');
+      this.setData({ showInquiryFromSearch: true });
+    }
     
     // 加载期权矩阵数据
     this.loadOptionMatrix();
@@ -325,6 +343,9 @@ Page({
           loading: false
         });
         
+        // 检查是否需要自动弹出询价弹窗
+        this._checkAndShowInquiryPopup();
+        
         // 如果是降级数据，显示提示
         if (result.fallback) {
           wx.showToast({
@@ -489,6 +510,12 @@ Page({
       });
     }, 200));
 
+    // 尝试从存储中获取用户手机号作为默认值
+    const storedUserInfo = wx.getStorageSync('userInfo') || {};
+    const loginService = require('../../../utils/loginService.js');
+    const currentUser = loginService.getCurrentUser() || {};
+    const defaultPhone = storedUserInfo.phone || currentUser.phone || '';
+
     this.setData({
       showOrderModal: true,
       orderForm: {
@@ -498,7 +525,8 @@ Page({
         term,
         rate: cell.value.replace('%', ''),
         notional: 100,
-        price: ''
+        price: '',
+        contactPhone: defaultPhone
       }
     });
   },
@@ -522,6 +550,10 @@ Page({
 
   onPriceInput(e) {
     this.setData({ 'orderForm.price': e.detail.value });
+  },
+
+  onContactPhoneInput(e) {
+    this.setData({ 'orderForm.contactPhone': e.detail.value });
   },
 
   // ==================== 图片生成（Canvas 2D API）====================
@@ -591,6 +623,14 @@ Page({
       } else if (price > 100000) {
         errors.push('买入价格超出合理范围');
       }
+    }
+
+    // 8. 联系电话校验（必填）
+    const phoneRegex = /^1[3-9]\d{9}$/;
+    if (!orderForm.contactPhone || orderForm.contactPhone.trim() === '') {
+      errors.push('联系电话为必填项');
+    } else if (!phoneRegex.test(orderForm.contactPhone.trim())) {
+      errors.push('联系电话格式不正确（需为11位手机号）');
     }
 
     return {
@@ -797,7 +837,7 @@ Page({
 
       // 联系信息（优先使用表单输入，其次使用存储的用户信息）
       contactName: storedUserInfo.nickName || currentUser.nickName || '转发用户',
-      contactPhone: storedUserInfo.phone || currentUser.phone || '',
+      contactPhone: orderForm.contactPhone || storedUserInfo.phone || currentUser.phone || '',
       contactEmail: storedUserInfo.email || currentUser.email || '',
       notes: `通过转发下单图片提交 - ${orderForm.direction}`,
 
@@ -878,6 +918,88 @@ Page({
           wx.makePhoneCall({ phoneNumber: '400-123-4567' });
         }
       }
+    });
+  },
+
+  // ==================== 询价增强功能 ====================
+
+  /**
+   * 自动弹出询价弹窗（从搜索页询价入口进入时调用）
+   * 在矩阵数据加载完成后检查并触发
+   */
+  _checkAndShowInquiryPopup() {
+    if (this.data.showInquiryFromSearch && this.data.matrixData.length > 0) {
+      setTimeout(() => {
+        this.setData({ showInquiryFromSearch: false });
+        // 自动弹出询价弹窗，默认选中第一个结构
+        const firstStrike = this.data.matrixData[0]?.strike || '100C';
+        const firstTerm = this.data.terms[0] || '1M';
+        const firstValue = this.data.matrixData[0]?.values[0]?.value?.replace('%', '') || '';
+
+        // 尝试获取用户手机号作为默认值
+        const storedUserInfo = wx.getStorageSync('userInfo') || {};
+        const loginService = require('../../../utils/loginService.js');
+        const currentUser = loginService.getCurrentUser() || {};
+        const defaultPhone = storedUserInfo.phone || currentUser.phone || '';
+
+        this.setData({
+          showOrderModal: true,
+          orderForm: {
+            direction: '买入',
+            trader: this.data.selectedTrader || '最优报价',
+            strike: firstStrike,
+            term: firstTerm,
+            rate: firstValue,
+            notional: 100,
+            price: '',
+            contactPhone: defaultPhone
+          }
+        });
+      }, 500);
+    }
+  },
+
+  /**
+   * 跳转到完整询价表单页
+   * 携带当前选中的标的和报价参数
+   */
+  goToFullInquiry() {
+    const { stock, orderForm } = this.data;
+    
+    const product = {
+      code: stock.code,
+      name: stock.name,
+      price: stock.price,
+      type: 'stock'
+    };
+    
+    const params = {
+      optionType: orderForm.strike?.includes('P') ? 'put' : 'call',
+      term: orderForm.term,
+      strikePrice: orderForm.strike?.replace(/[CP]/, '') || '100',
+      structure: this.data.activeTab || 'vanilla',
+      rate: orderForm.rate
+    };
+    
+    // 设置全局询价上下文
+    const app = getApp();
+    app.globalData.inquiryContext = {
+      selectedProduct: product,
+      presetParams: params,
+      fromSearchInquiry: true
+    };
+    
+    wx.navigateTo({
+      url: `/subpackages/inquiry/inquiry/inquiry?product=${encodeURIComponent(JSON.stringify(product))}`
+    });
+  },
+
+  /**
+   * 查看询价历史
+   */
+  goToInquiryHistory() {
+    wx.navigateTo({
+      url: '/subpackages/user/inquiry-history/inquiry-history'
     });
   },
 

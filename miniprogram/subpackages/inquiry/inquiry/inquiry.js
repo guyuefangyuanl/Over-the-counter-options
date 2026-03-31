@@ -61,7 +61,17 @@ Page({
       { value: '3M', label: '3个月' },
       { value: '6M', label: '6个月' },
       { value: '12M', label: '12个月' }
-    ]
+    ],
+    
+    // === 行权价预设选项 ===
+    strikePriceTypes: [
+      { value: 'atm', label: '平值(100%)', strike: 100 },
+      { value: 'otm105', label: '虚值105%', strike: 105 },
+      { value: 'otm110', label: '虚值110%', strike: 110 },
+      { value: 'itm95', label: '实值95%', strike: 95 },
+      { value: 'itm90', label: '实值90%', strike: 90 }
+    ],
+    selectedStrikeType: 'atm'
   },
 
   // ==================== 生命周期 ====================
@@ -98,6 +108,36 @@ Page({
         contactName: userStatus.userInfo.nickname || userStatus.userInfo.nickName || '',
         contactPhone: userStatus.userInfo.phone || ''
       });
+    }
+    
+    // 检查全局询价上下文（从stock-detail跳转过来）
+    const app = getApp();
+    const context = app.globalData.inquiryContext;
+    
+    if (context && context.selectedProduct) {
+      console.log('[询价] 从全局上下文获取标的:', context.selectedProduct);
+      
+      this.setData({
+        selectedProduct: context.selectedProduct
+      });
+      
+      // 如果有预设参数，也一并设置
+      if (context.presetParams) {
+        const params = context.presetParams;
+        this.setData({
+          optionType: params.optionType || this.data.optionType,
+          term: params.term || this.data.term,
+          strikePrice: params.strikePrice || this.data.strikePrice,
+          structure: params.structure || this.data.structure
+        });
+      }
+      
+      // 清空上下文
+      app.globalData.inquiryContext = {
+        selectedProduct: null,
+        presetParams: null,
+        fromSearchInquiry: false
+      };
     }
   },
 
@@ -396,5 +436,35 @@ Page({
       title: '期权询价',
       path: '/subpackages/inquiry/inquiry/inquiry'
     };
+  },
+
+  // ==================== 行权价预设选择 ====================
+
+  /**
+   * 行权价类型切换
+   * 快速选择常用的行权价百分比
+   */
+  onStrikeTypeChange(e) {
+    const type = e.currentTarget.dataset.type;
+    const strikeType = this.data.strikePriceTypes.find(t => t.value === type);
+    
+    if (strikeType) {
+      this.setData({
+        selectedStrikeType: type,
+        strikePrice: String(strikeType.strike),
+        formErrors: { ...this.data.formErrors, strikePrice: null }
+      });
+    }
+  },
+
+  // ==================== 询价历史入口 ====================
+
+  /**
+   * 跳转到询价历史页面
+   */
+  onGoHistory() {
+    wx.navigateTo({
+      url: '/subpackages/user/inquiry-history/inquiry-history'
+    });
   }
 });

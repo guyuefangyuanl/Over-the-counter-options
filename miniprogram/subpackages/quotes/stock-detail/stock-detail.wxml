@@ -157,10 +157,16 @@
             </view>
           </view>
           <view class="popup-row">
-            <view class="popup-label">买入价格<text class="req-star">*</text></view>
+            <view class="popup-label">买入价格</view>
             <view class="popup-value input-group">
               <input class="popup-input" type="digit" value="{{orderForm.price}}" placeholder="不输入默认为市价" bindinput="onPriceInput" />
               <text class="input-unit">元</text>
+            </view>
+          </view>
+          <view class="popup-row">
+            <view class="popup-label">联系电话<text class="req-star">*</text></view>
+            <view class="popup-value input-group">
+              <input class="popup-input" type="number" value="{{orderForm.contactPhone}}" placeholder="请输入联系电话" bindinput="onContactPhoneInput" maxlength="11" />
             </view>
           </view>
         </view>

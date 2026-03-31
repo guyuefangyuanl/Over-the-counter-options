@@ -262,21 +262,55 @@ Page({
     this.setData({ positionData });
   },
 
-  // 重新计算持仓盈亏
+  // 重新计算持仓盈亏（场外期权标准逻辑）
   recalculatePosition: function (position) {
-    const { currentPrice, strikePrice, openPrice, scale, optionFee } = position;
-    
-    // 简化的盈亏计算
-    const intrinsicValue = Math.max(0, (currentPrice - strikePrice) / openPrice);
-    const totalValue = intrinsicValue * scale * 10000; // 转换为元
-    const totalCost = scale * 10000 * (optionFee / 100);
-    
-    position.profitLoss = totalValue - totalCost;
-    position.profitRate = (position.profitLoss / totalCost) * 100;
-    
-    // 更新距离指标
-    position.distanceToStrike = ((currentPrice - strikePrice) / currentPrice) * 100;
-    position.distanceToBreakEven = ((currentPrice - position.breakEvenPoint) / currentPrice) * 100;
+    const { currentPrice, strikePrice, openPrice, scale, optionFee, breakEvenPoint } = position;
+
+    // 场外期权盈亏计算：
+    // 1. 投入成本 = 名义本金（万元）× 10000 × 期权费率（%）
+    //    若 optionFee 是金额（元），直接使用；若是费率（%），需换算
+    const notionalAmount = scale * 10000; // 名义本金（元）
+    const investedCost = typeof optionFee === 'number' && optionFee < 100
+      ? notionalAmount * (optionFee / 100)  // optionFee 为费率
+      : (optionFee * scale / 100 || 0);     // optionFee 为费率百分比时的备选计算
+
+    // 2. 看涨期权内在价值 = (当前价 - 执行价) × 名义本金 / 进场价
+    //    只有当前价 > 执行价时才有内在价值
+    const intrinsicValue = currentPrice > strikePrice
+      ? (currentPrice - strikePrice) / openPrice * notionalAmount
+      : 0;
+
+    // 3. 净盈利 = 内在价值 - 投入成本
+    position.profitLoss = intrinsicValue - investedCost;
+
+    // 4. 盈亏率 = 净盈利 / 投入成本
+    position.profitRate = investedCost > 0
+      ? (position.profitLoss / investedCost) * 100
+      : 0;
+
+    // 5. 更新距离指标
+    // 距执行价百分比：当前价相对于执行价的偏离程度
+    position.distanceToStrike = strikePrice > 0
+      ? ((currentPrice - strikePrice) / strikePrice) * 100
+      : 0;
+
+    // 距盈亏平衡点百分比
+    position.distanceToBreakEven = breakEvenPoint > 0
+      ? ((currentPrice - breakEvenPoint) / breakEvenPoint) * 100
+      : 0;
+  },
+
+  /**
+   * 计算香草看涨期权盈亏平衡点
+   * @param {number} entryPrice - 进场价
+   * @param {number} premiumRate - 期权费率（小数，如 0.062 表示 6.2%）
+   * @param {number} strikePercent - 执行价百分比（如 1.0 表示 100% 平值）
+   * @returns {number} 盈亏平衡点价格
+   */
+  calculateBreakEven: function (entryPrice, premiumRate, strikePercent = 1) {
+    // 盈亏平衡点公式：执行价 + (进场价 × 期权费率 / 执行价比)
+    // 简化：breakEven = entryPrice × (premiumRate + strikePercent)
+    return entryPrice * (premiumRate + strikePercent);
   },
 
   // 计算风险等级

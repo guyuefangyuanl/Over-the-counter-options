@@ -34,7 +34,14 @@ App({
     allowMockLogin: true,
 
     // ⚠️ 当前是否处于Mock模式（运行时设置）
-    isMockMode: false
+    isMockMode: false,
+
+    // 📋 询价上下文（用于页面间数据传递）
+    inquiryContext: {
+      selectedProduct: null,    // 选中的标的 { code, name, price, type }
+      presetParams: null,       // 预设询价参数 { optionType, term, strikePrice, structure }
+      fromSearchInquiry: false  // 是否从搜索页询价入口进入
+    }
   },
   onLaunch: function() {
     console.log('小程序启动');

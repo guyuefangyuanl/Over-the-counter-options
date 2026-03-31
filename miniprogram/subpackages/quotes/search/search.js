@@ -29,73 +29,79 @@ const buildSafeRegex = (query, maxLength = 50) => {
   return escapeRegExp(trimmed);
 };
 
-// ================== 数据获取 ==================
+// ================== 模拟数据已移除 ==================
+// 股票数据来源于后台管理系统API
+// 搜索通过后台API /api/stock/search 获取数据
+
+// ================== 数据获取 ====================
 
 /**
- * 获取搜索建议 - 接入真实数据源
+ * 获取搜索建议 - 从后台API获取
  */
 const fetchSuggestions = async (query) => {
   console.log(`[搜索建议] 查询: ${query}`);
-  
+
   if (!query || query.trim().length < 1) {
     return [];
   }
-  
+
   try {
-    // 使用数据管理器获取真实的搜索建议
-    const suggestions = await quotesDataManager.getSearchSuggestions(query, 5);
-    
-    return suggestions.map((item, index) => ({
-      id: index,
-      code: item.code,
-      text: `${item.name} (${item.code})`,
-      name: item.name,
-      price: item.price,
-      changePercent: item.changePercent,
-      type: item.type
-    }));
+    // 从后台API获取搜索建议
+    const suggestions = await quotesDataManager.searchStocksFromAPI(query, 5);
+
+    if (suggestions && suggestions.length > 0) {
+      return suggestions.map((item, index) => ({
+        id: index,
+        code: item.code,
+        text: `${item.name} (${item.code})`,
+        name: item.name,
+        price: item.price,
+        changePercent: item.changePercent,
+        type: item.type
+      }));
+    }
+
+    // 无数据时返回空数组
+    console.log('[搜索建议] 未找到匹配结果');
+    return [];
   } catch (error) {
     console.error('[搜索建议] 获取失败:', error);
     return [];
   }
 };
 
-// 安全的数据库搜索
-const fetchResults = (query) => {
+// 从后台API搜索股票
+const fetchResults = async (query) => {
   console.log(`[搜索] 开始查询: ${query}`);
-  
+
   // 安全处理用户输入
   const safeQuery = buildSafeRegex(query);
   if (!safeQuery) {
-    return Promise.resolve([]);
+    return [];
   }
-  
-  const db = wx.cloud.database();
-  const _ = db.command;
-  
-  // 使用安全的正则模式进行搜索
-  return db.collection('quotes')
-    .where(_.or([
-      { code: db.RegExp({ regexp: safeQuery, options: 'i' }) },
-      { name: db.RegExp({ regexp: safeQuery, options: 'i' }) },
-      { pinyin: db.RegExp({ regexp: safeQuery, options: 'i' }) }
-    ]))
-    .limit(20)
-    .get()
-    .then(res => {
-      return res.data.map(item => ({
-        id: item._id,
+
+  try {
+    // 从后台API获取搜索结果
+    const results = await quotesDataManager.searchStocksFromAPI(query, 20);
+
+    if (results && results.length > 0) {
+      return results.map(item => ({
+        id: item.id || item.code,
         name: item.name,
         code: item.code,
         price: item.price,
         changePercent: item.changePercent,
         type: item.type || 'stock'
       }));
-    })
-    .catch(err => {
-      console.error('[搜索] 数据库查询失败:', err);
-      return [];
-    });
+    }
+
+    // 无数据时返回空数组
+    console.log('[搜索] 未找到匹配结果');
+    return [];
+  } catch (err) {
+    console.error('[搜索] 查询失败:', err);
+    return [];
+  }
 };
 
 Page({
@@ -329,7 +335,7 @@ Page({
   // 点击搜索结果
   onResultTap: function (e) {
     const item = e.currentTarget.dataset.item;
-    console.log('[搜索] 点击结果:', item);
+    console.log('[搜索] 点击结果:', item, '来源:', this.data.source);
 
     // 对参数进行URL编码，确保中文等特殊字符正确传递
     const encodedName = encodeURIComponent(item.name || '');
@@ -337,7 +343,25 @@ Page({
     const price = item.price || '';
     const changePercent = item.changePercent || '';
 
-    // 跳转到股票详情页面（修正：使用分包正确路径）
+    // 询价来源特殊处理：跳转到stock-detail并标记需要显示询价
+    if (this.data.source === 'inquiry') {
+      const url = `/subpackages/quotes/stock-detail/stock-detail?code=${encodedCode}&name=${encodedName}&price=${price}&changePercent=${changePercent}&showInquiry=1`;
+      console.log('[跳转-询价] 目标URL:', url);
+      
+      wx.navigateTo({
+        url: url,
+        success: () => {
+          console.log('[跳转-询价] 股票详情页成功');
+        },
+        fail: (err) => {
+          console.error('[跳转-询价] 股票详情页失败:', err);
+          wx.showToast({ title: '跳转失败，请重试', icon: 'none' });
+        }
+      });
+      return;
+    }
+
+    // 其他来源：跳转到股票详情页面（原有逻辑）
     const url = `/subpackages/quotes/stock-detail/stock-detail?code=${encodedCode}&name=${encodedName}&price=${price}&changePercent=${changePercent}`;
     console.log('[跳转] 目标URL:', url);
 

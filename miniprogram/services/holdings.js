@@ -163,7 +163,12 @@ function mapPositionForIndex(p) {
     notional: p.notional,
     notionalWan: notionalWan.toFixed(2),
     fillPrice: p.fillPrice,
+    strikePrice: p.strikePrice || 0,          // 执行价
+    optionFee: p.optionFee || 0,              // 期权费
+    premiumRate: p.premiumRate || 0,          // 期权费率
+    investedCost: p.investedCost || 0,        // 投入成本
     currentPrice: p.currentPrice,
+    distanceToStrike: p.distanceToStrike || '--', // 距执行价百分比
     pnl: pnlValue,
     pnlRate: pnlRateValue,
     daysLeft: p.daysLeft,
@@ -202,26 +207,46 @@ async function getIndexHoldingsData() {
 
     // 将后端原始字段映射为首页展示格式
     const positions = rawItems.map(p => {
-      const quantity = Number(p.quantity) || 0;
-      const price = Number(p.price) || 0;
-      const marketValue = Number(p.marketValue) || 0;
-      const currentPrice = quantity > 0 ? (marketValue / quantity).toFixed(3) : '--';
+      // 场外期权标准字段映射
+      const notional = Number(p.notional) || Number(p.marketValue) || 0;  // 名义本金
+      const entryPrice = Number(p.price) || Number(p.entryPrice) || 0;    // 进场价
+      const strikePrice = Number(p.strikePrice) || 0;                     // 执行价
+      const optionFee = Number(p.optionFee) || 0;                         // 期权费
+      const premiumRate = Number(p.premiumRate) || 0;                     // 期权费率（%）
+      const currentPrice = Number(p.currentPrice) || 0;                   // 当前价
+
+      // 投入成本 = 期权费（优先）或 名义本金 × 期权费率
+      const investedCost = optionFee > 0
+        ? optionFee
+        : (premiumRate > 0 ? notional * (premiumRate / 100) : 0);
+
+      // 净盈利（使用后端计算值）
       const pnl = Number(p.profitLoss) || 0;
-      const costBasis = quantity * price;
-      const pnlRate = costBasis > 0 ? ((pnl / costBasis) * 100).toFixed(2) : '0.00';
+
+      // 盈亏率 = 净盈利 / 投入成本
+      const pnlRate = investedCost > 0
+        ? ((pnl / investedCost) * 100).toFixed(2)
+        : '0.00';
+
       const isActive = p.status === 'active';
+      const daysLeft = p.daysLeft != null ? p.daysLeft : 30;
 
       const mapped = {
         id: p._id || p.id || '',
         productCode: p.productCode || '',
         productName: p.productName || '未知产品',
         dealer: p.dealer || '自营',
-        notional: marketValue,
-        fillPrice: price,
-        currentPrice,
+        notional,
+        notionalWan: (notional / 10000).toFixed(2),
+        fillPrice: entryPrice,
+        strikePrice,
+        optionFee,
+        premiumRate,
+        investedCost,
+        currentPrice: currentPrice || '--',
         pnlRate: Number(pnlRate),
         pnl,
-        daysLeft: p.daysLeft != null ? p.daysLeft : 30,
+        daysLeft,
         status: isActive ? 'CONTINUING' : 'CLOSED',
         statusText: isActive ? '存续中' : '已完结'
       };

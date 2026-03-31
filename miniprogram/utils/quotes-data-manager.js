@@ -13,6 +13,7 @@
 const { DataCacheManager, CACHE_PREFIX, DEFAULT_TTL } = require('./data-cache.js');
 const quotesApi = require('./api-quotes.js');
 const favoritesService = require('./favoritesService.js');
+const { getBaseUrl } = require('../config/api.config.js');
 
 // 缓存键扩展
 const QUOTES_CACHE_PREFIX = {
@@ -865,6 +866,68 @@ class QuotesDataManager {
   }
 
   // ==================== 搜索建议功能 ====================
+
+  /**
+   * 从后台API搜索股票
+   * @param {string} keyword 搜索关键词
+   * @param {number} limit 返回数量限制
+   * @returns {Promise<Array>} 搜索结果列表
+   */
+  async searchStocksFromAPI(keyword, limit = 20) {
+    if (!keyword || keyword.trim().length < 1) {
+      return [];
+    }
+
+    const safeKeyword = keyword.trim().slice(0, 50);
+
+    try {
+      const baseUrl = getBaseUrl();
+      const token = wx.getStorageSync('token');
+      const userId = wx.getStorageSync('userId') || 'anonymous';
+
+      return new Promise((resolve, reject) => {
+        wx.request({
+          url: `${baseUrl}/stock/search`,
+          method: 'GET',
+          data: { keyword: safeKeyword },
+          header: {
+            'content-type': 'application/json',
+            'X-User-ID': userId,
+            'Authorization': token ? `Bearer ${token}` : ''
+          },
+          timeout: 10000,
+          success: (res) => {
+            console.log('[股票搜索API] 响应状态:', res.statusCode);
+            if (res.statusCode >= 200 && res.statusCode < 300 && res.data) {
+              const responseData = res.data.data || res.data;
+              const stocks = Array.isArray(responseData) ? responseData : (responseData.items || []);
+
+              const results = stocks.slice(0, limit).map(item => ({
+                id: item._id || item.id || item.code,
+                code: item.code || item.stock_code,
+                name: item.name || item.stock_name,
+                price: item.price || item.last_price || '--',
+                changePercent: item.change_percent || item.changePercent || 0,
+                type: item.type || 'stock'
+              }));
+
+              resolve(results);
+            } else {
+              console.warn('[股票搜索API] 搜索失败:', res.data);
+              resolve([]);
+            }
+          },
+          fail: (err) => {
+            console.error('[股票搜索API] 请求失败:', err);
+            resolve([]);
+          }
+        });
+      });
+    } catch (error) {
+      console.error('[股票搜索API] 异常:', error);
+      return [];
+    }
+  }
 
   /**
    * 获取搜索建议（从热门股票和自选中匹配）
