@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "场外龙虎榜",
+  "usingComponents": {},
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "dark",
+  "backgroundColor": "#f5f7fa"
+}

@@ -53,7 +53,7 @@
       </view>
 
       <!-- 筛选栏 -->
-      <view class="list-filter-bar">
+      <view class="list-filter-bar" backgroud="transparent ">
         <view class="filter-group">
           <text class="filter-label">期限</text>
           <view class="chip-group">

@@ -163,6 +163,7 @@ def create_app() -> Flask:
     from routes.trade import trade_bp
     from routes.message import message_bp
     from routes.config import config_bp
+    from routes.dragon_tiger import dragon_tiger_bp
 
     flask_app = Flask(__name__)
     flask_app.json = CustomJSONProvider(flask_app)
@@ -284,7 +285,8 @@ def create_app() -> Flask:
     flask_app.register_blueprint(trade_bp, url_prefix='/api/v1/trade')
     flask_app.register_blueprint(message_bp, url_prefix='/api/v1/admin')
     flask_app.register_blueprint(config_bp, url_prefix='/api/v1/admin')
-    
+    flask_app.register_blueprint(dragon_tiger_bp)
+
     @flask_app.before_request
     def log_request_info():
         logger.info(f">>> Request: {request.method} {request.url}")

@@ -1,5 +1,6 @@
+/* 全局样式 */
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
@@ -20,7 +21,44 @@ body,
 
 body {
   min-width: 320px;
-  background: #f5f5f5;
+  background: var(--otc-bg-page, #F5F7FA);
+}
+
+/* ==================== 通用组件样式 ==================== */
+
+/* 链接样式 */
+a {
+  color: var(--otc-primary, #409EFF);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--otc-primary-light, #66B1FF);
+}
+
+/* 选中文本颜色 */
+::selection {
+  background: var(--otc-primary-lighter, #ECF5FF);
+  color: var(--otc-text-primary, #303133);
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--otc-text-placeholder, #C0C4CC);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--otc-text-secondary, #909399);
 }
 
 /* ==================== 响应式布局 ==================== */
@@ -31,7 +69,7 @@ body {
   .ant-table-wrapper {
     overflow-x: auto;
   }
-  
+
   .ant-table {
     min-width: 600px;
   }
@@ -146,4 +184,93 @@ body {
 
 .compact-mode .ant-card-body {
   padding: 12px;
+}
+
+/* ==================== 通用工具类 ==================== */
+
+/* 文字颜色 */
+.text-primary {
+  color: var(--otc-text-primary, #303133);
+}
+
+.text-regular {
+  color: var(--otc-text-regular, #606266);
+}
+
+.text-secondary {
+  color: var(--otc-text-secondary, #909399);
+}
+
+.text-placeholder {
+  color: var(--otc-text-placeholder, #C0C4CC);
+}
+
+/* 主题色文字 */
+.text-primary-color {
+  color: var(--otc-primary, #409EFF);
+}
+
+.text-success {
+  color: var(--otc-success, #67C23A);
+}
+
+.text-warning {
+  color: var(--otc-warning, #E6A23C);
+}
+
+.text-danger {
+  color: var(--otc-danger, #F56C6C);
+}
+
+/* 背景色 */
+.bg-page {
+  background-color: var(--otc-bg-page, #F5F7FA);
+}
+
+.bg-card {
+  background-color: var(--otc-bg-card, #FFFFFF);
+}
+
+.bg-hover {
+  background-color: var(--otc-bg-hover, #F5F7FA);
+}
+
+/* 圆角 */
+.rounded-base {
+  border-radius: var(--otc-radius-base, 4px);
+}
+
+.rounded-small {
+  border-radius: var(--otc-radius-small, 2px);
+}
+
+/* 阴影 */
+.shadow-base {
+  box-shadow: var(--otc-shadow-base, 0 2px 12px 0 rgba(0, 0, 0, 0.1));
+}
+
+.shadow-light {
+  box-shadow: var(--otc-shadow-light, 0 2px 8px 0 rgba(0, 0, 0, 0.08));
+}
+
+/* 涨跌色（中国股市习惯：红涨绿跌） */
+.text-up {
+  color: var(--otc-danger, #F56C6C);
+}
+
+.text-down {
+  color: var(--otc-success, #67C23A);
+}
+
+/* 表单标签样式 */
+.ant-form-item-label > label {
+  color: var(--otc-form-label-color, #606266);
+}
+
+/* 禁用状态 */
+.ant-input-disabled,
+.ant-select-disabled .ant-select-selector,
+.ant-input-number-disabled {
+  background-color: var(--otc-bg-disabled, #F5F7FA) !important;
+  color: var(--otc-text-placeholder, #C0C4CC) !important;
 }

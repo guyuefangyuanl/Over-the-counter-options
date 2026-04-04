@@ -1,0 +1,136 @@
+/**
+ * OTC 场外期权后台管理系统 - CSS 变量定义
+ * 基于 Element UI 设计规范，用于自定义组件样式
+ */
+
+:root {
+  /* ========== 主题色 ========== */
+  --otc-primary: #409EFF;
+  --otc-primary-light: #66B1FF;
+  --otc-primary-lighter: #ECF5FF;
+  --otc-primary-dark: #337ECC;
+  --otc-success: #67C23A;
+  --otc-success-light: #E1F3D8;
+  --otc-warning: #E6A23C;
+  --otc-warning-light: #FDF6EC;
+  --otc-danger: #F56C6C;
+  --otc-danger-light: #FEF0F0;
+  --otc-info: #909399;
+  --otc-info-light: #F4F4F5;
+
+  /* ========== 文字颜色 ========== */
+  --otc-text-primary: #303133;
+  --otc-text-regular: #606266;
+  --otc-text-secondary: #909399;
+  --otc-text-placeholder: #C0C4CC;
+  --otc-text-white: #FFFFFF;
+
+  /* ========== 边框颜色 ========== */
+  --otc-border-base: #DCDFE6;
+  --otc-border-light: #E4E7ED;
+  --otc-border-lighter: #EBEEF5;
+  --otc-border-extra-light: #F2F6FC;
+
+  /* ========== 背景色 ========== */
+  --otc-bg-page: #F5F7FA;
+  --otc-bg-card: #FFFFFF;
+  --otc-bg-hover: #F5F7FA;
+  --otc-bg-selected: #ECF5FF;
+  --otc-bg-disabled: #F5F7FA;
+  --otc-bg-header: #F5F7FA;
+
+  /* ========== 侧边栏 ========== */
+  --otc-sidebar-width: 166px;
+  --otc-sidebar-collapsed-width: 60px;
+  --otc-sidebar-bg-start: #1A2A3A;
+  --otc-sidebar-bg-end: #2C3E50;
+  --otc-sidebar-text-color: #FFFFFF;
+  --otc-sidebar-active-bg: rgba(255, 255, 255, 0.15);
+  --otc-sidebar-hover-bg: rgba(255, 255, 255, 0.1);
+  --otc-sidebar-border: rgba(255, 255, 255, 0.1);
+
+  /* ========== 头部 ========== */
+  --otc-header-height: 64px;
+  --otc-header-bg: #FFFFFF;
+  --otc-header-border: #E8E8E8;
+
+  /* ========== 内容区域 ========== */
+  --otc-content-padding: 24px;
+  --otc-content-margin: 24px 16px;
+
+  /* ========== 圆角 ========== */
+  --otc-radius-base: 4px;
+  --otc-radius-small: 2px;
+  --otc-radius-round: 20px;
+  --otc-radius-circle: 50%;
+
+  /* ========== 阴影 ========== */
+  --otc-shadow-base: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  --otc-shadow-light: 0 2px 8px 0 rgba(0, 0, 0, 0.08);
+  --otc-shadow-dark: 0 4px 16px 0 rgba(0, 0, 0, 0.12);
+
+  /* ========== 字体 ========== */
+  --otc-font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --otc-font-size-extra-large: 20px;
+  --otc-font-size-large: 18px;
+  --otc-font-size-medium: 16px;
+  --otc-font-size-base: 14px;
+  --otc-font-size-small: 13px;
+  --otc-font-size-extra-small: 12px;
+
+  /* ========== 行高 ========== */
+  --otc-line-height-base: 1.5;
+  --otc-line-height-large: 1.8;
+  --otc-line-height-small: 1.25;
+
+  /* ========== 间距 ========== */
+  --otc-spacing-xs: 4px;
+  --otc-spacing-sm: 8px;
+  --otc-spacing-md: 12px;
+  --otc-spacing-lg: 16px;
+  --otc-spacing-xl: 20px;
+  --otc-spacing-xxl: 24px;
+
+  /* ========== 控件尺寸 ========== */
+  --otc-control-height: 32px;
+  --otc-control-height-large: 40px;
+  --otc-control-height-small: 24px;
+
+  /* ========== 表格 ========== */
+  --otc-table-header-bg: #F5F7FA;
+  --otc-table-header-color: #606266;
+  --otc-table-row-hover-bg: #F5F7FA;
+  --otc-table-border-color: #EBEEF5;
+  --otc-table-row-height: 40px;
+
+  /* ========== 按钮间距 ========== */
+  --otc-button-padding-horizontal: 15px;
+  --otc-button-padding-vertical: 8px;
+
+  /* ========== 表单 ========== */
+  --otc-form-label-color: #606266;
+  --otc-form-input-border: #DCDFE6;
+  --otc-form-input-focus-border: #409EFF;
+
+  /* ========== 过渡动画 ========== */
+  --otc-transition-duration: 0.3s;
+  --otc-transition-timing: ease;
+
+  /* ========== 层级 ========== */
+  --otc-z-index-dropdown: 1000;
+  --otc-z-index-modal: 2000;
+  --otc-z-index-message: 3000;
+  --otc-z-index-notification: 4000;
+}
+
+/* ========== 深色主题变量预留 ========== */
+[data-theme='dark'] {
+  --otc-bg-page: #141414;
+  --otc-bg-card: #1F1F1F;
+  --otc-bg-hover: #262626;
+  --otc-text-primary: #FFFFFF;
+  --otc-text-regular: rgba(255, 255, 255, 0.85);
+  --otc-text-secondary: rgba(255, 255, 255, 0.65);
+  --otc-text-placeholder: rgba(255, 255, 255, 0.35);
+  --otc-border-base: #434343;
+}

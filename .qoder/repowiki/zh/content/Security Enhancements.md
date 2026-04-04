@@ -3,6 +3,9 @@
 <cite>
 **本文档引用的文件**
 - [backend_utils/security.py](file://backend_utils/security.py)
+- [backend_utils/rate_limiter.py](file://backend_utils/rate_limiter.py)
+- [services/two_factor_auth.py](file://services/two_factor_auth.py)
+- [services/token_blacklist.py](file://services/token_blacklist.py)
 - [routes/auth.py](file://routes/auth.py)
 - [utils/auth.js](file://utils/auth.js)
 - [models/user.py](file://models/user.py)
@@ -15,11 +18,12 @@
 
 ## 更新摘要
 **所做更改**
-- 新增微信登录自动降级机制的完整实现分析
-- 更新速率限制和账户锁定机制的技术细节
-- 完善审计日志系统的功能描述和实现方式
-- 增加短信验证码安全机制的详细说明
-- 补充生产环境安全配置的验证机制
+- 新增双因素认证(2FA)功能的完整实现分析
+- 更新令牌黑名单机制的技术细节和部署配置
+- 完善敏感操作二次验证装饰器的功能描述
+- 增强安全响应头和XSS/CSRF防护机制
+- 补充SQL注入检测和文件上传安全验证
+- 更新速率限制器的分布式Redis支持
 
 ## 目录
 1. [简介](#简介)
@@ -34,9 +38,9 @@
 
 ## 简介
 
-本项目是一个场外期权交易系统，包含小程序前端、管理后台、后端服务和云函数等多个组件。本文档重点分析系统的安全增强功能，包括身份认证、授权控制、访问限制、审计日志等安全机制。
+本项目是一个场外期权交易系统，包含小程序前端、管理后台、后端服务和云函数等多个组件。本文档重点分析系统的安全增强功能，包括身份认证、授权控制、访问限制、审计日志、双因素认证、令牌黑名单等高级安全机制。
 
-系统采用多层安全防护策略，涵盖客户端、服务端和云平台三个层面的安全保障。通过JWT令牌认证、IP地址限制、账户锁定机制、操作审计、微信登录降级等多功能的安全防护体系，构建了完整的安全解决方案。
+系统采用多层安全防护策略，涵盖客户端、服务端和云平台三个层面的安全保障。通过JWT令牌认证、IP地址限制、账户锁定机制、操作审计、微信登录降级、双因素认证、令牌黑名单、安全响应头等多功能的安全防护体系，构建了完整的安全解决方案。
 
 ## 项目结构
 
@@ -49,6 +53,7 @@ MiniProgram[小程序客户端]
 AdminUI[管理后台UI]
 Utils[认证工具类]
 WXLogin[微信登录组件]
+PasswordValidator[密码强度验证器]
 end
 subgraph "服务端层"
 FlaskApp[Flask应用]
@@ -60,6 +65,12 @@ RateLimiter[速率限制器]
 AccountLock[账户锁定器]
 AuditLogger[审计日志器]
 SMSService[短信验证码服务]
+TwoFactorAuth[双因素认证服务]
+TokenBlacklist[令牌黑名单服务]
+SecurityHeaders[安全响应头]
+XSSProtection[XSS防护]
+CSRFProtection[CSRF防护]
+SQLInjectionDetection[SQL注入检测]
 end
 subgraph "云平台层"
 CloudFunctions[云函数]
@@ -70,6 +81,7 @@ MiniProgram --> FlaskApp
 AdminUI --> FlaskApp
 Utils --> MiniProgram
 WXLogin --> CloudFunctions
+PasswordValidator --> MiniProgram
 FlaskApp --> SecurityModule
 FlaskApp --> AuthRoutes
 AuthRoutes --> AuthService
@@ -78,6 +90,12 @@ SecurityModule --> RateLimiter
 SecurityModule --> AccountLock
 SecurityModule --> AuditLogger
 SecurityModule --> SMSService
+SecurityModule --> TwoFactorAuth
+SecurityModule --> TokenBlacklist
+SecurityModule --> SecurityHeaders
+SecurityModule --> XSSProtection
+SecurityModule --> CSRFProtection
+SecurityModule --> SQLInjectionDetection
 SecurityModule --> Database
 CloudFunctions --> WXCloud
 WXCloud --> Database
@@ -85,13 +103,15 @@ WXCloud --> Database
 
 **图表来源**
 - [routes/auth.py:1-632](file://routes/auth.py#L1-L632)
-- [backend_utils/security.py:1-144](file://backend_utils/security.py#L1-L144)
+- [backend_utils/security.py:1-734](file://backend_utils/security.py#L1-L734)
 - [services/auth_service.py:1-562](file://services/auth_service.py#L1-L562)
 - [models/user.py:1-309](file://models/user.py#L1-L309)
+- [services/two_factor_auth.py:1-300](file://services/two_factor_auth.py#L1-L300)
+- [services/token_blacklist.py:1-239](file://services/token_blacklist.py#L1-L239)
 
 **章节来源**
 - [routes/auth.py:1-632](file://routes/auth.py#L1-L632)
-- [backend_utils/security.py:1-144](file://backend_utils/security.py#L1-L144)
+- [backend_utils/security.py:1-734](file://backend_utils/security.py#L1-L734)
 - [services/auth_service.py:1-562](file://services/auth_service.py#L1-L562)
 - [models/user.py:1-309](file://models/user.py#L1-L309)
 
@@ -99,13 +119,14 @@ WXCloud --> Database
 
 ### 安全模块 (Security Module)
 
-安全模块提供了基础的安全功能，包括请求限流、账户锁定、审计日志和短信验证码管理。
+安全模块提供了基础的安全功能，包括请求限流、账户锁定、审计日志、短信验证码管理、敏感操作二次验证、安全响应头、XSS防护、CSRF防护、SQL注入检测等。
 
 #### 请求限流机制
 - 支持基于IP地址和端点的双重限流
 - 内存存储历史请求时间戳
 - 可配置的限流阈值和时间窗口
 - 实现429状态码的限流响应
+- **新增** Redis分布式限流支持
 
 #### 账户锁定机制
 - 失败登录尝试计数
@@ -122,11 +143,82 @@ WXCloud --> Database
 #### 短信验证码安全
 - 验证码生成和存储
 - 过期时间管理和错误次数限制
-- 多类型验证码支持（登录、注册、重置）
+- 多类型验证码支持（登录、注册、重置、敏感操作）
 - 安全的验证码验证流程
+
+#### 敏感操作二次验证
+- **新增** 支持密码和短信验证码双重验证
+- 适用于高风险操作如密码修改、账户删除等
+- 统一的验证装饰器接口
+
+#### 安全响应头
+- **新增** 防XSS、防点击劫持、防MIME嗅探等安全头
+- 内容安全策略(CSP)配置
+- HTTPS强制和引用策略设置
+
+#### XSS防护
+- **新增** HTML标签净化和危险内容过滤
+- 事件属性和危险协议检测
+- 递归字典数据净化
+
+#### CSRF防护
+- **新增** CSRF令牌生成和验证机制
+- 会话绑定的令牌存储
+- 装饰器形式的保护接口
+
+#### SQL注入检测
+- **新增** 正则表达式模式匹配检测
+- 常见注入攻击模式识别
+- 请求参数深度安全验证
 
 **章节来源**
 - [backend_utils/security.py:18-144](file://backend_utils/security.py#L18-L144)
+- [backend_utils/security.py:388-579](file://backend_utils/security.py#L388-L579)
+
+### 双因素认证服务 (2FA Service)
+
+**新增** 双因素认证服务提供了TOTP(基于时间的一次性密码)验证功能：
+
+#### TOTP验证机制
+- 支持6位数字验证码，30秒时间窗口
+- 前后1个时间窗口的误差容忍
+- Base32密钥生成和URI格式化
+- 标准otpauth://格式支持
+
+#### 备用码管理
+- 生成10个8位数字备用码
+- 哈希存储防止明文泄露
+- 使用后自动失效机制
+
+#### 装饰器集成
+- require_2fa装饰器自动集成
+- 支持TOTP和备用码双重验证
+- 降级处理异常情况
+
+**章节来源**
+- [services/two_factor_auth.py:1-300](file://services/two_factor_auth.py#L1-L300)
+
+### 令牌黑名单服务 (Token Blacklist)
+
+**新增** 令牌黑名单服务提供了JWT令牌撤销功能：
+
+#### 黑名单管理
+- 支持Redis和内存两种存储后端
+- Token哈希存储避免明文泄露
+- 自动过期和清理机制
+
+#### 分布式支持
+- Redis集群部署推荐
+- 单机开发降级支持
+- 线程安全的内存存储
+
+#### 应用集成
+- 注销时自动加入黑名单
+- 认证中间件自动检查
+- 统一的API接口
+
+**章节来源**
+- [services/token_blacklist.py:1-239](file://services/token_blacklist.py#L1-L239)
 
 ### 认证路由 (Auth Routes)
 
@@ -151,8 +243,16 @@ WXCloud --> Database
 - 登录失败处理
 - 会话管理
 
+#### **新增** 双因素认证接口
+- /auth/2fa/setup 初始化2FA
+- /auth/2fa/enable 启用2FA
+- /auth/2fa/disable 禁用2FA
+- /auth/2fa/status 查询状态
+- /auth/2fa/regenerate-backup-codes 重新生成备用码
+
 **章节来源**
 - [routes/auth.py:79-464](file://routes/auth.py#L79-L464)
+- [routes/auth.py:1312-1548](file://routes/auth.py#L1312-L1548)
 
 ### 用户模型 (User Model)
 
@@ -175,6 +275,12 @@ WXCloud --> Database
 - 原子性操作保证
 - 错误处理机制
 - 数据完整性检查
+
+#### **新增** 2FA用户配置
+- 2FA启用状态管理
+- 密钥存储和验证
+- 备用码哈希存储
+- 启用时间记录
 
 **章节来源**
 - [models/user.py:1-309](file://models/user.py#L1-L309)
@@ -207,6 +313,8 @@ sequenceDiagram
 participant Client as 客户端
 participant AuthRoute as 认证路由
 participant Security as 安全模块
+participant TwoFactorAuth as 双因素认证
+participant TokenBlacklist as 令牌黑名单
 participant AuthService as 认证服务
 participant UserModel as 用户模型
 participant Database as 数据库
@@ -227,6 +335,10 @@ AuthService-->>AuthRoute : 模拟用户登录
 end
 AuthRoute->>Security : 记录登录尝试
 Security-->>AuthRoute : 更新账户状态
+AuthRoute->>TwoFactorAuth : 检查2FA状态
+TwoFactorAuth-->>AuthRoute : 2FA验证结果
+AuthRoute->>TokenBlacklist : 检查令牌状态
+TokenBlacklist-->>AuthRoute : 令牌有效性
 AuthRoute-->>Client : 返回JWT令牌
 Note over Client,Database : 安全认证流程
 ```
@@ -262,6 +374,135 @@ NextHandler --> End
 
 **章节来源**
 - [backend_utils/security.py:48-86](file://backend_utils/security.py#L48-L86)
+
+### 双因素认证详细分析
+
+#### 2FA验证流程
+```mermaid
+flowchart TD
+Start([用户请求]) --> Check2FA{"检查2FA状态"}
+Check2FA --> |未启用| DirectAccess["直接访问"]
+Check2FA --> |已启用| RequireAuth["要求验证"]
+RequireAuth --> GetCode["获取TOTP或备用码"]
+GetCode --> VerifyTOTP{"验证TOTP"}
+VerifyTOTP --> |成功| AccessGranted["访问授权"]
+VerifyTOTP --> |失败| VerifyBackup{"验证备用码"}
+VerifyBackup --> |成功| AccessGranted
+VerifyBackup --> |失败| DenyAccess["拒绝访问"]
+DirectAccess --> End([结束])
+AccessGranted --> End
+DenyAccess --> End
+```
+
+**图表来源**
+- [services/two_factor_auth.py:218-296](file://services/two_factor_auth.py#L218-L296)
+
+#### 备用码管理流程
+```mermaid
+flowchart TD
+Start([备用码验证]) --> HashCode["哈希输入码"]
+HashCode --> CompareHash["比较哈希值"]
+CompareHash --> |匹配| RemoveCode["移除已使用码"]
+CompareHash --> |不匹配| ReturnFalse["返回验证失败"]
+RemoveCode --> UpdateDB["更新数据库"]
+UpdateDB --> ReturnTrue["返回验证成功"]
+ReturnFalse --> End([结束])
+ReturnTrue --> End
+```
+
+**图表来源**
+- [services/two_factor_auth.py:181-203](file://services/two_factor_auth.py#L181-L203)
+
+### 令牌黑名单详细分析
+
+#### 黑名单存储策略
+```mermaid
+flowchart TD
+Start([添加令牌]) --> HashToken["哈希令牌"]
+HashToken --> CheckStorage{"检查存储类型"}
+CheckStorage --> |Redis可用| RedisStore["Redis存储"]
+CheckStorage --> |Redis不可用| MemoryStore["内存存储"]
+RedisStore --> SetExpiry["设置过期时间"]
+MemoryStore --> LockStore["线程锁存储"]
+SetExpiry --> LogSuccess["记录成功"]
+LockStore --> CleanupExpired["清理过期"]
+CleanupExpired --> LogSuccess
+LogSuccess --> End([结束])
+```
+
+**图表来源**
+- [services/token_blacklist.py:68-102](file://services/token_blacklist.py#L68-L102)
+
+#### 分布式部署配置
+```mermaid
+graph TB
+subgraph "Redis存储"
+RedisCluster[Redis集群]
+RedisMaster[主节点]
+RedisSlave[从节点]
+RedisSentinel[哨兵集群]
+end
+subgraph "应用实例"
+AppInstance1[应用实例1]
+AppInstance2[应用实例2]
+AppInstance3[应用实例3]
+end
+RedisCluster --> AppInstance1
+RedisCluster --> AppInstance2
+RedisCluster --> AppInstance3
+RedisSentinel --> RedisMaster
+RedisSentinel --> RedisSlave
+```
+
+**图表来源**
+- [services/token_blacklist.py:35-58](file://services/token_blacklist.py#L35-L58)
+
+### 敏感操作二次验证
+
+#### 验证流程设计
+```mermaid
+flowchart TD
+Start([敏感操作请求]) --> CheckVerificationType{"验证类型"}
+CheckVerificationType --> |密码验证| PasswordAuth["密码验证流程"]
+CheckVerificationType --> |短信验证| SMSAuth["短信验证流程"]
+PasswordAuth --> VerifyPassword["验证用户密码"]
+VerifyPassword --> |成功| RemoveFields["移除验证字段"]
+VerifyPassword --> |失败| ReturnError["返回验证失败"]
+SMSAuth --> VerifySMS["验证短信验证码"]
+VerifySMS --> |成功| RemoveFields
+VerifySMS --> |失败| ReturnError
+RemoveFields --> ExecuteOperation["执行敏感操作"]
+ReturnError --> End([结束])
+ExecuteOperation --> End
+```
+
+**图表来源**
+- [backend_utils/security.py:392-478](file://backend_utils/security.py#L392-L478)
+
+### 安全响应头配置
+
+#### 安全头配置详解
+```mermaid
+graph LR
+subgraph "XSS防护"
+XSSHeader[X-XSS-Protection: 1; mode=block]
+End
+subgraph "点击劫持防护"
+FrameHeader[X-Frame-Options: DENY]
+End
+subgraph "MIME嗅探防护"
+SniffHeader[X-Content-Type-Options: nosniff]
+End
+subgraph "内容安全策略"
+CSPHeader[Content-Security-Policy: default-src 'self']
+End
+subgraph "HTTPS强制"
+HSTSHeader[Strict-Transport-Security: max-age=31536000]
+End
+```
+
+**图表来源**
+- [backend_utils/security.py:485-513](file://backend_utils/security.py#L485-L513)
 
 ### 认证流程分析
 
@@ -381,6 +622,9 @@ Success --> End
 graph TB
 subgraph "安全基础设施"
 SecurityPy[backend_utils/security.py]
+RateLimiterPy[backend_utils/rate_limiter.py]
+TwoFactorAuthPy[services/two_factor_auth.py]
+TokenBlacklistPy[services/token_blacklist.py]
 EnvConfig[.env配置]
 EnvExample[.env.example]
 TestSecurity[tests/test_security_config.py]
@@ -398,10 +642,15 @@ end
 subgraph "客户端工具"
 AuthJS[utils/auth.js]
 MiniProgram[miniprogram/*]
+PasswordValidator[miniprogram/utils/passwordValidator.js]
 end
 SecurityPy --> AuthRoutes
 SecurityPy --> UserModel
 SecurityPy --> AuthService
+RateLimiterPy --> AuthRoutes
+TwoFactorAuthPy --> AuthRoutes
+TwoFactorAuthPy --> UserModel
+TokenBlacklistPy --> AuthService
 EnvConfig --> AuthRoutes
 EnvConfig --> ConfigPy
 EnvConfig --> AuthMiddleware
@@ -412,19 +661,22 @@ AuthMiddleware --> UserModel
 CloudLogin --> AuthService
 AuthJS --> AuthRoutes
 MiniProgram --> AuthJS
+PasswordValidator --> MiniProgram
 ```
 
 **图表来源**
-- [backend_utils/security.py:1-144](file://backend_utils/security.py#L1-L144)
+- [backend_utils/security.py:1-734](file://backend_utils/security.py#L1-L734)
+- [backend_utils/rate_limiter.py:1-272](file://backend_utils/rate_limiter.py#L1-L272)
+- [services/two_factor_auth.py:1-300](file://services/two_factor_auth.py#L1-L300)
+- [services/token_blacklist.py:1-239](file://services/token_blacklist.py#L1-L239)
 - [routes/auth.py:1-632](file://routes/auth.py#L1-L632)
-- [services/auth_service.py:1-562](file://services/auth_service.py#L1-L562)
-- [models/user.py:1-309](file://models/user.py#L1-L309)
 
 **章节来源**
-- [backend_utils/security.py:1-144](file://backend_utils/security.py#L1-L144)
+- [backend_utils/security.py:1-734](file://backend_utils/security.py#L1-L734)
+- [backend_utils/rate_limiter.py:1-272](file://backend_utils/rate_limiter.py#L1-L272)
+- [services/two_factor_auth.py:1-300](file://services/two_factor_auth.py#L1-L300)
+- [services/token_blacklist.py:1-239](file://services/token_blacklist.py#L1-L239)
 - [routes/auth.py:1-632](file://routes/auth.py#L1-L632)
-- [services/auth_service.py:1-562](file://services/auth_service.py#L1-L562)
-- [models/user.py:1-309](file://models/user.py#L1-L309)
 
 ## 性能考虑
 
@@ -434,6 +686,11 @@ MiniProgram --> AuthJS
 - 限流和账户锁定状态存储在内存中
 - 使用字典结构实现O(1)查找复杂度
 - 定期清理过期数据减少内存占用
+
+#### Redis分布式优化
+- **新增** Redis限流器支持分布式部署
+- 滑动窗口算法实现精确限流
+- Pipeline批量操作减少网络开销
 
 #### 数据库查询优化
 - 用户信息查询使用索引字段
@@ -449,6 +706,16 @@ MiniProgram --> AuthJS
 - 网络异常时的快速降级响应
 - 模拟用户的轻量级处理
 - 最小化的数据库操作
+
+#### 2FA性能优化
+- **新增** TOTP验证使用硬件随机数
+- 备用码哈希存储避免明文泄露
+- 装饰器缓存减少重复验证
+
+#### 令牌黑名单优化
+- **新增** Redis存储支持高并发
+- 哈希算法避免存储原始令牌
+- 自动过期清理减少存储压力
 
 ## 故障排除指南
 
@@ -476,12 +743,22 @@ MiniProgram --> AuthJS
    - 查看日志中的限流警告信息
    - 分析IP地址和端点的访问模式
 
+3. **Redis限流器问题**
+   - **新增** 检查Redis连接配置
+   - 验证Redis服务可用性
+   - 确认限流键空间清理
+
 #### 审计日志问题
 1. **验证日志配置**
    - 检查日志级别设置
    - 确认日志输出目标
 
 2. **调试审计流程**
+3. **检查日志配置**
+   - 检查日志级别设置
+   - 确认日志输出目标
+
+4. **调试审计流程**
    - 查看操作开始和结束的日志记录
    - 检查异常情况的错误日志
 
@@ -494,11 +771,41 @@ MiniProgram --> AuthJS
    - 查看降级日志信息
    - 验证模拟用户创建过程
 
+#### **新增** 双因素认证问题
+1. **检查2FA配置**
+   - 验证TOTP密钥生成
+   - 确认备用码存储
+
+2. **调试2FA流程**
+   - 查看TOTP验证日志
+   - 检查备用码使用情况
+
+#### **新增** 令牌黑名单问题
+1. **检查Redis配置**
+   - 验证REDIS_URL设置
+   - 确认Redis连接
+
+2. **调试黑名单流程**
+   - 查看令牌哈希存储
+   - 检查过期时间设置
+
+#### **新增** 安全响应头问题
+1. **检查响应头配置**
+   - 验证安全头设置
+   - 确认中间件加载
+
+2. **调试安全防护**
+   - 查看XSS防护日志
+   - 检查CSRF令牌验证
+
 **章节来源**
 - [.env:8-11](file://.env#L8-L11)
 - [.env.example:13-17](file://.env.example#L13-L17)
 - [routes/auth.py:33-59](file://routes/auth.py#L33-L59)
 - [services/auth_service.py:411-440](file://services/auth_service.py#L411-L440)
+- [services/two_factor_auth.py:1-300](file://services/two_factor_auth.py#L1-L300)
+- [services/token_blacklist.py:1-239](file://services/token_blacklist.py#L1-L239)
+- [backend_utils/security.py:485-513](file://backend_utils/security.py#L485-L513)
 
 ## 结论
 
@@ -507,11 +814,16 @@ MiniProgram --> AuthJS
 ### 核心安全优势
 - **多重认证机制**：支持多种登录方式，满足不同场景需求
 - **完善的权限控制**：基于角色的访问控制和细粒度权限管理
-- **智能限流保护**：防止暴力破解和DDoS攻击
+- **智能限流保护**：防止暴力破解和DDoS攻击，支持Redis分布式部署
 - **全面审计追踪**：完整的操作日志和异常监控
 - **灵活的部署配置**：支持开发、测试、生产环境的不同安全需求
 - **鲁棒的降级机制**：网络异常时的优雅降级和用户体验保障
 - **短信验证码安全**：完整的验证码生命周期管理和安全验证
+- **双因素认证(2FA)**：支持TOTP验证和备用码的完整2FA解决方案
+- **令牌黑名单**：JWT令牌撤销和重复使用防护
+- **安全响应头**：全面的HTTP安全头配置
+- **XSS/CSRF防护**：输入净化和跨站请求伪造防护
+- **SQL注入检测**：请求参数深度安全验证
 
 ### 安全改进建议
 1. **增强令牌安全**
@@ -533,5 +845,10 @@ MiniProgram --> AuthJS
    - 实现IP白名单和黑名单
    - 添加多因素认证
    - 增强日志审计功能
+
+5. **优化性能**
+   - 实现Redis缓存优化
+   - 添加CDN安全加速
+   - 优化证书管理
 
 该安全体系为场外期权交易系统提供了坚实的安全基础，能够有效防范常见的安全威胁，保障用户数据和交易安全。通过持续的安全改进和监控，系统能够适应不断变化的安全挑战，为用户提供可靠的服务保障。

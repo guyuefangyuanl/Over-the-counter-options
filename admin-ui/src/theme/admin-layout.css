@@ -1,0 +1,343 @@
+/**
+ * Admin Layout 样式
+ * 匹配原型 HTML 的布局设计
+ */
+
+/* ========== 整体布局 ========== */
+.admin-layout {
+  min-height: 100vh;
+  background-color: var(--otc-bg-page);
+}
+
+/* ========== 侧边栏样式 ========== */
+.admin-layout-sider {
+  background: linear-gradient(180deg, var(--otc-sidebar-bg-start) 0%, var(--otc-sidebar-bg-end) 100%) !important;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+}
+
+.admin-layout-sider .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.admin-layout-sider.ant-layout-sider-collapsed .ant-layout-sider-children {
+  overflow: visible;
+}
+
+/* 菜单标题区域 */
+.admin-menu-header {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--otc-sidebar-text-color);
+  font-size: 16px;
+  font-weight: bold;
+  border-bottom: 1px solid var(--otc-sidebar-border);
+  padding: 0 16px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+.admin-menu-header-collapsed {
+  font-size: 14px;
+  padding: 0;
+}
+
+/* 侧边栏菜单样式 */
+.admin-layout-sider .ant-menu {
+  background: transparent !important;
+  border: none !important;
+}
+
+.admin-layout-sider .ant-menu-item,
+.admin-layout-sider .ant-menu-submenu-title {
+  color: var(--otc-sidebar-text-color) !important;
+  margin: 0 !important;
+  padding-left: 24px !important;
+  height: 42px !important;
+  line-height: 42px !important;
+}
+
+.admin-layout-sider .ant-menu-item:hover,
+.admin-layout-sider .ant-menu-submenu-title:hover {
+  background-color: var(--otc-sidebar-hover-bg) !important;
+}
+
+.admin-layout-sider .ant-menu-item-selected {
+  background-color: var(--otc-sidebar-active-bg) !important;
+}
+
+.admin-layout-sider .ant-menu-item-selected::after {
+  border-color: var(--otc-primary) !important;
+}
+
+/* 子菜单浮动样式 */
+.admin-layout-sider .ant-menu-submenu-popup {
+  position: fixed !important;
+}
+
+.admin-layout-sider .ant-menu-sub {
+  background: var(--otc-bg-card) !important;
+  box-shadow: var(--otc-shadow-base);
+  border-radius: var(--otc-radius-base);
+  padding: 4px 0;
+  min-width: 150px;
+}
+
+.admin-layout-sider .ant-menu-sub .ant-menu-item {
+  color: var(--otc-text-regular) !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  padding-left: 20px !important;
+}
+
+.admin-layout-sider .ant-menu-sub .ant-menu-item:hover {
+  background: var(--otc-bg-hover) !important;
+  color: var(--otc-primary) !important;
+}
+
+.admin-layout-sider .ant-menu-sub .ant-menu-item-selected {
+  background: var(--otc-bg-selected) !important;
+  color: var(--otc-primary) !important;
+}
+
+/* 子菜单箭头 */
+.admin-layout-sider .ant-menu-submenu-arrow {
+  color: var(--otc-sidebar-text-color);
+}
+
+/* 收起状态 */
+.admin-layout-sider.ant-layout-sider-collapsed .ant-menu-item,
+.admin-layout-sider.ant-layout-sider-collapsed .ant-menu-submenu-title {
+  padding-left: 0 !important;
+  text-align: center;
+}
+
+/* ========== 头部样式 ========== */
+.admin-layout-header {
+  height: var(--otc-header-height);
+  padding: 0 24px;
+  background: var(--otc-header-bg);
+  border-bottom: 1px solid var(--otc-header-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  position: relative;
+  z-index: 10;
+}
+
+.admin-layout-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.admin-layout-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 折叠按钮 */
+.admin-collapse-btn {
+  font-size: 18px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--otc-text-regular);
+  transition: color var(--otc-transition-duration);
+}
+
+.admin-collapse-btn:hover {
+  color: var(--otc-primary);
+}
+
+/* 面包屑样式 */
+.admin-breadcrumb {
+  font-size: var(--otc-font-size-base);
+}
+
+.admin-breadcrumb .ant-breadcrumb-link {
+  color: var(--otc-text-regular);
+}
+
+.admin-breadcrumb .ant-breadcrumb-link a {
+  color: var(--otc-text-regular);
+  transition: color var(--otc-transition-duration);
+}
+
+.admin-breadcrumb .ant-breadcrumb-link a:hover {
+  color: var(--otc-primary);
+}
+
+.admin-breadcrumb .ant-breadcrumb-separator {
+  color: var(--otc-text-placeholder);
+}
+
+.admin-breadcrumb .ant-breadcrumb-link:last-child {
+  color: var(--otc-text-primary);
+  font-weight: 500;
+}
+
+/* 用户信息区域 */
+.admin-user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--otc-radius-base);
+  transition: background-color var(--otc-transition-duration);
+}
+
+.admin-user-info:hover {
+  background-color: var(--otc-bg-hover);
+}
+
+.admin-user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--otc-radius-circle);
+  background-color: var(--otc-primary);
+  color: var(--otc-text-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--otc-font-size-small);
+}
+
+.admin-user-name {
+  color: var(--otc-text-regular);
+  font-size: var(--otc-font-size-base);
+}
+
+/* 用户下拉菜单 */
+.admin-user-dropdown {
+  min-width: 140px;
+}
+
+.admin-user-dropdown .ant-dropdown-menu-item {
+  padding: 8px 16px;
+}
+
+.admin-user-dropdown .ant-dropdown-menu-item:hover {
+  background-color: var(--otc-bg-hover);
+}
+
+/* 头部操作按钮 */
+.admin-header-btn {
+  padding: 6px 15px;
+  height: 32px;
+}
+
+/* ========== 内容区域样式 ========== */
+.admin-layout-content {
+  margin: var(--otc-content-margin);
+  padding: var(--otc-content-padding);
+  min-height: calc(100vh - var(--otc-header-height) - 48px);
+  background: var(--otc-bg-card);
+  border-radius: var(--otc-radius-base);
+  overflow: auto;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* ========== 页面标题区域 ========== */
+.admin-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--otc-border-lighter);
+}
+
+.admin-page-title {
+  font-size: var(--otc-font-size-large);
+  font-weight: 600;
+  color: var(--otc-text-primary);
+  margin: 0;
+}
+
+.admin-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ========== 响应式适配 ========== */
+@media screen and (max-width: 767px) {
+  .admin-layout-header {
+    padding: 0 12px;
+  }
+
+  .admin-layout-content {
+    margin: 12px 8px;
+    padding: 12px;
+  }
+
+  .admin-breadcrumb {
+    display: none;
+  }
+
+  .admin-user-name {
+    display: none;
+  }
+
+  .admin-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .admin-page-actions {
+    flex-wrap: wrap;
+  }
+}
+
+@media screen and (min-width: 768px) and (max-width: 1024px) {
+  .admin-layout-content {
+    margin: 16px 12px;
+    padding: 16px;
+  }
+}
+
+@media screen and (min-width: 1200px) {
+  .admin-layout-content {
+    margin: 24px;
+    padding: 24px;
+  }
+}
+
+/* ========== 过渡动画 ========== */
+.admin-layout-sider,
+.admin-menu-header,
+.admin-layout-content {
+  transition: all var(--otc-transition-duration) var(--otc-transition-timing);
+}
+
+/* ========== 滚动条样式 ========== */
+.admin-layout-content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.admin-layout-content::-webkit-scrollbar-thumb {
+  background-color: var(--otc-text-placeholder);
+  border-radius: 3px;
+}
+
+.admin-layout-content::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.admin-layout-content::-webkit-scrollbar-thumb:hover {
+  background-color: var(--otc-text-secondary);
+}

@@ -1,0 +1,198 @@
+<!--
+  页面名称：场外龙虎榜
+  功能说明：
+  1. 展示龙虎榜个股列表
+  2. 支持日期筛选
+  3. 支持类型筛选
+  4. 支持排序功能
+  5. 下拉刷新
+  
+  交互说明：
+  - 点击日期筛选器切换日期
+  - 点击类型标签筛选股票类型
+  - 点击表头排序
+  - 点击个股查看详情
+-->
+<wxs module="utils">
+  module.exports.formatPercent = function(val) {
+    if (val >= 0) {
+      return '+' + val.toFixed(2) + '%';
+    }
+    return val.toFixed(2) + '%';
+  };
+  module.exports.formatAmount = function(val) {
+    if (val >= 10000) {
+      return (val / 10000).toFixed(2) + '亿';
+    }
+    return val.toFixed(0) + '万';
+  };
+</wxs>
+
+<view class="page-container dragon-tiger-page">
+  <!-- 顶部横幅 -->
+  <view class="dt-banner">
+    <view class="dt-banner-left">
+      <text class="dt-banner-title">场外龙虎榜</text>
+      <view class="dt-rank-badge">TOP {{totalCount}}</view>
+    </view>
+    <view class="dt-banner-right">
+      <text class="dt-update-time">{{updateTime}}</text>
+    </view>
+  </view>
+
+  <!-- 日期选择器 -->
+  <view class="dt-date-selector">
+    <scroll-view scroll-x class="dt-date-scroll" show-scrollbar="{{false}}">
+      <view class="dt-date-list">
+        <view 
+          wx:for="{{dateList}}" 
+          wx:key="date" 
+          class="dt-date-item {{selectedDate === item.date ? 'active' : ''}}"
+          bindtap="onDateSelect"
+          data-date="{{item.date}}"
+        >
+          <text class="dt-date-label">{{item.isToday ? '今天' : item.label}}</text>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- 类型筛选 -->
+  <view class="dt-type-filter">
+    <view 
+      wx:for="{{typeList}}" 
+      wx:key="*this" 
+      class="dt-type-chip {{selectedType === item ? 'active' : ''}}"
+      bindtap="onTypeSelect"
+      data-type="{{item}}"
+    >
+      {{item}}
+    </view>
+  </view>
+
+  <!-- 统计摘要 -->
+  <view class="dt-summary">
+    <view class="dt-summary-item">
+      <text class="dt-summary-value up">{{summary.upCount}}</text>
+      <text class="dt-summary-label">上涨</text>
+    </view>
+    <view class="dt-summary-divider"></view>
+    <view class="dt-summary-item">
+      <text class="dt-summary-value down">{{summary.downCount}}</text>
+      <text class="dt-summary-label">下跌</text>
+    </view>
+    <view class="dt-summary-divider"></view>
+    <view class="dt-summary-item">
+      <text class="dt-summary-value">{{summary.avgChange}}%</text>
+      <text class="dt-summary-label">平均涨幅</text>
+    </view>
+    <view class="dt-summary-divider"></view>
+    <view class="dt-summary-item">
+      <text class="dt-summary-value">{{utils.formatAmount(summary.totalTurnover)}}</text>
+      <text class="dt-summary-label">总成交额</text>
+    </view>
+  </view>
+
+  <!-- 排序控制 -->
+  <view class="dt-sort-bar">
+    <view class="dt-sort-item {{sortBy === 'turnover' ? 'active' : ''}}" bindtap="onSortChange" data-sort="turnover">
+      <text>成交额</text>
+      <text class="dt-sort-icon" wx:if="{{sortBy === 'turnover'}}">{{sortOrder === 'desc' ? '↓' : '↑'}}</text>
+    </view>
+    <view class="dt-sort-item {{sortBy === 'changePercent' ? 'active' : ''}}" bindtap="onSortChange" data-sort="changePercent">
+      <text>涨跌幅</text>
+      <text class="dt-sort-icon" wx:if="{{sortBy === 'changePercent'}}">{{sortOrder === 'desc' ? '↓' : '↑'}}</text>
+    </view>
+    <view class="dt-sort-item {{sortBy === 'amount' ? 'active' : ''}}" bindtap="onSortChange" data-sort="amount">
+      <text>成交量</text>
+      <text class="dt-sort-icon" wx:if="{{sortBy === 'amount'}}">{{sortOrder === 'desc' ? '↓' : '↑'}}</text>
+    </view>
+  </view>
+
+  <!-- 龙虎榜列表 -->
+  <scroll-view 
+    scroll-y 
+    class="dt-list-container"
+    bindscrolltolower="onLoadMore"
+    refresher-enabled="{{true}}"
+    refresher-triggered="{{isRefreshing}}"
+    bindrefresherrefresh="onRefresh"
+  >
+    <!-- 列表内容 -->
+    <view class="dt-list">
+      <view 
+        class="dt-stock-card" 
+        wx:for="{{stockList}}" 
+        wx:key="code"
+        bindtap="onViewDetail"
+        data-item="{{item}}"
+      >
+        <!-- 排名标识 -->
+        <view class="dt-rank-number {{item.rank <= 3 ? 'top-rank' : ''}}">
+          {{item.rank}}
+        </view>
+        
+        <!-- 股票信息 -->
+        <view class="dt-card-left">
+          <view class="dt-stock-name-box">
+            <text class="dt-stock-name">{{item.name}}</text>
+            <text class="dt-stock-code">{{item.code}}</text>
+          </view>
+          <view class="dt-stock-reason">{{item.reason}}</view>
+        </view>
+        
+        <!-- 价格与涨跌幅 -->
+        <view class="dt-card-center">
+          <view class="dt-price-val {{item.changePercent >= 0 ? 'up' : 'down'}}">
+            {{item.price}}
+          </view>
+          <view class="dt-change-box {{item.changePercent >= 0 ? 'bg-up' : 'bg-down'}}">
+            <text class="dt-change-val">{{utils.formatPercent(item.changePercent)}}</text>
+          </view>
+        </view>
+        
+        <!-- 成交额与期权费率 -->
+        <view class="dt-card-right">
+          <view class="dt-turnover">
+            <text class="dt-turnover-label">成交额</text>
+            <text class="dt-turnover-val">{{utils.formatAmount(item.turnover)}}</text>
+          </view>
+          <view class="dt-option-rates">
+            <text class="dt-rate-item">平值 {{item.atm}}%</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 加载状态 -->
+    <view class="dt-loading-container" wx:if="{{isLoading}}">
+      <view class="dt-loading-spinner"></view>
+      <text>加载中...</text>
+    </view>
+
+    <!-- 加载更多 -->
+    <view class="dt-load-more" wx:if="{{hasMore && !isLoading}}">
+      <text bindtap="onLoadMore">加载更多</text>
+    </view>
+
+    <!-- 无更多数据 -->
+    <view class="dt-no-more" wx:if="{{!hasMore && stockList.length > 0}}">
+      <text>— 已显示全部数据 —</text>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="dt-empty-state" wx:if="{{!isLoading && stockList.length === 0}}">
+      <text class="dt-empty-icon">📊</text>
+      <text class="dt-empty-text">暂无龙虎榜数据</text>
+      <text class="dt-empty-hint">请尝试选择其他日期</text>
+    </view>
+  </scroll-view>
+
+  <!-- 底部返回按钮 -->
+  <view class="dt-footer">
+    <view class="dt-back-btn" bindtap="onGoBack">
+      <text class="dt-back-icon">←</text>
+      <text>返回行情</text>
+    </view>
+  </view>
+</view>

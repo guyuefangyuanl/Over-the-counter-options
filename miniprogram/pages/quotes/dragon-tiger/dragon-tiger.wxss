@@ -1,0 +1,484 @@
+/* ==================== 龙虎榜页面样式 ==================== */
+/* 基于设计系统的龙虎榜专用样式 */
+
+/* 页面容器 */
+.dragon-tiger-page {
+  background-color: #f5f7fa;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==================== 顶部横幅 ==================== */
+.dt-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 32rpx 24rpx;
+  background: linear-gradient(135deg, #409EFF 0%, #66b1ff 100%);
+  color: #fff;
+}
+
+.dt-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.dt-banner-title {
+  font-size: 40rpx;
+  font-weight: bold;
+  letter-spacing: 2rpx;
+}
+
+.dt-rank-badge {
+  background-color: rgba(255, 255, 255, 0.25);
+  padding: 6rpx 16rpx;
+  border-radius: 20rpx;
+  font-size: 22rpx;
+  font-weight: 500;
+}
+
+.dt-banner-right {
+  display: flex;
+  align-items: center;
+}
+
+.dt-update-time {
+  font-size: 24rpx;
+  opacity: 0.9;
+}
+
+/* ==================== 日期选择器 ==================== */
+.dt-date-selector {
+  background-color: #fff;
+  padding: 16rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.dt-date-scroll {
+  width: 100%;
+}
+
+.dt-date-list {
+  display: flex;
+  padding: 0 24rpx;
+  gap: 16rpx;
+}
+
+.dt-date-item {
+  flex-shrink: 0;
+  padding: 12rpx 28rpx;
+  border-radius: 24rpx;
+  background-color: #f5f7fa;
+  transition: all 0.25s ease;
+}
+
+.dt-date-item.active {
+  background-color: #409EFF;
+  color: #fff;
+}
+
+.dt-date-label {
+  font-size: 26rpx;
+  font-weight: 500;
+}
+
+/* ==================== 类型筛选 ==================== */
+.dt-type-filter {
+  display: flex;
+  padding: 16rpx 24rpx;
+  gap: 12rpx;
+  background-color: #fff;
+  border-bottom: 1rpx solid #f0f0f0;
+  overflow-x: auto;
+}
+
+.dt-type-chip {
+  flex-shrink: 0;
+  padding: 8rpx 24rpx;
+  border: 1rpx solid #e0e0e0;
+  border-radius: 24rpx;
+  font-size: 24rpx;
+  color: #606266;
+  background-color: #fff;
+  transition: all 0.2s ease;
+}
+
+.dt-type-chip.active {
+  background-color: #409EFF;
+  border-color: #409EFF;
+  color: #fff;
+}
+
+/* ==================== 统计摘要 ==================== */
+.dt-summary {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 24rpx 16rpx;
+  background-color: #fff;
+  margin: 16rpx 24rpx;
+  border-radius: 16rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.dt-summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.dt-summary-value {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.dt-summary-value.up {
+  color: #cf1322;
+}
+
+.dt-summary-value.down {
+  color: #389e0d;
+}
+
+.dt-summary-label {
+  font-size: 22rpx;
+  color: #909399;
+}
+
+.dt-summary-divider {
+  width: 1rpx;
+  height: 48rpx;
+  background-color: #e8e8e8;
+}
+
+/* ==================== 排序控制 ==================== */
+.dt-sort-bar {
+  display: flex;
+  padding: 16rpx 24rpx;
+  gap: 24rpx;
+  background-color: #fff;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.dt-sort-item {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 26rpx;
+  color: #606266;
+  padding: 8rpx 16rpx;
+  border-radius: 8rpx;
+  transition: all 0.2s ease;
+}
+
+.dt-sort-item.active {
+  color: #409EFF;
+  background-color: rgba(64, 158, 255, 0.1);
+  font-weight: 500;
+}
+
+.dt-sort-icon {
+  font-size: 20rpx;
+}
+
+/* ==================== 列表容器 ==================== */
+.dt-list-container {
+  flex: 1;
+  padding: 0 24rpx 120rpx;
+}
+
+.dt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  padding-top: 16rpx;
+}
+
+/* ==================== 股票卡片 ==================== */
+.dt-stock-card {
+  display: flex;
+  align-items: center;
+  padding: 24rpx 20rpx;
+  background-color: #fff;
+  border-radius: 16rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.dt-stock-card:active {
+  transform: scale(0.98);
+  background-color: rgba(64, 158, 255, 0.02);
+}
+
+/* 左侧彩色边条 */
+.dt-stock-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 5rpx;
+  height: 100%;
+  background: linear-gradient(180deg, #409EFF 0%, #69b1ff 100%);
+  opacity: 0.6;
+  border-radius: 5rpx 0 0 5rpx;
+}
+
+/* 排名数字 */
+.dt-rank-number {
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
+  font-weight: bold;
+  color: #909399;
+  background-color: #f5f7fa;
+  border-radius: 12rpx;
+  margin-right: 16rpx;
+}
+
+.dt-rank-number.top-rank {
+  background: linear-gradient(135deg, #ff9500 0%, #ffb347 100%);
+  color: #fff;
+}
+
+/* 股票信息区域 */
+.dt-card-left {
+  flex: 1.2;
+  min-width: 0;
+  padding-left: 8rpx;
+}
+
+.dt-stock-name-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.dt-stock-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160rpx;
+}
+
+.dt-stock-code {
+  font-size: 22rpx;
+  color: #409EFF;
+  background-color: rgba(64, 158, 255, 0.1);
+  padding: 2rpx 10rpx;
+  border-radius: 6rpx;
+  display: inline-flex;
+  width: fit-content;
+}
+
+.dt-stock-reason {
+  font-size: 20rpx;
+  color: #909399;
+  margin-top: 8rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 价格与涨跌幅区域 */
+.dt-card-center {
+  flex: 0.9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.dt-price-val {
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.dt-price-val.up {
+  color: #cf1322;
+}
+
+.dt-price-val.down {
+  color: #389e0d;
+}
+
+.dt-change-box {
+  min-width: 100rpx;
+  height: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10rpx;
+  padding: 0 12rpx;
+}
+
+.dt-change-box.bg-up {
+  background: linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%);
+  color: #fff;
+}
+
+.dt-change-box.bg-down {
+  background: linear-gradient(135deg, #52c41a 0%, #73d13d 100%);
+  color: #fff;
+}
+
+.dt-change-val {
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+/* 成交额与期权费率区域 */
+.dt-card-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8rpx;
+}
+
+.dt-turnover {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.dt-turnover-label {
+  font-size: 20rpx;
+  color: #909399;
+}
+
+.dt-turnover-val {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.dt-option-rates {
+  display: flex;
+  gap: 8rpx;
+}
+
+.dt-rate-item {
+  font-size: 20rpx;
+  color: #fa8c16;
+  background-color: #fff7e6;
+  padding: 4rpx 10rpx;
+  border-radius: 6rpx;
+}
+
+/* ==================== 加载状态 ==================== */
+.dt-loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48rpx 0;
+  color: #909399;
+}
+
+.dt-loading-spinner {
+  width: 48rpx;
+  height: 48rpx;
+  border: 4rpx solid #e8e8e8;
+  border-top-color: #409EFF;
+  border-radius: 50%;
+  animation: dt-spin 0.8s linear infinite;
+  margin-bottom: 16rpx;
+}
+
+@keyframes dt-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ==================== 加载更多 ==================== */
+.dt-load-more {
+  text-align: center;
+  padding: 24rpx 0;
+  color: #409EFF;
+  font-size: 26rpx;
+}
+
+.dt-no-more {
+  text-align: center;
+  padding: 24rpx 0;
+  color: #909399;
+  font-size: 24rpx;
+}
+
+/* ==================== 空状态 ==================== */
+.dt-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80rpx 0;
+}
+
+.dt-empty-icon {
+  font-size: 80rpx;
+  margin-bottom: 24rpx;
+}
+
+.dt-empty-text {
+  font-size: 32rpx;
+  color: #606266;
+  margin-bottom: 12rpx;
+}
+
+.dt-empty-hint {
+  font-size: 24rpx;
+  color: #909399;
+}
+
+/* ==================== 底部返回按钮 ==================== */
+.dt-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16rpx 24rpx;
+  background-color: #fff;
+  border-top: 1rpx solid #f0f0f0;
+  box-shadow: 0 -4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.dt-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  height: 80rpx;
+  background: linear-gradient(135deg, #409EFF 0%, #66b1ff 100%);
+  border-radius: 40rpx;
+  color: #fff;
+  font-size: 30rpx;
+  font-weight: 500;
+}
+
+.dt-back-btn:active {
+  opacity: 0.85;
+}
+
+.dt-back-icon {
+  font-size: 32rpx;
+}
+
+/* ==================== 涨跌颜色 ==================== */
+.up {
+  color: #cf1322;
+}
+
+.down {
+  color: #389e0d;
+}
