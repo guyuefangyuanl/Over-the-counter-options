@@ -1,5 +1,5 @@
 // API 工具类
-const BASE_URL = 'http://localhost:3001/api';
+let BASE_URL = 'http://localhost:3001/api';
 const performanceOptimizer = require('./performance-optimizer.js').getInstance();
 
 // API响应缓存
